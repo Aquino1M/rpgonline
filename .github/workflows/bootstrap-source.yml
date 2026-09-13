@@ -1,8 +1,6 @@
 name: Bootstrap source
 
 on:
-  push:
-    branches: [bootstrap-source-v098]
   workflow_dispatch:
 
 permissions:
@@ -10,32 +8,6 @@ permissions:
 
 jobs:
   restore:
-    if: ${{ !contains(github.event.head_commit.message || '', '[skip bootstrap]') }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Restore source archive
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [ ! -f .bootstrap/part00.b64 ]; then
-            echo 'No bootstrap parts found; nothing to restore.'
-            exit 0
-          fi
-          cat .bootstrap/part*.b64 > /tmp/shadow-ascension.b64
-          base64 --decode /tmp/shadow-ascension.b64 > /tmp/shadow-ascension.zip
-          unzip -t /tmp/shadow-ascension.zip
-          find . -mindepth 1 -maxdepth 1 ! -name .git ! -name .github ! -name .bootstrap -exec rm -rf {} +
-          unzip -q /tmp/shadow-ascension.zip -d .
-          rm -rf .bootstrap
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -A
-          if git diff --cached --quiet; then
-            echo 'No changes.'
-            exit 0
-          fi
-          git commit -m 'feat: restore Shadow Ascension source [skip bootstrap]'
-          git push origin HEAD:bootstrap-source-v098
+      - run: echo "Preparing V0.9.8 bootstrap parts"
