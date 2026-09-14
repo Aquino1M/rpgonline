@@ -107,13 +107,23 @@ export async function saveCloudProfile({ id, name, game, lastLobby = 'asterra-01
   if (!client || !id) return { ok: false, error: 'not_configured' }
 
   try {
+    let existingAuth = null
+    try {
+      const { data: current } = await client.from('player_profiles').select('game_data').eq('id', id).maybeSingle()
+      if (current?.game_data?.auth) {
+        existingAuth = current.game_data.auth
+      }
+    } catch {}
+
+    const gameDataPayload = existingAuth ? { auth: existingAuth, ...(game || {}) } : (game || null)
+
     const payload = {
       id,
       name: String(name || 'Aventureiro').slice(0, 32),
       level: Number(level) || 1,
       guild_rank: String(guildRank || 'E').slice(0, 8),
       last_lobby: String(lastLobby || 'asterra-01'),
-      game_data: game || null,
+      game_data: gameDataPayload,
       updated_at: new Date(updatedAt || Date.now()).toISOString()
     }
 
@@ -129,6 +139,189 @@ export async function saveCloudProfile({ id, name, game, lastLobby = 'asterra-01
     return { ok: true, updatedAt }
   } catch (err) {
     console.warn('[Supabase] Exceção ao salvar perfil:', err)
+    return { ok: false, error: String(err?.message || err) }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// GESTÃO DE CONTAS E AUTENTICAÇÃO
+// ---------------------------------------------------------------------------
+
+export const AUTH_STORAGE_KEY = 'shadow_rpg_account_session'
+
+export function getSavedAccountSession() {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = window.localStorage.getItem(AUTH_STORAGE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (parsed && parsed.accountId && parsed.username) return parsed
+  } catch {}
+  return null
+}
+
+export function saveAccountSession(session) {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session))
+    if (session.accountId) {
+      window.localStorage.setItem('shadow-ascension-player-id', session.accountId)
+    }
+    if (session.username) {
+      window.localStorage.setItem('shadow-ascension-nick', session.username)
+    }
+    if (session.server) {
+      window.localStorage.setItem('shadow-ascension-last-lobby', session.server)
+    }
+  } catch {}
+}
+
+export function clearAccountSession() {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.removeItem(AUTH_STORAGE_KEY)
+    window.localStorage.removeItem('shadow-ascension-nick')
+  } catch {}
+}
+
+export async function hashPassword(password, salt = 'shadow_rpg_salt_2026') {
+  const text = `${salt}:${password}:${salt}`
+  if (typeof crypto !== 'undefined' && crypto.subtle) {
+    const msgBuffer = new TextEncoder().encode(text)
+    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer)
+    const hashArray = Array.from(new Uint8Array(hashBuffer))
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
+  }
+  let h = 0x811c9dc5
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i)
+    h = Math.imul(h, 0x01000193)
+  }
+  return ('00000000' + (h >>> 0).toString(16)).slice(-8)
+}
+
+export async function registerAccount({ username, password, server = 'asterra-01' }) {
+  const client = getSupabaseClient()
+  if (!client) return { ok: false, error: 'Servidor Supabase não conectado. Verifique sua conexão.' }
+
+  const cleanUser = String(username || '').trim().replace(/[^\p{L}\p{N} _.\-]/gu, '')
+  if (cleanUser.length < 3) return { ok: false, error: 'O nome de usuário deve ter pelo menos 3 caracteres.' }
+  if (cleanUser.length > 20) return { ok: false, error: 'O nome de usuário pode ter no máximo 20 caracteres.' }
+
+  if (!password || password.length < 4) return { ok: false, error: 'A senha deve ter pelo menos 4 caracteres.' }
+
+  const accountId = `acc_${cleanUser.toLowerCase()}`
+
+  try {
+    const { data: existing, error: checkError } = await client
+      .from('player_profiles')
+      .select('id')
+      .eq('id', accountId)
+      .maybeSingle()
+
+    if (existing) {
+      return { ok: false, error: 'Este nome de aventureiro já existe. Entre com sua senha ou escolha outro.' }
+    }
+
+    const passwordHash = await hashPassword(password)
+    const now = new Date().toISOString()
+
+    const newProfile = {
+      id: accountId,
+      name: cleanUser,
+      level: 1,
+      guild_rank: 'E',
+      last_lobby: server || 'asterra-01',
+      game_data: {
+        auth: {
+          username: cleanUser,
+          passwordHash,
+          createdAt: Date.now()
+        }
+      },
+      updated_at: now
+    }
+
+    const { error: insertError } = await client
+      .from('player_profiles')
+      .insert(newProfile)
+
+    if (insertError) {
+      return { ok: false, error: `Erro ao cadastrar: ${insertError.message}` }
+    }
+
+    const session = {
+      accountId,
+      username: cleanUser,
+      server: server || 'asterra-01',
+      loginTime: Date.now()
+    }
+    saveAccountSession(session)
+
+    return { ok: true, session, isNew: true }
+  } catch (err) {
+    return { ok: false, error: String(err?.message || err) }
+  }
+}
+
+export async function loginAccount({ username, password, server = null }) {
+  const client = getSupabaseClient()
+  if (!client) return { ok: false, error: 'Servidor Supabase não conectado. Verifique sua conexão.' }
+
+  const cleanUser = String(username || '').trim().replace(/[^\p{L}\p{N} _.\-]/gu, '')
+  if (!cleanUser) return { ok: false, error: 'Informe o nome de usuário.' }
+  if (!password) return { ok: false, error: 'Informe sua senha.' }
+
+  const accountId = `acc_${cleanUser.toLowerCase()}`
+
+  try {
+    const { data, error } = await client
+      .from('player_profiles')
+      .select('*')
+      .eq('id', accountId)
+      .maybeSingle()
+
+    if (error) {
+      return { ok: false, error: `Erro ao buscar conta: ${error.message}` }
+    }
+
+    if (!data) {
+      return { ok: false, error: 'Conta não encontrada. Verifique o nome ou crie uma conta nova.' }
+    }
+
+    const savedAuth = data.game_data?.auth
+    const expectedHash = savedAuth?.passwordHash
+
+    const inputHash = await hashPassword(password)
+
+    if (expectedHash && inputHash !== expectedHash) {
+      return { ok: false, error: 'Senha incorreta. Verifique e tente novamente.' }
+    }
+
+    const chosenServer = server || data.last_lobby || 'asterra-01'
+
+    const session = {
+      accountId,
+      username: data.name || cleanUser,
+      server: chosenServer,
+      loginTime: Date.now()
+    }
+    saveAccountSession(session)
+
+    return {
+      ok: true,
+      session,
+      profile: {
+        id: data.id,
+        name: data.name,
+        level: data.level,
+        guildRank: data.guild_rank,
+        lastLobby: chosenServer,
+        updatedAt: data.updated_at ? new Date(data.updated_at).getTime() : 0,
+        game: data.game_data || null
+      }
+    }
+  } catch (err) {
     return { ok: false, error: String(err?.message || err) }
   }
 }

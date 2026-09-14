@@ -23,11 +23,15 @@ export class ShadowGame {
     this.clock=new THREE.Clock(); this.yaw=Math.PI; this.pitch=0.14; this.cameraDistance=5.2; this.drag=false; this.pointerLocked=false
     this.weatherClock=0; this.weatherIndex=0; this.dayHours=8.25; this.lastHud=0; this.attackClock=0; this.specialClock=0; this.dashTime=0; this.invuln=0
     this.abilityCooldowns=Object.fromEntries(ABILITIES.map(a=>[a.id,0])); this.raycaster=new THREE.Raycaster(); this.discovered=new Set(); this.savedDiscovered=[]; this.currentMerchantZoneMin=1; this.currentMerchantZoneMax=10; this.currentMerchantZoneId='aurora'; this.currentMerchantCityId='aurora-city'; this.localUpdatedAt=0; this.serverProfileTimestamp=0
-    const savedNick=(localStorage.getItem('shadow-ascension-nick')||'').trim()
-    const savedLobby=(localStorage.getItem('shadow-ascension-last-lobby')||'').trim()
+    let savedSession = null
+    try { savedSession = JSON.parse(localStorage.getItem('shadow_rpg_account_session') || 'null') } catch {}
+    const savedNick = (savedSession?.username || localStorage.getItem('shadow-ascension-nick') || '').trim()
+    const savedLobby = (savedSession?.server || localStorage.getItem('shadow-ascension-last-lobby') || '').trim() || 'asterra-01'
+    const hasValidLogin = Boolean(savedSession?.accountId && savedSession?.username)
+    if (savedSession?.accountId) localStorage.setItem('shadow-ascension-player-id', savedSession.accountId)
     this.settings={renderDistance:2,pixelRatio:Math.min(window.devicePixelRatio||1,1.5),uiScale:1.2,shadows:true,invertCameraX:false,invertCameraY:false,invertCamera:false,multiplayerUrl:localStorage.getItem('shadow-ascension-mp-url')||''}
     this.state={
-      version:8,playerName:savedNick,needsNickname:!savedNick,level:1,xp:0,nextXp:120,hp:120,maxHp:120,baseMaxHp:120,stamina:100,maxStamina:100,baseMaxStamina:100,gold:220,
+      version:8,playerName:savedNick,needsNickname:!hasValidLogin && !savedNick,level:1,xp:0,nextXp:120,hp:120,maxHp:120,baseMaxHp:120,stamina:100,maxStamina:100,baseMaxStamina:100,gold:220,
       baseAtk:16,baseDef:5,atk:16,def:5,speed:7.1,zone:'Vila Aurora',zoneId:'aurora',target:null,dungeon:null,boss:null,
       inventory:starterInventory(),equipment:{weapon:null,armor:null,boots:null,talisman:null},quests:defaultQuestState(),
       mount:{unlocked:false,active:false,name:'Corcel de Aurora'},classState:defaultClassState(),travelState:defaultTravelState(),ambush:null,uiPanel:null,dialogue:null,interactionPrompt:null,
@@ -2283,6 +2287,44 @@ applyEnemyNetworkState(st){
   }
 
   setPlayerName(name){const clean=String(name||'').normalize('NFKC').replace(/[^\p{L}\p{N} _.\-]/gu,'').replace(/\s+/g,' ').trim().slice(0,24);if(clean.length<2){this.toast('Use um nick com pelo menos 2 caracteres.');return false}this.state.playerName=clean;this.state.needsNickname=false;localStorage.setItem('shadow-ascension-nick',clean);this.multiplayer?.setIdentity(clean);this.updatePlayerNameplate(this.localPlayerLabel,{name:clean,level:this.state.level,hp:this.state.hp,maxHp:this.state.maxHp,guildRank:this.state.guildRank},true);this.saveGame();return true}
+  setPlayerAccount(session, profile = null){
+    if(!session) return false
+    const username = session.username || 'Aventureiro'
+    const server = session.server || 'asterra-01'
+    this.state.playerName = username
+    this.state.needsNickname = false
+    this.state.multiplayer.room = server
+    localStorage.setItem('shadow-ascension-nick', username)
+    localStorage.setItem('shadow-ascension-last-lobby', server)
+    if(session.accountId){
+      localStorage.setItem('shadow-ascension-player-id', session.accountId)
+      if(this.multiplayer) this.multiplayer.playerId = session.accountId
+    }
+    this.multiplayer?.setIdentity(username)
+    this.multiplayer?.setRoom(server)
+    this.updatePlayerNameplate(this.localPlayerLabel, {
+      name: username,
+      level: this.state.level,
+      hp: this.state.hp,
+      maxHp: this.state.maxHp,
+      guildRank: this.state.guildRank
+    }, true)
+    if(profile?.game){
+      this.applyServerProfile(profile.game, profile.updatedAt || Date.now())
+    }
+    this.saveGame()
+    this.multiplayer?.connect()
+    this.toast(`Bem-vindo, ${username}! Conectado ao ${server.replace('asterra-','Servidor ')}.`)
+    return true
+  }
+  logoutAccount(){
+    localStorage.removeItem('shadow_rpg_account_session')
+    localStorage.removeItem('shadow-ascension-nick')
+    this.state.playerName = ''
+    this.state.needsNickname = true
+    this.multiplayer?.disconnect()
+    this.toast('Você saiu da sua conta.')
+  }
   connectMultiplayer(url){const value=String(url||'').trim();this.settings.multiplayerUrl=value;this.state.multiplayer.url=value;localStorage.setItem('shadow-ascension-mp-url',value);if(value)this.multiplayer.connect(value);else this.multiplayer.disconnect();this.saveGame()}
   setMultiplayerLobby(room){const next=this.multiplayer?.setRoom?.(room)||String(room||'asterra-01');this.state.multiplayer.room=next;localStorage.setItem('shadow-ascension-last-lobby',next);this.toast(`Entrando no ${next.replace('asterra-','Lobby ')}...`);this.saveGame();return next}
   profileSnapshot(){const room=this.multiplayer?.room||this.state.multiplayer?.room||localStorage.getItem('shadow-ascension-last-lobby')||'asterra-01';return{state:{...this.state,version:8,target:null,dungeon:null,uiPanel:null,dialogue:null,portal:null,interactionPrompt:null,merchant:[],minimap:null,mapSnapshot:null,party:{id:null,leaderId:null,members:[],totalXP:0},onlinePlayers:[],multiplayer:{connected:false,url:this.settings.multiplayerUrl,room,players:0}},position:{x:this.player?.position.x||0,z:this.player?.position.z||0},dayHours:this.dayHours,settings:this.settings,multiplayerRoom:room,discovered:[...this.discovered]}}

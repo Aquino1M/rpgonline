@@ -4,7 +4,7 @@ import { EQUIPMENT_SLOTS, GUILD_RANKS, ATTRIBUTE_DEFS } from './game/config.js'
 import { CLASSES_LIST, CLASS_TIERS, CLASS_RANKS, getClassRankInfo } from './game/classesData.js'
 import { TRAVEL_NODES, calculateTravelCost } from './game/fastTravel.js'
 import { calculateGrimoireCost, getNextGrimoireLevel } from './game/rpgSystems.js'
-import { getSupabaseConfig, saveSupabaseConfig } from './game/supabaseService.js'
+import { getSupabaseConfig, saveSupabaseConfig, getSavedAccountSession, registerAccount, loginAccount, clearAccountSession } from './game/supabaseService.js'
 import MiniMap from './ui/Minimap.jsx'
 import WorldMap from './ui/WorldMap.jsx'
 
@@ -158,7 +158,7 @@ export default function App(){
       {panel==='map'&&<WorldMap hud={hud}/>} 
       {panel==='settings'&&<Settings hud={hud} apply={v=>call('applySettings',v)} connect={url=>call('connectMultiplayer',url)} setName={name=>call('setPlayerName',name)} call={call}/>} 
     </Overlay>}
-    {hud.needsNickname&&<NicknameGate initialName={hud.playerName} onSave={name=>call('setPlayerName',name)}/>}
+    {hud.needsNickname&&<AuthGate initialServer={hud.multiplayer?.room||'asterra-01'} onLogin={(session,profile)=>call('setPlayerAccount',session,profile)}/>}
   </div>
 }
 
@@ -836,6 +836,19 @@ function Settings({hud,apply,connect,setName,call}){
   }
 
   return <div className="settings">
+    {getSavedAccountSession() && (
+      <div className="save-backup-setting glass" style={{ borderColor: 'rgba(56, 189, 248, 0.35)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+          <div>
+            <b>Conta: {getSavedAccountSession().username}</b>
+            <small>Servidor Atual: {multiplayerLobbies.find(x => x.id === currentLobby)?.name || currentLobby}</small>
+          </div>
+          <button className="save-btn" style={{ background: '#7f1d1d', borderColor: '#ef4444', color: '#fee2e2' }} onClick={() => call('logoutAccount')}>
+            🚪 Sair da Conta (Trocar)
+          </button>
+        </div>
+      </div>
+    )}
     <div className="profile-setting">
       <div><b>Perfil do aventureiro</b><small>O nick, nível, HP e rank aparecem acima do seu personagem no multiplayer.</small></div>
       <input value={nick} maxLength={24} onChange={e=>setNick(e.target.value)} placeholder="Seu nick"/>
@@ -920,29 +933,168 @@ function Setting({label,value,children}){return <label className="setting"><span
 function formatRefresh(ms){if(ms==null)return '--:--';const s=Math.max(0,Math.ceil(ms/1000));return `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`}
 
 
-function NicknameGate({initialName='',onSave}){
-  const [name,setName]=useState(initialName||'')
-  const submit=e=>{
+function AuthGate({ initialServer = 'asterra-01', onLogin }) {
+  const [mode, setMode] = useState('login')
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [selectedServer, setSelectedServer] = useState(() => {
+    const saved = getSavedAccountSession()
+    return saved?.server || initialServer || 'asterra-01'
+  })
+  const [loading, setLoading] = useState(false)
+  const [errorMsg, setErrorMsg] = useState('')
+
+  useEffect(() => {
+    const saved = getSavedAccountSession()
+    if (saved && saved.username && saved.accountId) {
+      onLogin(saved, null)
+    }
+  }, [])
+
+  const handleSubmit = async (e) => {
     e?.preventDefault?.()
-    if(name.trim().length>=2)onSave(name.trim())
+    setErrorMsg('')
+    const clean = username.trim()
+    if (!clean) {
+      setErrorMsg('Informe o nome de usuário.')
+      return
+    }
+    if (!password) {
+      setErrorMsg('Informe sua senha.')
+      return
+    }
+    if (mode === 'register') {
+      if (clean.length < 3) {
+        setErrorMsg('O nome de usuário deve ter pelo menos 3 caracteres.')
+        return
+      }
+      if (password.length < 4) {
+        setErrorMsg('A senha deve ter pelo menos 4 caracteres.')
+        return
+      }
+      if (password !== confirmPassword) {
+        setErrorMsg('As senhas digitadas não coincidem.')
+        return
+      }
+    }
+
+    setLoading(true)
+    try {
+      if (mode === 'register') {
+        const res = await registerAccount({ username: clean, password, server: selectedServer })
+        if (!res.ok) {
+          setErrorMsg(res.error || 'Erro ao criar conta.')
+          setLoading(false)
+          return
+        }
+        onLogin(res.session, null)
+      } else {
+        const res = await loginAccount({ username: clean, password, server: selectedServer })
+        if (!res.ok) {
+          setErrorMsg(res.error || 'Erro ao entrar na conta.')
+          setLoading(false)
+          return
+        }
+        onLogin(res.session, res.profile)
+      }
+    } catch (err) {
+      setErrorMsg(String(err?.message || err))
+    } finally {
+      setLoading(false)
+    }
   }
+
   return (
-    <div className="nickname-gate" onKeyDown={e=>e.stopPropagation()}>
-      <form className="nickname-card glass" onSubmit={submit} onKeyDown={e=>e.stopPropagation()}>
-        <small>SHADOW ASCENSION • PERFIL LAN</small>
-        <h1>Escolha seu nick</h1>
-        <p>Esse nome fica salvo neste dispositivo e no servidor local. Outros jogadores verão seu nick, HP, nível e rank da guilda acima do personagem.</p>
-        <input
-          autoFocus
-          maxLength={24}
-          value={name}
-          onChange={e=>setName(e.target.value)}
-          onKeyDown={e=>e.stopPropagation()}
-          placeholder="Ex.: Aquino"
-        />
-        <button type="submit" disabled={name.trim().length<2}>ENTRAR EM ASTERRA</button>
-        <em>Você poderá alterar o nick depois em Opções.</em>
-      </form>
+    <div className="auth-gate" onKeyDown={e => e.stopPropagation()}>
+      <div className="auth-card" onKeyDown={e => e.stopPropagation()}>
+        <div className="auth-header">
+          <small>SHADOW ASCENSION MMORPG</small>
+          <h1>{mode === 'login' ? 'Portal de Acesso' : 'Criar Nova Conta'}</h1>
+          <p>{mode === 'login' ? 'Entre na sua conta para carregar seu progresso salvo.' : 'Crie sua conta única para jogar e salvar na nuvem.'}</p>
+        </div>
+
+        <div className="auth-tabs">
+          <button
+            type="button"
+            className={`auth-tab-btn ${mode === 'login' ? 'active' : ''}`}
+            onClick={() => { setMode('login'); setErrorMsg('') }}
+          >
+            Entrar
+          </button>
+          <button
+            type="button"
+            className={`auth-tab-btn ${mode === 'register' ? 'active' : ''}`}
+            onClick={() => { setMode('register'); setErrorMsg('') }}
+          >
+            Criar Conta
+          </button>
+        </div>
+
+        <form className="auth-form" onSubmit={handleSubmit}>
+          {errorMsg && <div className="auth-error">⚠ {errorMsg}</div>}
+
+          <div className="auth-field">
+            <label>Nome do Aventureiro</label>
+            <input
+              autoFocus
+              type="text"
+              maxLength={24}
+              value={username}
+              onChange={e => setUsername(e.target.value)}
+              placeholder="Ex.: Aquino"
+              disabled={loading}
+            />
+          </div>
+
+          <div className="auth-field">
+            <label>Senha</label>
+            <input
+              type="password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              placeholder="Sua senha secreta"
+              disabled={loading}
+            />
+          </div>
+
+          {mode === 'register' && (
+            <div className="auth-field">
+              <label>Confirmar Senha</label>
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={e => setConfirmPassword(e.target.value)}
+                placeholder="Repita sua senha"
+                disabled={loading}
+              />
+            </div>
+          )}
+
+          <div className="auth-servers-section">
+            <label>
+              <b>Servidor Escolhido:</b>
+              <span>{multiplayerLobbies.find(x => x.id === selectedServer)?.name || selectedServer}</span>
+            </label>
+            <div className="auth-servers-grid">
+              {multiplayerLobbies.map(l => (
+                <div
+                  key={l.id}
+                  className={`auth-server-card ${selectedServer === l.id ? 'active' : ''}`}
+                  onClick={() => setSelectedServer(l.id)}
+                >
+                  <b>{l.name}</b>
+                  <small>{selectedServer === l.id ? '● SELECIONADO' : '○ DISPONÍVEL'}</small>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <button type="submit" className="auth-submit-btn" disabled={loading}>
+            {loading ? 'Conectando ao Supabase...' : mode === 'login' ? '⚔ Entrar no Servidor' : '✨ Criar Conta e Jogar'}
+          </button>
+        </form>
+      </div>
     </div>
   )
 }
