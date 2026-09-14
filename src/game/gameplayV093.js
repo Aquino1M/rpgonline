@@ -297,7 +297,10 @@ if (!ShadowGame.prototype[PATCH_FLAG]) {
     group.add(ground)
 
     const waterChance = hash2(cx, cz)
-    const hasWater = zone.id === 'coast' || waterChance > .91
+    const midX = cx * size, midZ = cz * size
+    const nearRoad = this.isOnRoad?.(midX, midZ, size * 0.62)
+    const nearCity = this.isInsideCitySafeZone?.(midX, midZ, 34)
+    const hasWater = (zone.id === 'coast' || waterChance > .91) && !nearRoad && !nearCity
     let waterMesh = null
     if (hasWater) {
       waterMesh = new THREE.Mesh(shared.waterGeo, shared.waterMat)

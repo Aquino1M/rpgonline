@@ -6,6 +6,8 @@ import { defaultClassState, starterInventory, defaultQuestState, merchantStock, 
 import { MultiplayerClient, sameOriginMultiplayerUrl, sameOriginHttpMultiplayerUrl } from './multiplayer.js'
 import { CLASSES_LIST, rollDestinyClass, CLASS_RANKS, getClassRankInfo } from './classesData.js'
 import { TRAVEL_NODES, calculateTravelCost, rollRoadAmbush, defaultTravelState } from './fastTravel.js'
+import { GateManager } from './dungeons/GateManager.js'
+import { XPFeedbackManager } from './dungeons/XPFeedbackManager.js'
 
 const V3=()=>new THREE.Vector3()
 const mat=(color,extra={})=>new THREE.MeshStandardMaterial({color,roughness:.72,...extra})
@@ -18,7 +20,7 @@ export class ShadowGame {
   constructor(canvas,onHud){
     this.canvas=canvas; this.onHud=onHud; this.assets=new AssetLibrary()
     const isMobUA = typeof navigator !== 'undefined' && /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent || '');
-    this.keys={}; this.enemies=[]; this.bots=[]; this.guards=[]; this.respawnQueue=[]; this.respawnLocks=new Map(); this.chunks=new Map(); this.portals=[]; this.projectiles=[]; this.npcs=[]; this.remotePlayers=new Map(); this.effects=[]; this.virtualMove={x:0,z:0}; this.combatMode=false; this.specialAnim=0; this.lastTouch=null; this.freeLook=false; this.freeLookPointer=null; this.freeLookLast=null; this.uiSuspendedCombat=false; this.isTouchDevice=isMobUA && !window.matchMedia?.('(pointer: fine)').matches; this.verticalVelocity=0; this.grounded=true; this.aimNdcX=0
+    this.keys={}; this.enemies=[]; this.bots=[]; this.guards=[]; this.respawnQueue=[]; this.respawnLocks=new Map(); this.chunks=new Map(); this.portals=[]; this.projectiles=[]; this.npcs=[]; this.remotePlayers=new Map(); this.effects=[]; this.virtualMove={x:0,z:0}; this.combatMode=false; this.specialAnim=0; this.lastTouch=null; this.freeLook=false; this.freeLookPointer=null; this.freeLookLast=null; this.uiSuspendedCombat=false; this.isTouchDevice=isMobUA && !window.matchMedia?.('(pointer: fine)').matches; this.verticalVelocity=0; this.grounded=true; this.aimNdcX=0; this.combatCooldown=0; this.inCombat=false;
     this.resourceNodes=[]; this.mobSpecialCooldowns=new Map()
     this.clock=new THREE.Clock(); this.yaw=Math.PI; this.pitch=0.14; this.cameraDistance=5.2; this.drag=false; this.pointerLocked=false
     this.weatherClock=0; this.weatherIndex=0; this.dayHours=8.25; this.lastHud=0; this.attackClock=0; this.specialClock=0; this.dashTime=0; this.invuln=0
@@ -37,7 +39,7 @@ export class ShadowGame {
       mount:{unlocked:false,active:false,oathCompleted:false,name:'Corcel de Aurora',currentHorseId:'horse_aurora',speedBonus:4.7,tamedHorses:[]},classState:defaultClassState(),travelState:defaultTravelState(),ambush:null,uiPanel:null,dialogue:null,interactionPrompt:null,
       weather:'Céu limpo',time:'08:15',timeHours:8.25,portal:null,merchant:[],toast:null,settings:this.settings,
       worldMap:WORLD_MAP,playerPosition:{x:0,z:0},playerHeading:0,stats:{kills:0,dungeons:0,bosses:0},ores:2,
-      abilities:ABILITIES.map(a=>({...a,remaining:0,ready:true})),currentCity:null,combatMode:false,
+      abilities:ABILITIES.map(a=>({...a,remaining:0,ready:true})),currentCity:null,combatMode:false,inCombat:false,combatTimer:0,
       attributes:{strength:0,vitality:0,agility:0,intellect:0},attributePoints:0,
       guildRankIndex:0,guildRank:'E',guildPoints:0,guildMissions:[],guildMissionCycle:null,shopRefresh:null,
       economy:{cityId:'aurora-city',...CITY_ECONOMIES['aurora-city']},party:{id:null,leaderId:null,members:[],totalXP:0},onlinePlayers:[],
@@ -64,6 +66,7 @@ export class ShadowGame {
     this.cityGroups=[]; this.cityById=new Map(); this.buildWorldCities(); this.ensureSafeSpawn(); this.buildRoadNetwork(); this.buildLandmarks()
     this.village=this.cityGroups.find(c=>c.city.id==='aurora-city')?.group||new THREE.Group()
     this.makeNPCs(); this.spawnAdventurerBots(); this.spawnCityGuards(); this.seedPortals(); this.createWeatherSystem(); this.bind(); this.createDungeonArena(); this.resize(); refreshGuildBoard(this.state)
+    this.gateManager=new GateManager(this); this.xpFeedback=new XPFeedbackManager(this); this.gateManager.init()
     this.resizeObserver=new ResizeObserver(()=>this.resize()); this.resizeObserver.observe(this.canvas)
     this.autoSave=setInterval(()=>this.saveGame(),10000)
     const autoWs=sameOriginMultiplayerUrl(),autoHttp=!autoWs?sameOriginHttpMultiplayerUrl():'',autoMp=autoWs||autoHttp;this.multiplayer=new MultiplayerClient({url:autoMp||this.settings.multiplayerUrl,room:this.state.multiplayer?.room||savedLobby,name:this.state.playerName||'Aventureiro',onEvent:e=>this.onMultiplayerEvent(e)});this.settings.multiplayerUrl=this.multiplayer.url||this.settings.multiplayerUrl;this.state.settings=this.settings;this.state.multiplayer.url=this.settings.multiplayerUrl;this.state.multiplayer.room=this.multiplayer.room;if(this.multiplayer.url)this.multiplayer.connect()
@@ -182,15 +185,16 @@ export class ShadowGame {
 
     // Service stalls / guild boards use the same coordinates as the actual NPCs.
     for(const svc of city.services||[]){
-      const role=svc.role,c=role==='merchant'?0xc9944c:role==='blacksmith'?0xa94f3f:role==='stable'?0x6290a8:0x5e79ad
+      const role=svc.role,c=role==='merchant'?0xc9944c:role==='blacksmith'?0xa94f3f:role==='stable'?0x6290a8:role==='townhall'?0x3b82f6:role==='guild'?0xeab308:role==='quest'?0x60a5fa:0x5e79ad
       const stall=new THREE.Group();stall.userData.service=role
       const table=mesh(new THREE.BoxGeometry(role==='blacksmith'?3.4:3,.18,1.5),mat(0x6b482d));table.position.y=1;stall.add(table)
       const canopy=mesh(new THREE.BoxGeometry(3.4,.12,1.9),mat(c));canopy.position.y=2.5;stall.add(canopy)
       for(const xx of [-1.45,1.45]){const pole=mesh(new THREE.CylinderGeometry(.05,.05,2.6,6),mat(0x5b3d28));pole.position.set(xx,1.3,0);stall.add(pole)}
       if(role==='blacksmith'){const anvil=mesh(new THREE.BoxGeometry(.8,.35,.45),mat(0x606770,{metalness:.6,roughness:.35}));anvil.position.set(0,.72,.95);stall.add(anvil)}
-      const signText=role==='merchant'?'LOJA • MERCADOR':role==='blacksmith'?'FERREIRO':role==='stable'?'ESTÁBULO':role==='traveler'?'VIAGENS':'GUILDA / MISSÕES'
+      const signText=role==='merchant'?'LOJA • MERCADOR':role==='blacksmith'?'FERREIRO RÚNICO':role==='stable'?'ESTÁBULOS':role==='traveler'?'CARAVANA • VIAGENS':role==='townhall'?'🏛️ PREFEITURA':role==='guild'?'⚔️ GUILDA DE AVENTUREIROS':role==='quest'?'📜 QUADRO DE MISSÕES':'SERVIÇOS'
+      const signBorder=role==='merchant'?'#72f0ad':role==='blacksmith'?'#ff9270':role==='stable'||role==='traveler'?'#7dd3fc':role==='townhall'?'#60a5fa':role==='guild'?'#fbbf24':'#a78bfa'
       const signCanvas=document.createElement('canvas');signCanvas.width=512;signCanvas.height=128
-      const signCtx=signCanvas.getContext('2d');signCtx.clearRect(0,0,512,128);signCtx.fillStyle='rgba(4,16,26,.88)';signCtx.strokeStyle=role==='merchant'?'#72f0ad':role==='blacksmith'?'#ff9270':role==='stable'||role==='traveler'?'#7dd3fc':'#ffd866';signCtx.lineWidth=8;signCtx.beginPath();signCtx.roundRect?.(12,14,488,100,28);if(!signCtx.roundRect){signCtx.rect(12,14,488,100)}signCtx.fill();signCtx.stroke();signCtx.font='900 44px Inter,Arial';signCtx.textAlign='center';signCtx.textBaseline='middle';signCtx.fillStyle='#ffffff';signCtx.fillText(signText,256,65)
+      const signCtx=signCanvas.getContext('2d');signCtx.clearRect(0,0,512,128);signCtx.fillStyle='rgba(4,16,26,.88)';signCtx.strokeStyle=signBorder;signCtx.lineWidth=8;signCtx.beginPath();signCtx.roundRect?.(12,14,488,100,28);if(!signCtx.roundRect){signCtx.rect(12,14,488,100)}signCtx.fill();signCtx.stroke();signCtx.font='900 38px Inter,Arial';signCtx.textAlign='center';signCtx.textBaseline='middle';signCtx.fillStyle='#ffffff';signCtx.fillText(signText,256,65)
       const signTexture=new THREE.CanvasTexture(signCanvas);signTexture.colorSpace=THREE.SRGBColorSpace;signTexture.minFilter=THREE.LinearFilter
       const sign=new THREE.Sprite(new THREE.SpriteMaterial({map:signTexture,transparent:true,depthTest:false,depthWrite:false,toneMapped:false}));sign.position.set(0,3.75,0);sign.scale.set(5.0,1.18,1);sign.renderOrder=25;sign.userData.serviceLabel=true;stall.add(sign)
       stall.position.set(svc.x-city.x,0,svc.z-city.z);g.add(stall)
@@ -332,8 +336,24 @@ export class ShadowGame {
     const body=mesh(new THREE.CapsuleGeometry(.32,.8,5,9),mat(def.color));body.position.y=1.05;g.add(body)
     const head=mesh(new THREE.SphereGeometry(.26,12,10),mat(0xe6b38c));head.position.y=1.78;g.add(head)
     const hair=mesh(new THREE.SphereGeometry(.275,10,7,0,Math.PI*2,0,Math.PI*.55),mat(def.id==='brann'?0x5b2d23:0x342b27));hair.position.y=1.87;g.add(hair)
-    const marker=mesh(new THREE.OctahedronGeometry(.14),new THREE.MeshBasicMaterial({color:def.role==='quest'?0xffd34f:def.role==='merchant'?0x70e1a1:def.role==='blacksmith'?0xff855e:def.role==='townhall'?0x64b5f6:def.role==='guild'?0xba68c8:def.role==='stable'?0xeab308:0x8bd5ff}));marker.position.y=2.55;g.add(marker)
-    return {g,def,marker,body,head,hair}
+    const markerColor=def.role==='quest'?0x38bdf8:def.role==='merchant'?0x70e1a1:def.role==='blacksmith'?0xff855e:def.role==='townhall'?0x60a5fa:def.role==='guild'?0xfbbf24:def.role==='stable'?0xa3e635:0x8bd5ff
+    const marker=mesh(new THREE.OctahedronGeometry(.14),new THREE.MeshBasicMaterial({color:markerColor}));marker.position.y=2.55;g.add(marker)
+
+    // Overhead nameplate sprite for NPC
+    const c=document.createElement('canvas');c.width=384;c.height=96
+    const ctx=c.getContext('2d');ctx.clearRect(0,0,384,96)
+    ctx.textAlign='center';ctx.textBaseline='middle'
+    ctx.fillStyle='rgba(5,12,22,0.85)';ctx.strokeStyle=def.role==='townhall'?'#60a5fa':def.role==='guild'?'#fbbf24':def.role==='quest'?'#38bdf8':'#ffffff'
+    ctx.lineWidth=4;ctx.beginPath();ctx.roundRect?.(12,12,360,72,20);if(!ctx.roundRect){ctx.rect(12,12,360,72)}ctx.fill();ctx.stroke()
+    ctx.font='900 28px Inter,Arial';ctx.fillStyle='#ffffff';ctx.fillText(def.name,192,36)
+    ctx.font='700 18px Inter,Arial';ctx.fillStyle=def.role==='townhall'?'#93c5fd':def.role==='guild'?'#fde047':def.role==='quest'?'#7dd3fc':'#cbd5e1'
+    const sub=def.role==='townhall'?'[Prefeitura]':def.role==='guild'?'[Guilda]':def.role==='quest'?'[Missões]':def.role==='merchant'?'[Mercador]':def.role==='blacksmith'?'[Ferreiro]':def.role==='stable'?'[Estábulos]':'[NPC]'
+    ctx.fillText(sub,192,66)
+    const tx=new THREE.CanvasTexture(c);tx.minFilter=THREE.LinearFilter;tx.colorSpace=THREE.SRGBColorSpace
+    const tag=new THREE.Sprite(new THREE.SpriteMaterial({map:tx,transparent:true,depthTest:false,depthWrite:false,toneMapped:false}))
+    tag.position.y=2.95;tag.scale.set(2.4,0.6,1);tag.renderOrder=32;g.add(tag)
+
+    return {g,def,marker,body,head,hair,tag}
   }
 
   createWeatherSystem(){
@@ -753,7 +773,10 @@ export class ShadowGame {
   buildChunk(cx,cz,key){
     const size=WORLD.chunkSize,zone=this.zoneForChunk(cx,cz),group=new THREE.Group();group.position.set(cx*size,0,cz*size);group.userData.chunkKey=key
     const ground=mesh(new THREE.PlaneGeometry(size,size,8,8),mat(zone.ground));ground.rotation.x=-Math.PI/2;ground.receiveShadow=true;group.add(ground)
-    const waterChance=hash2(cx,cz),hasWater=zone.id==='coast'||waterChance>.91;if(hasWater){
+    const waterChance=hash2(cx,cz)
+    const midX=cx*size,midZ=cz*size
+    const hasWater=(zone.id==='coast'||waterChance>.91)&&!this.isOnRoad(midX,midZ,size*0.62)&&!this.isInsideCitySafeZone(midX,midZ,34)
+    if(hasWater){
       const water=mesh(new THREE.PlaneGeometry(size*.86,size*.42,12,8),new THREE.MeshStandardMaterial({color:0x1e88e5,transparent:true,opacity:.82,roughness:.15,metalness:.05,depthWrite:false}));water.rotation.x=-Math.PI/2;water.position.y=.12;water.userData.water=true;group.add(water)
     }
     const decorCount=(zone.id==='void'?4:6+Math.floor(hash2(cx+11,cz+5)*8))*WORLD.detailDensity,colliders=[]
@@ -1121,7 +1144,7 @@ export class ShadowGame {
               if(this.invuln<=0){
                 let dealt=Math.max(1,Math.round(dmg-this.state.def*.42))
                 if(this.state.blocking)dealt=Math.max(1,Math.round(dealt*.32))
-                this.state.hp=Math.max(0,this.state.hp-dealt)
+                this.damagePlayer(dealt)
               }
             }else{
               target.hp-=dmg
@@ -1139,8 +1162,22 @@ export class ShadowGame {
     }
   }
 
+  enterCombat(seconds=8){
+    this.combatCooldown=Math.max(this.combatCooldown||0,seconds)
+    this.inCombat=true
+    this.state.inCombat=true
+    this.state.combatTimer=Math.ceil(this.combatCooldown)
+  }
+
+  damagePlayer(amount){
+    const dealt=Math.max(1,Math.round(amount))
+    this.state.hp=Math.max(0,this.state.hp-dealt)
+    this.enterCombat(8)
+    return dealt
+  }
+
   damageBot(bot,amount,{crit=false}={}){
-    if(!bot||bot.dead)return false;const dealt=Math.max(1,Math.round(amount));bot.hp-=dealt;bot.hostileToPlayer=true;this.state.target={name:`${bot.name} [IA]`,level:bot.level,hp:Math.max(0,bot.hp),maxHp:bot.maxHp,boss:false,adventurer:true,crit};this.spawnDamageText(bot.g.position,dealt,crit);this.updatePlayerNameplate(bot.label,{name:`${bot.name} [IA]`,level:bot.level,hp:bot.hp,maxHp:bot.maxHp,guildRank:bot.guildRank},false);if(bot.hp<=0)this.killBot(bot);return true
+    if(!bot||bot.dead)return false;this.enterCombat(8);const dealt=Math.max(1,Math.round(amount));bot.hp-=dealt;bot.hostileToPlayer=true;this.state.target={name:`${bot.name} [IA]`,level:bot.level,hp:Math.max(0,bot.hp),maxHp:bot.maxHp,boss:false,adventurer:true,crit};this.spawnDamageText(bot.g.position,dealt,crit);this.updatePlayerNameplate(bot.label,{name:`${bot.name} [IA]`,level:bot.level,hp:bot.hp,maxHp:bot.maxHp,guildRank:bot.guildRank},false);if(bot.hp<=0)this.killBot(bot);return true
   }
 
   killBot(bot,{byPlayer=true}={}){
@@ -1251,7 +1288,6 @@ export class ShadowGame {
           this.updateMobLabel(targetMob)
           if(targetMob.hp<=0){
             this.killByBot(targetMob,guard)
-            this.toast(`⚔ ${guard.name} defendeu a muralha e eliminou ${targetMob.name}!`)
           }
         }
       }
@@ -1444,7 +1480,7 @@ export class ShadowGame {
 
   damageEnemy(e,amount,{knockback=.35,crit=false,network=true}={}){
     if(e?.adventurer)return this.damageBot(e,amount,{crit})
-    if(!e||e.dead)return false;const dealt=Math.max(1,Math.round(amount));e.hp-=dealt
+    if(!e||e.dead)return false;this.enterCombat(8);const dealt=Math.max(1,Math.round(amount));e.hp-=dealt
     this.state.target={name:e.name,level:e.level,hp:Math.max(0,e.hp),maxHp:e.maxHp,boss:e.boss,crit};if(network&&e.netId)this.multiplayer?.send({type:'enemy_damage',netId:e.netId,amount:dealt,hpAfter:Math.max(0,e.hp),maxHp:e.maxHp,world:this.currentWorldId(),respawnAt:Date.now()+5000});this.spawnDamageText(e.g.position,dealt,crit);this.flashEnemy(e,crit)
     if(knockback)e.g.position.addScaledVector(e.g.position.clone().sub(this.player.position).normalize(),knockback)
     if(e.hp<=0)this.kill(e);return true
@@ -1682,6 +1718,7 @@ export class ShadowGame {
   }
 
   shootArrow(){
+    this.enterCombat(8)
     const maxRange=30
     const aimed=this.getCrosshairTarget(maxRange,.28)
     const origin=this.player.position.clone()
@@ -1771,7 +1808,7 @@ export class ShadowGame {
             if(this.invuln <= 0 && !this.isInsideCitySafeZone(this.player.position.x, this.player.position.z, 1)){
               let dealt = Math.max(2, Math.round(p.dmg - this.state.def * 0.38))
               if(this.state.blocking) dealt = Math.max(1, Math.round(dealt * 0.3))
-              this.state.hp = Math.max(0, this.state.hp - dealt)
+              this.damagePlayer(dealt)
               this.spawnDamageText(this.player.position, dealt, false)
               this.spawnAbilityRing(p.color||0x22c55e, 2.0, 0.5)
               this.haptic(35)
@@ -1820,6 +1857,7 @@ export class ShadowGame {
   castAbility(slot=1){
     const ability=ABILITIES.find(a=>a.slot===Number(slot));if(!ability||this.state.uiPanel)return false
     const remain=this.abilityCooldowns[ability.id]||0;if(remain>0||this.state.stamina<ability.cost)return false
+    if(ability.slot===1||ability.slot===2)this.enterCombat(8)
     this.state.stamina-=ability.cost;this.abilityCooldowns[ability.id]=ability.cooldown;this.haptic(18);this.multiplayer?.send({type:'ability',slot:ability.slot,id:ability.id,world:this.currentWorldId()})
     if(ability.slot===1){
       const target=this.getCrosshairTarget(ability.range,.22)
@@ -1839,6 +1877,7 @@ export class ShadowGame {
   kill(e){
     if(e?.adventurer)return this.killBot(e)
     if(!e||e.dead)return;e.dead=true;(this.state.dungeon?this.dungeonArena:this.worldRoot).remove(e.g);const respawnAt=!this.state.dungeon?this.scheduleEnemyRespawn(e):0;if(e.netId)this.multiplayer?.send({type:'enemy_dead',netId:e.netId,world:this.currentWorldId(),respawnAt});this.state.stats.kills++;if(e.boss)this.state.stats.bosses++
+    this.gateManager?.onEnemyKilled(e)
     if(e.boss&&this.state.classState?.activeClassId==='chaos_sovereign'){
       this.state.classState.bossPowersAbsorbed=(this.state.classState.bossPowersAbsorbed||0)+1
       this.recalcStats()
@@ -1858,9 +1897,29 @@ export class ShadowGame {
     this.gainXp(xp)
   }
 
-  gainXp(x){
-    this.state.xp+=Math.max(0,Math.round(x||0))
-    while(this.state.xp>=this.state.nextXp&&this.state.level<300){this.state.xp-=this.state.nextXp;this.state.level++;this.state.nextXp=Math.round(120*Math.pow(this.state.level,1.38));this.state.baseMaxHp=(this.state.baseMaxHp||this.state.maxHp||120)+8;this.state.baseAtk+=2;this.state.baseDef+=1;this.state.attributePoints=(this.state.attributePoints||0)+1;progressQuest(this.state,'level','level',1);this.toast(`Nível ${this.state.level}! +1 ponto de atributo`)}this.recalcStats();this.state.hp=this.state.maxHp
+  gainXp(x, partyTag = null){
+    const amount = Math.max(0, Math.round(x || 0))
+    if (this.xpFeedback) {
+      this.xpFeedback.awardXP(amount, { isPartyBonus: !!partyTag, bonusText: partyTag || '' })
+    }
+    this.state.xp += amount
+    while(this.state.xp >= this.state.nextXp && this.state.level < 300) {
+      this.state.xp -= this.state.nextXp
+      this.state.level++
+      this.state.nextXp = Math.round(120 * Math.pow(this.state.level, 1.38))
+      this.state.baseMaxHp = (this.state.baseMaxHp || this.state.maxHp || 120) + 8
+      this.state.baseAtk += 2
+      this.state.baseDef += 1
+      this.state.attributePoints = (this.state.attributePoints || 0) + 1
+      progressQuest(this.state, 'level', 'level', 1)
+      if (this.xpFeedback) {
+        this.xpFeedback.triggerLevelUp(this.state.level)
+      } else {
+        this.toast(`Nível ${this.state.level}! +1 ponto de atributo`)
+      }
+    }
+    this.recalcStats()
+    this.state.hp = this.state.maxHp
   }
 
   addInventoryItem(item){
@@ -2151,8 +2210,20 @@ export class ShadowGame {
   }
   toast(msg){this.state.toast={id:Date.now(),msg};setTimeout(()=>{if(this.state.toast?.msg===msg)this.state.toast=null},2200)}
 
+  openGateModal(gate){this.gateManager?.openGateModal(gate)}
+  closeGateModal(){this.gateManager?.closeGateModal()}
+  startSoloDungeon(gate){this.gateManager?.confirmSoloEntry(gate)}
+  startPartyReadyCheck(gate){this.gateManager?.startPartyReadyCheck(gate)}
+  confirmPartyReady(gate){this.gateManager?.confirmPartyReady(gate)}
+  cancelPartyReadyCheck(){this.gateManager?.closeGateModal()}
+  closeDungeonCompletion(){this.gateManager?.leaveDungeon()}
+  abandonDungeon(){this.gateManager?.leaveDungeon()}
+  setDestinationMarker(gate){this.gateManager?.setDestinationMarker(gate)}
+  clearDestinationMarker(){this.gateManager?.clearDestinationMarker()}
+
   interact(){
     if(this.state.uiPanel){this.closePanel();return}
+    if(this.gateManager&&this.gateManager.onInteract())return
     const portal=this.portals.find(q=>q.g.visible&&q.g.position.distanceTo(this.player.position)<3.8);if(portal){this.enterDungeon(portal);return}
     let near=null,dist=4.2;for(const n of this.npcs){const d=n.g.position.distanceTo(this.player.position);if(d<dist){near=n;dist=d}}
     if(near){
@@ -2227,7 +2298,7 @@ export class ShadowGame {
         if(e.boss){
           const targetPos=victim.position.clone()
           this.spawnAbilityRing(0xef4444,4.2,1.2)
-          this.toast(`⚠️ ${e.name} invocou Juízo Arcano!`)
+          if(!victimBot&&dPlayer<16)this.toast(`⚠️ ${e.name} invocou Juízo Arcano!`)
           setTimeout(()=>{
             if(e.dead)return
             if(targetPos.distanceTo(victim.position)<4.2){
@@ -2237,7 +2308,8 @@ export class ShadowGame {
                 this.updatePlayerNameplate(victimBot.label,{name:`${victimBot.name} [IA]`,level:victimBot.level,hp:victimBot.hp,maxHp:victimBot.maxHp,guildRank:victimBot.guildRank},false)
                 if(victimBot.hp<=0)this.killBot(victimBot,{byPlayer:false})
               }else if(this.invuln<=0&&!this.isInsideCitySafeZone(this.player.position.x,this.player.position.z,1)){
-                this.state.hp=Math.max(0,this.state.hp-(this.state.blocking?Math.round(dmg*.3):dmg))
+                const dmgDealt=this.state.blocking?Math.round(dmg*.3):dmg
+                this.damagePlayer(dmgDealt)
                 this.haptic(35)
               }
             }
@@ -2246,19 +2318,20 @@ export class ShadowGame {
           this.spawnMobSpecialAttack(e, victim, victimBot, mobRank)
         }else{
           this.spawnAbilityRing(0xef4444,2.8,.5)
-          this.toast(`🐺 ${e.name} usou Investida Furiosa!`)
+          if(!victimBot&&d<10)this.toast(`🐺 ${e.name} usou Investida Furiosa!`)
           if(d<4.0){
             const dmg=Math.max(2,Math.round(e.atk*1.2))
             if(victimBot){
               victimBot.hp=Math.max(0,victimBot.hp-Math.max(1,Math.round(dmg-victimBot.def*.35)))
             }else if(this.invuln<=0&&!this.isInsideCitySafeZone(this.player.position.x,this.player.position.z,1)){
-              this.state.hp=Math.max(0,this.state.hp-Math.max(1,Math.round(dmg-this.state.def*.35)))
+              const dmgDealt=Math.max(1,Math.round(dmg-this.state.def*.35))
+              this.damagePlayer(dmgDealt)
             }
           }
         }
       }
       if(d<16&&d>1.7){const dir=victim.position.clone().sub(e.g.position);dir.y=0;if(dir.lengthSq())dir.normalize();const step=(e.boss?2.2:2.75)*dt,next=e.g.position.clone().addScaledVector(dir,step),safe=this.cityAt(next.x,next.z,2.5);if(!safe&&this.canOccupy(next.x,next.z,e.boss?1.1:.55)){e.g.position.copy(next)}else if(safe){const away=e.g.position.clone().sub(new THREE.Vector3(safe.x,0,safe.z)).normalize();e.g.position.addScaledVector(away,step*.45)}e.g.rotation.y=Math.atan2(dir.x,dir.z);if(lunge)e.g.position.addScaledVector(dir,lunge*dt)}
-      if(d<=1.85&&performance.now()-e.last>1100){e.last=performance.now();e.attackAnim=.34;if(victimBot){const dmg=Math.max(1,Math.round(e.atk-victimBot.def*.42));victimBot.hp=Math.max(0,victimBot.hp-dmg);this.updatePlayerNameplate(victimBot.label,{name:`${victimBot.name} [IA]`,level:victimBot.level,hp:victimBot.hp,maxHp:victimBot.maxHp,guildRank:victimBot.guildRank},false);if(victimBot.hp<=0)this.killBot(victimBot,{byPlayer:false})}else if(!this.isInsideCitySafeZone(this.player.position.x,this.player.position.z,1)&&this.invuln<=0){let dmg=Math.max(1,Math.round(e.atk-this.state.def*.45));if(this.state.blocking)dmg=Math.max(1,Math.round(dmg*.3));this.state.hp=Math.max(0,this.state.hp-dmg)}}
+      if(d<=1.85&&performance.now()-e.last>1100){e.last=performance.now();e.attackAnim=.34;if(victimBot){const dmg=Math.max(1,Math.round(e.atk-victimBot.def*.42));victimBot.hp=Math.max(0,victimBot.hp-dmg);this.updatePlayerNameplate(victimBot.label,{name:`${victimBot.name} [IA]`,level:victimBot.level,hp:victimBot.hp,maxHp:victimBot.maxHp,guildRank:victimBot.guildRank},false);if(victimBot.hp<=0)this.killBot(victimBot,{byPlayer:false})}else if(!this.isInsideCitySafeZone(this.player.position.x,this.player.position.z,1)&&this.invuln<=0){let dmg=Math.max(1,Math.round(e.atk-this.state.def*.45));if(this.state.blocking)dmg=Math.max(1,Math.round(dmg*.3));this.damagePlayer(dmg)}}
     }
   }
 
@@ -2313,7 +2386,7 @@ export class ShadowGame {
     })
 
     const rankRom=['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'][rank]||`★${rank}`
-    if(!victimBot){
+    if(!victimBot&&mob.g.position.distanceTo(this.player.position)<16){
       this.toast(`⚡ ${mob.name} disparou ${namePower} (Rank ${rankRom})!`)
     }
   }
@@ -2330,10 +2403,21 @@ export class ShadowGame {
 
   updatePlayer(dt,t){
     if(this.state.hp<=0){
+      this.combatCooldown=0;this.inCombat=false;this.state.inCombat=false;this.state.combatTimer=0;
       this.state.hp=this.state.maxHp;this.state.mount.active=false;this.mountModel.visible=false;this.respawnPlayerAt('aurora-city');this.setWorldVisible(true);this.state.dungeon=null;this.dungeonArena.visible=false;this.repopulateVisibleChunks();this.toast('Você retornou à Cidadela Aurora.')
     }
+    if(this.combatCooldown>0){
+      this.combatCooldown=Math.max(0,this.combatCooldown-dt)
+      this.inCombat=this.combatCooldown>0
+      this.state.inCombat=this.inCombat
+      this.state.combatTimer=Math.ceil(this.combatCooldown)
+    }else if(this.state.inCombat){
+      this.inCombat=false
+      this.state.inCombat=false
+      this.state.combatTimer=0
+    }
     this.state.stamina=Math.min(this.state.maxStamina,this.state.stamina+18*dt)
-    if(this.state.stamina>=this.state.maxStamina-0.5&&this.state.hp<this.state.maxHp&&!this.state.dungeon?.transition){
+    if(!this.state.inCombat&&this.state.stamina>=this.state.maxStamina-0.5&&this.state.hp<this.state.maxHp&&!this.state.dungeon?.transition){
       const hpRatePerSec=Math.max(4,this.state.maxHp*0.045)
       this.state.hp=Math.min(this.state.maxHp,this.state.hp+hpRatePerSec*dt)
       this.restedRegenTimer=(this.restedRegenTimer||0)+dt
@@ -2414,10 +2498,19 @@ export class ShadowGame {
 
   updateInteractions(){
     let prompt=null,action=null
-    const p=this.portals.find(q=>q.g.visible&&q.g.position.distanceTo(this.player.position)<4.5)
-    if(p){
-      prompt=`E — entrar em ${p.name}`
-      action={type:'portal',label:`Entrar em ${p.name}`,icon:'🌀'}
+    if(this.gateManager){
+      const gatePrompt=this.gateManager.getInteractionPrompt()
+      if(gatePrompt){
+        prompt=gatePrompt.prompt
+        action=gatePrompt.action
+      }
+    }
+    if(!prompt){
+      const p=this.portals.find(q=>q.g.visible&&q.g.position.distanceTo(this.player.position)<4.5)
+      if(p){
+        prompt=`E — entrar em ${p.name}`
+        action={type:'portal',label:`Entrar em ${p.name}`,icon:'🌀'}
+      }
     }
     if(!prompt&&!this.state.dungeon){
       let near=null,dist=4.3
@@ -2728,6 +2821,7 @@ applyEnemyNetworkState(st){
       chunkSize:WORLD.chunkSize,player:{x:px,z:pz,heading:this.player.rotation.y},
       chunks:[...this.chunks.values()].map(c=>({cx:c.cx,cz:c.cz,zoneId:c.zone.id,hasWater:!!c.hasWater})),
       enemies,adventurers,npcs,portals,landmarks,cities:cityLocal,roads:roadLocal,dungeon:!!this.state.dungeon,activeBosses,
+      gates:this.gateManager?this.gateManager.getMapGates():[],
     }
     const bosses=ZONES.map(zone=>{
       const live=activeBosses.find(b=>b.zoneId===zone.id)
@@ -2743,9 +2837,10 @@ applyEnemyNetworkState(st){
       landmarks:LANDMARKS.filter(l=>this.isMapDiscovered(l.x,l.z)).map(l=>({...l})),
       adventurers:this.bots.filter(b=>!b.dead&&this.isMapDiscovered(b.g.position.x,b.g.position.z)).map(b=>({x:b.g.position.x,z:b.g.position.z,name:b.name,level:b.level,rank:b.guildRank,hostile:!!b.hostileToPlayer})),
       bosses,activeBosses,
+      gates:this.gateManager?this.gateManager.getMapGates():[],
     }
     this.state.guildRank=getGuildRank(this.state.guildRankIndex||0).id;this.state.onlinePlayers=[...this.remotePlayers.entries()].filter(([,r])=>r.g.visible).map(([id,r])=>({id,name:r.data?.name||'Aventureiro',level:r.data?.level||1,guildRank:r.data?.guildRank||'E',partyId:r.data?.partyId||null}));this.updatePlayerNameplate(this.localPlayerLabel,{name:this.state.playerName||'Aventureiro',level:this.state.level,hp:this.state.hp,maxHp:this.state.maxHp,guildRank:this.state.guildRank},true)
-    this.onHud?.({...this.state,minimap,mapSnapshot,horseBreeds:HORSE_BREEDS,inventory:[...this.state.inventory],equipment:{...this.state.equipment},quests:this.state.quests.map(q=>({...q})),classState:{...this.state.classState},travelState:{...this.state.travelState,vipCost:Math.max(5000,this.state.travelState?.vipCost||5000),nodes:{...(this.state.travelState?.nodes||{})}},settings:{...this.settings},mount:{...this.state.mount},stats:{...this.state.stats},attributes:{...this.state.attributes},guildMissions:(this.state.guildMissions||[]).map(m=>({...m,reward:{...m.reward}})),multiplayer:{...this.state.multiplayer},abilities:this.state.abilities?.map(a=>({...a}))||[]})
+    this.onHud?.({...this.state,destinationMarker:this.state.destinationMarker||null,xpNotifications:this.state.xpNotifications||[],lastXpGain:this.state.lastXpGain||null,levelUpCelebration:this.state.levelUpCelebration||null,gateAnnouncement:this.state.gateAnnouncement||null,dungeonModal:this.state.dungeonModal||null,dungeonCompletion:this.state.dungeonCompletion||null,minimap,mapSnapshot,horseBreeds:HORSE_BREEDS,inventory:[...this.state.inventory],equipment:{...this.state.equipment},quests:this.state.quests.map(q=>({...q})),classState:{...this.state.classState},travelState:{...this.state.travelState,vipCost:Math.max(5000,this.state.travelState?.vipCost||5000),nodes:{...(this.state.travelState?.nodes||{})}},settings:{...this.settings},mount:{...this.state.mount},stats:{...this.state.stats},attributes:{...this.state.attributes},guildMissions:(this.state.guildMissions||[]).map(m=>({...m,reward:{...m.reward}})),multiplayer:{...this.state.multiplayer},abilities:this.state.abilities?.map(a=>({...a}))||[]})
   }
 
   loop=()=>{
@@ -2755,6 +2850,6 @@ applyEnemyNetworkState(st){
       this.renderer.render(this.scene,this.camera)
       return
     }
-    if(!this.state.dungeon)this.ensureChunks();this.updateDayNight(dt);this.updateWeather(dt,t);this.updatePlayer(dt,t);if(this.auraRoot)this.auraRoot.position.copy(this.player.position);this.updateEffects(dt);this.updateProjectiles(dt);this.updateCityVisibility();this.updateRespawns();this.updateBots(dt,t);this.updateCityGuards(dt,t);this.updateEnemies(dt,t);this.updatePortals(t);this.updateWater(t);this.updateNPCs(t,dt);this.advanceDungeonIfClear();this.updateInteractions();this.cameraFollow(dt);this.updateMultiplayer(dt);this.emitHud();this.renderer.render(this.scene,this.camera)
+    if(!this.state.dungeon)this.ensureChunks();this.updateDayNight(dt);this.updateWeather(dt,t);this.updatePlayer(dt,t);if(this.auraRoot)this.auraRoot.position.copy(this.player.position);this.updateEffects(dt);this.updateProjectiles(dt);this.updateCityVisibility();this.updateRespawns();this.updateBots(dt,t);this.updateCityGuards(dt,t);this.updateEnemies(dt,t);this.updatePortals(t);this.gateManager?.update(dt,t);this.updateWater(t);this.updateNPCs(t,dt);this.advanceDungeonIfClear();this.updateInteractions();this.cameraFollow(dt);this.updateMultiplayer(dt);this.emitHud();this.renderer.render(this.scene,this.camera)
   }
 }

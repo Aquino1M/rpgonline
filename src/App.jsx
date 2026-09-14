@@ -9,7 +9,7 @@ import { promptInstallApp, toggleFullScreen, subscribePWA, getPWAState } from '.
 import MiniMap from './ui/Minimap.jsx'
 import WorldMap from './ui/WorldMap.jsx'
 
-const initial={playerName:'',needsNickname:true,level:1,xp:0,nextXp:120,hp:120,maxHp:120,stamina:100,maxStamina:100,gold:220,atk:16,def:5,critChance:0,zone:'Vila Aurora',zoneId:'aurora',currentCity:'Cidadela Aurora',inventory:[],equipment:{},quests:[],guildMissions:[],guildRank:'E',guildRankIndex:0,guildPoints:0,attributePoints:0,attributes:{strength:0,vitality:0,agility:0,intellect:0},weather:'Céu limpo',time:'08:15',mount:{},abilities:[],combatMode:false,multiplayer:{connected:false,url:'',room:'asterra-01',players:0,latencyMs:0,quality:'offline',reconnecting:false},settings:{renderDistance:2,pixelRatio:1,uiScale:1.2,invertCameraX:false,invertCameraY:false,invertCamera:false,multiplayerUrl:''},playerPosition:{x:0,z:0},stats:{kills:0,bosses:0,dungeons:0},ores:0,party:{id:null,leaderId:null,members:[],totalXP:0},onlinePlayers:[],economy:{label:'Mercado dos Despertos',description:'Itens iniciais',theme:'Aurora'}}
+const initial={playerName:'',needsNickname:true,level:1,xp:0,nextXp:120,hp:120,maxHp:120,stamina:100,maxStamina:100,gold:220,atk:16,def:5,critChance:0,zone:'Vila Aurora',zoneId:'aurora',currentCity:'Cidadela Aurora',inventory:[],equipment:{},quests:[],guildMissions:[],guildRank:'E',guildRankIndex:0,guildPoints:0,attributePoints:0,attributes:{strength:0,vitality:0,agility:0,intellect:0},weather:'Céu limpo',time:'08:15',mount:{},abilities:[],combatMode:false,inCombat:false,combatTimer:0,multiplayer:{connected:false,url:'',room:'asterra-01',players:0,latencyMs:0,quality:'offline',reconnecting:false},settings:{renderDistance:2,pixelRatio:1,uiScale:1.2,invertCameraX:false,invertCameraY:false,invertCamera:false,multiplayerUrl:''},playerPosition:{x:0,z:0},stats:{kills:0,bosses:0,dungeons:0},ores:0,party:{id:null,leaderId:null,members:[],totalXP:0},onlinePlayers:[],economy:{label:'Mercado dos Despertos',description:'Itens iniciais',theme:'Aurora'}}
 const slotNames={weapon:'Arma',armor:'Armadura',boots:'Botas',talisman:'Talismã'}
 const roleTitle={inventory:'Inventário & Equipamento',grimoire:'Grimório do Despertar (Roleta de Almas)',travel:'Moço Viajante (Rotas de Caravana)',quests:'Missões',guild:'Guilda de Aventureiros',townhall:'Prefeitura de Aurora (Juramento do Cavaleiro)',attributes:'Atributos',merchant:'Mercador',blacksmith:'Ferreiro Rúnico',stable:'Estábulos & Domação de Montarias',map:'Mapa de Asterra',settings:'Configurações',trade:'Troca entre Jogadores'}
 const fallbackAbilities=[{slot:1,name:'Corte Astral',short:'Corte',icon:'✦',cost:14,remaining:0,ready:true},{slot:2,name:'Onda Astral',short:'Onda',icon:'✹',cost:28,remaining:0,ready:true},{slot:3,name:'Passo Etéreo',short:'Passo',icon:'➠',cost:22,remaining:0,ready:true}]
@@ -110,13 +110,22 @@ export default function App(){
         </div>
       </div>
       <div className="identity-line"><strong>{hud.playerName||'Aventureiro'}</strong><span>RANK {hud.guildRank||'E'}</span></div><div className="zone-line"><strong>{hud.currentCity||hud.zone}</strong><span>⚔ {hud.atk} &nbsp; 🛡 {hud.def}</span></div>
-      <Bar label={`HP ${Math.floor(hud.hp)}/${hud.maxHp}`} value={hp} cls="hp"/><Bar label={`Vigor ${Math.floor(hud.stamina)}/${hud.maxStamina}`} value={st} cls="stamina"/><Bar label={`XP ${Math.floor(hud.xp)}/${hud.nextXp}`} value={xp} cls="xp"/>
+      <Bar label={`HP ${Math.floor(hud.hp)}/${hud.maxHp}${hud.inCombat ? ` [⚔ Em Combate ${hud.combatTimer||8}s]` : (hud.hp < hud.maxHp && hud.stamina >= hud.maxStamina - 0.5) ? ' [💚 Regen]' : ''}`} value={hp} cls="hp"/><Bar label={`Vigor ${Math.floor(hud.stamina)}/${hud.maxStamina}`} value={st} cls="stamina"/><Bar label={`XP ${Math.floor(hud.xp)}/${hud.nextXp}`} value={xp} cls="xp"/>
       <div className="currency-row"><span>◈ {hud.gold} ouro</span><span>◆ {hud.ores||0} minério</span><span>📖 {grimoireQty} grimório{grimoireQty!==1?'s':''}</span></div>
     </section>
 
     <div className="world-status glass">
       <span>☀ {hud.time}</span>
       <span>{weatherIcon(hud.weather)} {hud.weather}</span>
+      {hud.inCombat ? (
+        <b className="combat-status" style={{color:'#f87171',background:'rgba(239,68,68,0.18)',border:'1px solid rgba(239,68,68,0.45)',padding:'2px 8px',borderRadius:'999px',fontSize:'10px',letterSpacing:'.04em'}}>
+          ⚔ COMBATE ({hud.combatTimer||8}s)
+        </b>
+      ) : (hud.hp < hud.maxHp && hud.stamina >= hud.maxStamina - 0.5) ? (
+        <b className="combat-status" style={{color:'#4ade80',background:'rgba(74,222,128,0.18)',border:'1px solid rgba(74,222,128,0.45)',padding:'2px 8px',borderRadius:'999px',fontSize:'10px',letterSpacing:'.04em'}}>
+          💚 REGEN
+        </b>
+      ) : null}
       {hud.multiplayer?.connected&&<b className="online-status">● ONLINE {hud.multiplayer.players||0} {hud.multiplayer.transport==='supabase'?'(SUPABASE)':hud.multiplayer.transport==='http'?'(VERCEL)':'(LAN)'}</b>}
       {hud.mount?.active&&<b>♞ Montado</b>}
       <button type="button" className="hud-mini-btn" onClick={toggleFullScreen} title="Alternar Modo Tela Cheia">⛶ Tela Cheia</button>
@@ -139,8 +148,57 @@ export default function App(){
 
     <MiniMap hud={hud} onOpenMap={()=>call('togglePanel','map')}/>
     <ActiveQuestTrackerHUD hud={hud} onOpenQuests={()=>call('togglePanel','quests')} onClaim={id=>call('claimQuest',id)}/>
+    
+    {hud.destinationMarker && (
+      <div className="destination-banner glass" style={{position:'absolute',top:'58px',left:'50%',transform:'translateX(-50%)',padding:'6px 16px',borderRadius:'999px',border:`1px solid ${hud.destinationMarker.color || '#38bdf8'}`,zIndex:18,display:'flex',alignItems:'center',gap:'10px',fontSize:'11px',color:'#f1f5f9',boxShadow:'0 4px 20px rgba(0,0,0,0.5)'}}>
+        <span>📍 <b>{hud.destinationMarker.label}</b> ({Math.round(Math.hypot((hud.destinationMarker.x || 0) - (hud.playerPosition?.x || 0), (hud.destinationMarker.z || 0) - (hud.playerPosition?.z || 0)))}m)</span>
+        <button type="button" onClick={() => call('clearDestinationMarker')} style={{background:'none',border:'none',color:'#ef4444',cursor:'pointer',fontSize:'13px',fontWeight:'bold',padding:0}} title="Cancelar Destino">✕</button>
+      </div>
+    )}
+    {hud.gateAnnouncement && (
+      <div className="gate-announcement-banner glass" style={{position:'absolute',top:'90px',left:'50%',transform:'translateX(-50%)',padding:'12px 24px',borderRadius:'16px',border:`2px solid ${hud.gateAnnouncement.rankColor || '#38bdf8'}`,boxShadow:`0 0 28px ${hud.gateAnnouncement.rankColor || '#38bdf8'}40, 0 10px 30px rgba(0,0,0,0.6)`,zIndex:20,display:'flex',flexDirection:'column',alignItems:'center',gap:'4px',animation:'toastin .3s ease-out'}}>
+        <b style={{color:'#facc15',fontSize:'12px',letterSpacing:'.1em'}}>{hud.gateAnnouncement.title}</b>
+        <strong style={{fontSize:'16px',color:'#f8fafc'}}>{hud.gateAnnouncement.gateName}</strong>
+        <span style={{fontSize:'11px',color:'#cbd5e1'}}>Rank <b style={{color:hud.gateAnnouncement.rankColor}}>{hud.gateAnnouncement.rank}</b> • Nv. {hud.gateAnnouncement.levelRange} • {hud.gateAnnouncement.floors} Andares • {hud.gateAnnouncement.zoneName}</span>
+        <button type="button" onClick={() => call('setDestinationMarker', { x: hud.gateAnnouncement.x, z: hud.gateAnnouncement.z, rank: hud.gateAnnouncement.rank, name: hud.gateAnnouncement.gateName, rankConfig: { color: hud.gateAnnouncement.rankColor } })} style={{marginTop:'6px',padding:'6px 14px',fontSize:'11px',fontWeight:'bold',background:'rgba(56,189,248,0.25)',border:'1px solid #38bdf8',color:'#38bdf8',borderRadius:'8px',cursor:'pointer'}}>🎯 MARCAR DESTINO</button>
+      </div>
+    )}
     {hud.portal&&!hud.dungeon&&<div className="portal-card glass" style={{'--portal':hud.portal.rarity.color}}><small>FENDA DETECTADA</small><strong>{hud.portal.name}</strong><span>Nv. {hud.portal.level} • <b style={{color:hud.portal.rarity.color}}>{hud.portal.rarity.name}</b> • {hud.portal.floors} andares</span><em>E para entrar</em></div>}
-    {hud.dungeon&&<div className="dungeon-card glass" style={{'--portal':hud.dungeon.color}}><small>MASMORRA ATIVA</small><strong>{hud.dungeon.name}</strong><span>{hud.dungeon.rarity} • Nv.{hud.dungeon.level}</span><b>Andar {hud.dungeon.floor}/{hud.dungeon.floors}</b></div>}
+    {hud.dungeon && (
+      <div className="dungeon-card glass" style={{'--portal':hud.dungeon.color || '#b06cff'}}>
+        <small>MASMORRA ATIVA</small>
+        <strong>{hud.dungeon.name}</strong>
+        <span>Rank <b style={{color:hud.dungeon.color}}>{hud.dungeon.rank || 'C'}</b> • Nv.{hud.dungeon.level}</span>
+        <b>Andar {hud.dungeon.floor}/{hud.dungeon.floors}</b>
+        <button
+          type="button"
+          onClick={() => {
+            if (window.confirm('Abandonar Masmorra?\nTodo o progresso não finalizado desta masmorra será perdido.')) {
+              call('abandonDungeon')
+            }
+          }}
+          style={{marginTop:'8px',padding:'4px 10px',fontSize:'10px',background:'rgba(239,68,68,0.2)',border:'1px solid #ef4444',color:'#fca5a5',borderRadius:'6px',cursor:'pointer',fontWeight:'bold'}}
+        >
+          Abandonar Masmorra
+        </button>
+      </div>
+    )}
+    {hud.xpNotifications && hud.xpNotifications.length > 0 && (
+      <div className="xp-float-container" style={{position:'absolute',top:'140px',left:'clamp(10px,1.4vw,20px)',zIndex:19,display:'flex',flexDirection:'column',gap:'4px',pointerEvents:'none'}}>
+        {hud.xpNotifications.map(n => (
+          <div key={n.id} style={{fontSize: n.isBig ? '15px' : '12px',fontWeight:'900',color: n.isBig ? '#fde047' : '#4ade80',textShadow:'0 0 10px rgba(0,0,0,0.8), 0 0 14px currentColor',animation:'toastin .25s ease-out'}}>
+            {n.text}
+          </div>
+        ))}
+      </div>
+    )}
+    {hud.levelUpCelebration && (
+      <div className="level-up-modal" style={{position:'absolute',top:'35%',left:'50%',transform:'translate(-50%,-50%)',zIndex:30,textAlign:'center',pointerEvents:'none',animation:'toastin .4s cubic-bezier(0.16, 1, 0.3, 1)'}}>
+        <div style={{fontSize:'36px',fontWeight:'900',letterSpacing:'.18em',color:'#facc15',textShadow:'0 0 35px #eab308, 0 4px 15px rgba(0,0,0,0.8)'}}>★ LEVEL UP! ★</div>
+        <div style={{fontSize:'22px',fontWeight:'800',color:'#ffffff',marginTop:'4px',textShadow:'0 2px 10px #000'}}>NÍVEL {hud.levelUpCelebration.level}</div>
+        <div style={{fontSize:'12px',color:'#93c5fd',marginTop:'6px',background:'rgba(15,23,42,0.8)',padding:'4px 16px',borderRadius:'999px',border:'1px solid rgba(147,197,253,0.3)',display:'inline-block'}}>+1 Ponto de Atributo • HP & Atributos Aumentados</div>
+      </div>
+    )}
     {hud.interactionPrompt&&!panel&&<div className="interaction">{hud.interactionPrompt}</div>}{hud.toast&&<div key={hud.toast.id} className="toast">{hud.toast.msg}</div>}
 
     {!panel&&hud.combatMode&&<div className={`combat-crosshair ${hud.crosshairTarget?'locked':''}`} aria-label="Mira"><i/><i/><b/></div>}
@@ -173,6 +231,9 @@ export default function App(){
       {panel==='settings'&&<Settings hud={hud} apply={v=>call('applySettings',v)} connect={url=>call('connectMultiplayer',url)} setName={name=>call('setPlayerName',name)} call={call}/>} 
     </Overlay>}
     {hud.needsNickname&&<AuthGate initialServer={hud.multiplayer?.room||'asterra-01'} onLogin={(session,profile)=>call('setPlayerAccount',session,profile)}/>}
+    
+    {hud.dungeonModal && <GateModal modal={hud.dungeonModal} call={call} onClose={() => call('closeGateModal')} />}
+    {hud.dungeonCompletion && <DungeonCompletionModal completion={hud.dungeonCompletion} onClose={() => call('closeDungeonCompletion')} />}
   </div>
 }
 
@@ -1681,6 +1742,186 @@ function FastTravel({ hud, onTravel, onBuyVip }) {
           }} disabled={hud.gold < vipCost}>Comprar VIP ({vipCost}◈)</button>
         </div>
         <div className="travel-warning">⚠️ Existe 5% de chance de emboscada durante a viagem.</div>
+      </div>
+    </div>
+  )
+}
+
+function GateModal({ modal, call, onClose }) {
+  if (!modal || !modal.gate) return null
+  const gate = modal.gate
+  const isCountingDown = modal.readyCountdown !== null && modal.readyCountdown !== undefined
+  const rankColor = gate.rankConfig?.color || '#38bdf8'
+  const isParty = modal.members && modal.members.length > 1
+
+  return (
+    <div className="overlay-shell" style={{zIndex:40,background:'rgba(2,6,15,0.78)',backdropFilter:'blur(8px)'}}>
+      <div className="window glass" style={{maxWidth:'580px',height:'auto',borderRadius:'24px',border:`2px solid ${rankColor}`,boxShadow:`0 0 45px ${rankColor}33`,padding:'24px',display:'flex',flexDirection:'column',gap:'16px'}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',borderBottom:'1px solid rgba(255,255,255,0.1)',paddingBottom:'14px'}}>
+          <div>
+            <div style={{display:'inline-flex',alignItems:'center',gap:'8px',padding:'4px 12px',borderRadius:'999px',background:'rgba(15,23,42,0.85)',border:`1px solid ${rankColor}`}}>
+              <span style={{color:rankColor,fontWeight:'900',fontSize:'13px'}}>RANK {gate.rankKey}</span>
+              {gate.isUnstable && <span style={{color:'#f43f5e',fontWeight:'900',fontSize:'11px'}}>ANOMALIA • INSTÁVEL</span>}
+            </div>
+            <h2 style={{margin:'8px 0 0',fontSize:'22px',color:'#f8fafc'}}>{gate.name}</h2>
+            <p style={{margin:'4px 0 0',fontSize:'12px',color:'#94a3b8'}}>{gate.zoneName} • {gate.theme?.name || 'Profundezas Arcanas'}</p>
+          </div>
+          <button type="button" onClick={onClose} disabled={isCountingDown} style={{background:'none',border:'none',color:'#94a3b8',fontSize:'22px',cursor:'pointer'}}>✕</button>
+        </div>
+
+        <div style={{display:'grid',gridTemplateColumns:'repeat(3, 1fr)',gap:'10px',background:'rgba(15,23,42,0.5)',padding:'12px',borderRadius:'12px',border:'1px solid rgba(255,255,255,0.06)'}}>
+          <div style={{textAlign:'center'}}>
+            <small style={{color:'#64748b',fontSize:'10px'}}>Nível Recomendado</small>
+            <b style={{display:'block',color:'#38bdf8',fontSize:'14px'}}>{gate.rankConfig?.levelRange[0]}–{gate.rankConfig?.levelRange[1]}</b>
+          </div>
+          <div style={{textAlign:'center'}}>
+            <small style={{color:'#64748b',fontSize:'10px'}}>Andares Estimados</small>
+            <b style={{display:'block',color:'#facc15',fontSize:'14px'}}>{gate.totalFloors} Andares</b>
+          </div>
+          <div style={{textAlign:'center'}}>
+            <small style={{color:'#64748b',fontSize:'10px'}}>Dificuldade</small>
+            <b style={{display:'block',color:rankColor,fontSize:'14px'}}>{gate.rankKey === 'S' ? 'MORTAL' : gate.rankKey === 'A' ? 'EXTREMA' : gate.rankKey === 'B' ? 'PERIGOSA' : gate.rankKey === 'C' ? 'DESAFIADORA' : 'MODERADA'}</b>
+          </div>
+        </div>
+
+        <div style={{fontSize:'11px',color:'#cbd5e1',lineHeight:'1.5'}}>
+          {gate.modifiers && gate.modifiers.length > 0 && (
+            <div style={{marginBottom:'8px'}}>
+              <b style={{color:'#f87171'}}>Modificadores de Masmorra:</b>
+              {gate.modifiers.map(m => (
+                <div key={m.id} style={{color:'#fca5a5',marginLeft:'8px'}}>• <strong>{m.name}</strong>: {m.desc}</div>
+              ))}
+            </div>
+          )}
+          <div>
+            <b style={{color:'#93c5fd'}}>Inimigos Detectados:</b> {gate.theme?.mobs?.join(', ') || 'Inimigos das Sombras'}
+          </div>
+          <div style={{marginTop:'4px'}}>
+            <b style={{color:'#facc15'}}>Loot Exclusivo:</b> Equipamentos Rúnicos, Runas Arcanas, Minérios Raros e Baú do Guardião.
+          </div>
+        </div>
+
+        <div style={{background:'rgba(11,25,40,0.6)',padding:'12px',borderRadius:'12px',border:'1px solid rgba(255,255,255,0.06)'}}>
+          <div style={{fontSize:'12px',fontWeight:'bold',color:'#e2e8f0',marginBottom:'8px'}}>
+            {isParty ? 'INTEGRANTES DA EQUIPE' : 'EXPLORAÇÃO INDIVIDUAL'}
+          </div>
+          <div style={{display:'flex',flexDirection:'column',gap:'6px'}}>
+            {modal.members.map(m => (
+              <div key={m.id} style={{display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:'12px'}}>
+                <span style={{color:'#cbd5e1'}}>{m.name} (Nv. {m.level})</span>
+                <span style={{color: m.ready ? '#4ade80' : '#f59e0b',fontWeight:'bold'}}>
+                  {m.ready ? '✅ Pronto' : '⏳ Aguardando'}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {isCountingDown ? (
+          <div style={{textAlign:'center',padding:'16px',background:'rgba(30,58,138,0.3)',borderRadius:'12px',border:'1px solid #3b82f6'}}>
+            <div style={{fontSize:'13px',color:'#93c5fd',fontWeight:'bold'}}>ENTRANDO NA MASMORRA...</div>
+            <div style={{fontSize:'42px',fontWeight:'900',color:'#facc15',marginTop:'4px',animation:'pulseGlow 0.8s infinite'}}>{modal.readyCountdown}</div>
+          </div>
+        ) : (
+          <div style={{display:'flex',gap:'10px',marginTop:'4px'}}>
+            <button
+              type="button"
+              onClick={() => call('startSoloDungeon', gate)}
+              style={{
+                flex:1,padding:'12px',borderRadius:'12px',border:'1px solid rgba(255,255,255,0.15)',
+                background:'rgba(30,41,59,0.8)',color:'#f8fafc',fontWeight:'bold',fontSize:'13px',cursor:'pointer'
+              }}
+            >
+              ⚔ ENTRAR SOLO
+            </button>
+            {isParty && (
+              <button
+                type="button"
+                onClick={() => call('startPartyReadyCheck', gate)}
+                style={{
+                  flex:1,padding:'12px',borderRadius:'12px',border:`1px solid ${rankColor}`,
+                  background:`color-mix(in srgb, ${rankColor} 25%, #0f172a)`,color:'#f8fafc',fontWeight:'bold',fontSize:'13px',cursor:'pointer'
+                }}
+              >
+                🛡 READY CHECK EQUIPE
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              style={{padding:'12px 18px',borderRadius:'12px',border:'1px solid rgba(255,255,255,0.1)',background:'transparent',color:'#94a3b8',cursor:'pointer'}}
+            >
+              Cancelar
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function DungeonCompletionModal({ completion, onClose }) {
+  if (!completion) return null
+  return (
+    <div className="overlay-shell" style={{zIndex:45,background:'rgba(2,6,15,0.85)',backdropFilter:'blur(10px)'}}>
+      <div className="window glass" style={{maxWidth:'620px',height:'auto',borderRadius:'24px',border:'2px solid #facc15',boxShadow:'0 0 55px rgba(250,204,21,0.25)',padding:'28px',textAlign:'center'}}>
+        <div style={{fontSize:'32px',fontWeight:'900',letterSpacing:'.12em',color:'#facc15',textShadow:'0 0 25px rgba(250,204,21,0.6)'}}>
+          🏆 MASMORRA CONCLUÍDA!
+        </div>
+        <div style={{color:'#94a3b8',fontSize:'13px',marginTop:'4px'}}>
+          O Guardião das Profundezas foi derrotado e o selo do portal foi dissipado.
+        </div>
+
+        <div style={{display:'grid',gridTemplateColumns:'repeat(4, 1fr)',gap:'10px',margin:'20px 0',background:'rgba(15,23,42,0.6)',padding:'14px',borderRadius:'14px',border:'1px solid rgba(255,255,255,0.08)'}}>
+          <div>
+            <small style={{color:'#64748b',fontSize:'10px'}}>Tempo de Conquista</small>
+            <b style={{display:'block',color:'#f8fafc',fontSize:'14px',marginTop:'3px'}}>{completion.timeFormatted}</b>
+          </div>
+          <div>
+            <small style={{color:'#64748b',fontSize:'10px'}}>Inimigos Derrotados</small>
+            <b style={{display:'block',color:'#f8fafc',fontSize:'14px',marginTop:'3px'}}>{completion.kills}</b>
+          </div>
+          <div>
+            <small style={{color:'#64748b',fontSize:'10px'}}>Elites Eliminados</small>
+            <b style={{display:'block',color:'#38bdf8',fontSize:'14px',marginTop:'3px'}}>{completion.elites}</b>
+          </div>
+          <div>
+            <small style={{color:'#64748b',fontSize:'10px'}}>Chefe</small>
+            <b style={{display:'block',color:'#f87171',fontSize:'14px',marginTop:'3px'}}>Derrotado</b>
+          </div>
+        </div>
+
+        <div style={{display:'flex',justifyContent:'center',gap:'24px',fontSize:'15px',fontWeight:'bold',marginBottom:'18px'}}>
+          <span style={{color:'#4ade80'}}>+{completion.xp.toLocaleString('pt-BR')} XP</span>
+          <span style={{color:'#facc15'}}>+{completion.gold.toLocaleString('pt-BR')} ◈ Ouro</span>
+        </div>
+
+        {completion.loot && completion.loot.length > 0 && (
+          <div style={{textAlign:'left',marginBottom:'20px'}}>
+            <div style={{fontSize:'12px',fontWeight:'bold',color:'#e2e8f0',marginBottom:'8px'}}>RECOMPENSAS EXCLUSIVAS OBTIDAS:</div>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill, minmax(160px, 1fr))',gap:'8px'}}>
+              {completion.loot.map((item, idx) => (
+                <div key={item.id || idx} style={{padding:'8px 10px',borderRadius:'10px',background:'rgba(11,25,40,0.8)',border:`1px solid ${item.color || '#3b82f6'}`}}>
+                  <div style={{color:item.color || '#3b82f6',fontWeight:'bold',fontSize:'11px'}}>{item.name}</div>
+                  <small style={{color:'#94a3b8',fontSize:'9px'}}>{item.rarity} • Nv. {item.level}</small>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <button
+          type="button"
+          onClick={onClose}
+          style={{
+            padding:'12px 32px',borderRadius:'12px',border:'1px solid #facc15',
+            background:'linear-gradient(135deg, #eab308, #ca8a04)',color:'#020617',
+            fontWeight:'900',fontSize:'14px',letterSpacing:'.06em',cursor:'pointer',
+            boxShadow:'0 0 25px rgba(250,204,21,0.35)'
+          }}
+        >
+          RETORNAR A ASTERRA
+        </button>
       </div>
     </div>
   )

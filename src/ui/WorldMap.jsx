@@ -39,11 +39,37 @@ export default function WorldMap({hud}){
     for(const l of data.landmarks||[]){const [x,y]=toMap(l.x,l.z);if(!inside(x,y))continue;ctx.fillStyle='#e6ca72';ctx.strokeStyle='#4e3c1f';ctx.lineWidth=1;ctx.beginPath();for(let i=0;i<8;i++){const a=-Math.PI/2+i*Math.PI/4,r=i%2?3:6,px=x+Math.cos(a)*r,py=y+Math.sin(a)*r;i?ctx.lineTo(px,py):ctx.moveTo(px,py)}ctx.closePath();ctx.fill();ctx.stroke();ctx.font='700 6px Inter,sans-serif';ctx.strokeStyle='rgba(0,0,0,.7)';ctx.lineWidth=2;ctx.strokeText(l.name,x,y+11);ctx.fillStyle='#f5e9bd';ctx.fillText(l.name,x,y+11)}
 
     for(const p of data.portals||[]){const [x,y]=toMap(p.x,p.z);if(!inside(x,y))continue;ctx.strokeStyle=p.color||'#c084fc';ctx.shadowColor=p.color||'#c084fc';ctx.shadowBlur=6;ctx.lineWidth=2;ctx.beginPath();ctx.arc(x,y,6,0,Math.PI*2);ctx.stroke();ctx.shadowBlur=0}
+    
+    // Global Gates
+    for(const g of data.gates||[]){
+      const [x,y]=toMap(g.x,g.z)
+      if(!inside(x,y))continue
+      const col = g.color || '#c084fc'
+      ctx.strokeStyle=col;ctx.shadowColor=col;ctx.shadowBlur=10;ctx.lineWidth=2.5
+      ctx.beginPath();ctx.arc(x,y,8,0,Math.PI*2);ctx.stroke()
+      ctx.fillStyle='rgba(8,16,28,0.92)';ctx.beginPath();ctx.arc(x,y,6.5,0,Math.PI*2);ctx.fill()
+      ctx.fillStyle=col;ctx.font='900 9px Inter,sans-serif';ctx.fillText(g.rank||'C',x,y+.5)
+      ctx.font='700 7px Inter,sans-serif';ctx.strokeStyle='rgba(0,0,0,.8)';ctx.lineWidth=2
+      ctx.strokeText(`Rank ${g.rank}`,x,y+13);ctx.fillStyle='#ffffff';ctx.fillText(`Rank ${g.rank}`,x,y+13)
+      ctx.shadowBlur=0
+    }
+
+    // Destination Marker
+    if(hud.destinationMarker){
+      const [dx,dy]=toMap(hud.destinationMarker.x,hud.destinationMarker.z)
+      if(inside(dx,dy)){
+        ctx.strokeStyle='#ffffff';ctx.lineWidth=2.5;ctx.fillStyle=hud.destinationMarker.color||'#38bdf8'
+        ctx.beginPath();ctx.arc(dx,dy,7,0,Math.PI*2);ctx.fill();ctx.stroke()
+        ctx.font='900 8px Inter,sans-serif';ctx.fillStyle='#ffffff';ctx.strokeStyle='rgba(0,0,0,.8)';ctx.lineWidth=2
+        ctx.strokeText('DESTINO',dx,dy-11);ctx.fillText('DESTINO',dx,dy-11)
+      }
+    }
+
     if(showMobs)for(const b of data.bosses||[]){const [x,y]=toMap(b.x,b.z);if(!inside(x,y))continue;ctx.fillStyle='#e43e56';ctx.strokeStyle='#ffe4e8';ctx.lineWidth=1;ctx.save();ctx.translate(x,y);ctx.rotate(Math.PI/4);ctx.fillRect(-4,-4,8,8);ctx.strokeRect(-4,-4,8,8);ctx.restore()}
     for(const a of data.adventurers||[]){const [x,y]=toMap(a.x,a.z);if(!inside(x,y))continue;ctx.fillStyle=a.hostile?'#ff9b4f':'#4fc3ff';ctx.strokeStyle='#eefaff';ctx.lineWidth=1;ctx.beginPath();ctx.arc(x,y,4.5,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.fillStyle='#06121d';ctx.font='900 6px Inter,sans-serif';ctx.fillText('A',x,y+.4)}
 
     const [px,py]=toMap(player.x,player.z);drawPlayer(ctx,px,py,player.heading||0)
-  },[data,fog,showMobs,hud.playerPosition,zoom,pan])
+  },[data,fog,showMobs,hud.playerPosition,zoom,pan,hud.destinationMarker])
 
   const onMouseDown=e=>{
     if(e.button!==0)return
@@ -173,6 +199,43 @@ export default function WorldMap({hud}){
         <span><i className="legend-landmark">✦</i>Local</span>
         <span><i className="legend-res">🪵</i>Recursos</span>
       </div>
+
+      {data.gates && data.gates.length > 0 && (
+        <>
+          <h4>🌀 Portais e Masmorras</h4>
+          <div className="city-index gates-index" style={{display:'flex',flexDirection:'column',gap:'8px',marginBottom:'12px'}}>
+            {data.gates.map(g => (
+              <div key={g.id} style={{padding:'8px 10px',borderRadius:'10px',background:'rgba(11,25,40,0.7)',border:`1px solid ${g.color || '#38bdf8'}`}}>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                  <b style={{color:g.color,fontSize:'12px'}}>Portal Rank {g.rank} {g.isUnstable ? '🔥 [INSTÁVEL]' : ''}</b>
+                  <span style={{fontSize:'10px',color:'#94a3b8'}}>Expira em: {g.expiresInMinutes}m</span>
+                </div>
+                <div style={{fontSize:'10px',color:'#cbd5e1',marginTop:'3px'}}>
+                  {g.zoneName} • Nv. recomendado: {g.recommendedMinLevel}–{g.recommendedMaxLevel} • {g.floors} andares
+                </div>
+                <div style={{marginTop:'6px',display:'flex',gap:'6px'}}>
+                  <button
+                    type="button"
+                    onClick={() => window.game?.setDestinationMarker(g)}
+                    style={{padding:'4px 10px',fontSize:'10px',background:'rgba(56,189,248,0.25)',border:'1px solid #38bdf8',color:'#38bdf8',borderRadius:'6px',cursor:'pointer',fontWeight:'bold'}}
+                  >
+                    🎯 Marcar Destino
+                  </button>
+                  {hud.destinationMarker?.label?.includes(g.rank) && (
+                    <button
+                      type="button"
+                      onClick={() => window.game?.clearDestinationMarker()}
+                      style={{padding:'4px 8px',fontSize:'10px',background:'rgba(239,68,68,0.2)',border:'1px solid #ef4444',color:'#ef4444',borderRadius:'6px',cursor:'pointer'}}
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
       <h4>Cidades</h4>
       <div className="city-index">
         {[...(data.cities||[])].sort((a,b)=>(ZONES.find(z=>z.id===a.zoneId)?.min||0)-(ZONES.find(z=>z.id===b.zoneId)?.min||0)).map(c=>{

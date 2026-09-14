@@ -77,6 +77,49 @@ export default function MiniMap({hud,onOpenMap}){
     // Dungeon portals.
     for(const p of data.portals||[]){if(!visible(p.x,p.z))continue;const [x,y]=toMap(p.x,p.z);ctx.strokeStyle=p.color||'#b56cff';ctx.lineWidth=2.2;ctx.shadowColor=p.color||'#b56cff';ctx.shadowBlur=5;ctx.beginPath();ctx.arc(x,y,5.4,0,Math.PI*2);ctx.stroke();ctx.beginPath();ctx.arc(x,y,2.2,0,Math.PI*2);ctx.stroke();ctx.shadowBlur=0}
 
+    // Global Solo-Leveling style Gates with Rank badge letter and colored ring
+    for(const g of data.gates||[]){
+      const [x,y]=toMap(g.x,g.z)
+      const inBounds = x >= 10 && x <= w - 10 && y >= 10 && y <= h - 10
+      const col = g.color || '#38bdf8'
+      if(inBounds){
+        ctx.strokeStyle=col;ctx.shadowColor=col;ctx.shadowBlur=8;ctx.lineWidth=2.4
+        ctx.beginPath();ctx.arc(x,y,6.5,0,Math.PI*2);ctx.stroke()
+        ctx.fillStyle='rgba(7,15,27,.9)';ctx.beginPath();ctx.arc(x,y,4.8,0,Math.PI*2);ctx.fill()
+        ctx.fillStyle=col;ctx.font='900 7px Inter,sans-serif';ctx.textAlign='center';ctx.textBaseline='middle'
+        ctx.fillText(g.rank||'C',x,y)
+        ctx.shadowBlur=0
+      } else {
+        // Edge beacon pointer for gates
+        const dx = x - cx, dy = y - cy, dist = Math.hypot(dx, dy)
+        if(dist > 0 && dist < Math.min(w, h) * 3){
+          const edgeR = Math.min(w, h) * 0.44
+          const ex = cx + (dx / dist) * edgeR, ey = cy + (dy / dist) * edgeR
+          ctx.fillStyle=col;ctx.beginPath();ctx.arc(ex,ey,4,0,Math.PI*2);ctx.fill()
+          ctx.fillStyle='#ffffff';ctx.font='900 6px Inter,sans-serif';ctx.textAlign='center';ctx.textBaseline='middle'
+          ctx.fillText(g.rank||'C',ex,ey)
+        }
+      }
+    }
+
+    // Destination Marker (Marcar Destino)
+    if(hud.destinationMarker){
+      const [dx,dy]=toMap(hud.destinationMarker.x,hud.destinationMarker.z)
+      const inBounds = dx >= 10 && dx <= w - 10 && dy >= 10 && dy <= h - 10
+      const col = hud.destinationMarker.color || '#38bdf8'
+      if(inBounds){
+        ctx.strokeStyle='#ffffff';ctx.lineWidth=2;ctx.fillStyle=col
+        ctx.beginPath();ctx.arc(dx,dy,5,0,Math.PI*2);ctx.fill();ctx.stroke()
+      } else {
+        const offX = dx - cx, offY = dy - cy, d = Math.hypot(offX, offY)
+        if(d > 0){
+          const edgeR = Math.min(w, h) * 0.45
+          const ex = cx + (offX / d) * edgeR, ey = cy + (offY / d) * edgeR
+          ctx.fillStyle='#38bdf8';ctx.beginPath();ctx.arc(ex,ey,4.5,0,Math.PI*2);ctx.fill()
+        }
+      }
+    }
+
     // Landmarks discovered near the player.
     for(const l of data.landmarks||[]){if(!visible(l.x,l.z))continue;const [x,y]=toMap(l.x,l.z);ctx.fillStyle='#f4d77b';ctx.strokeStyle='#49391f';ctx.lineWidth=1;ctx.beginPath();for(let i=0;i<8;i++){const a=-Math.PI/2+i*Math.PI/4,r=i%2?2.4:5.2,px=x+Math.cos(a)*r,py=y+Math.sin(a)*r;i?ctx.lineTo(px,py):ctx.moveTo(px,py)}ctx.closePath();ctx.fill();ctx.stroke()}
 
@@ -86,7 +129,7 @@ export default function MiniMap({hud,onOpenMap}){
     ctx.fillStyle='rgba(225,248,255,.92)';ctx.font='800 8px Inter,sans-serif';ctx.textAlign='center';ctx.fillText('N',cx,11)
     ctx.fillStyle='rgba(220,239,245,.72)';ctx.font='600 7px Inter,sans-serif';ctx.textAlign='left';ctx.fillText(`X ${Math.round(px)}  Z ${Math.round(pz)}`,7,h-7)
     ctx.textAlign='right';ctx.fillText(`${Math.round(range)}m`,w-7,h-7)
-  },[data,range])
+  },[data,range,hud.destinationMarker])
 
   return <div className="minimap glass">
     <div className="mini-header"><b>MAPA LOCAL</b><span>{hud.currentCity||hud.zone}</span></div>
@@ -95,7 +138,7 @@ export default function MiniMap({hud,onOpenMap}){
       <div className="mini-zoom"><button onClick={e=>{e.stopPropagation();setRange(v=>Math.max(38,v-14))}}>+</button><button onClick={e=>{e.stopPropagation();setRange(v=>Math.min(150,v+14))}}>−</button></div>
       <button className="mini-open" onClick={e=>{e.stopPropagation();onOpenMap?.()}}>M • MAPA</button>
     </div>
-    <div className="mini-legend"><span><i className="dot boss" style={{background:'#ff1a3c',boxShadow:'0 0 6px #ff1a3c'}}/>Boss</span><span><i className="dot enemy"/>Mob</span><span><i className="dot service"/>Serviço</span><span><i className="dot portal"/>Fenda</span><span><i className="dot landmark"/>Local</span></div>
+    <div className="mini-legend"><span><i className="dot boss" style={{background:'#ff1a3c',boxShadow:'0 0 6px #ff1a3c'}}/>Boss</span><span><i className="dot enemy"/>Mob</span><span><i className="dot service"/>Serviço</span><span><i className="dot portal" style={{background:'#c084fc'}}/>Portal</span><span><i className="dot landmark"/>Local</span></div>
   </div>
 }
 
