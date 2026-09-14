@@ -9,11 +9,11 @@ import { promptInstallApp, toggleFullScreen, subscribePWA, getPWAState } from '.
 import MiniMap from './ui/Minimap.jsx'
 import WorldMap from './ui/WorldMap.jsx'
 
-const initial={playerName:'',needsNickname:true,level:1,xp:0,nextXp:120,hp:120,maxHp:120,stamina:100,maxStamina:100,gold:220,atk:16,def:5,critChance:0,zone:'Vila Aurora',zoneId:'aurora',currentCity:'Cidadela Aurora',inventory:[],equipment:{},quests:[],guildMissions:[],guildRank:'E',guildRankIndex:0,guildPoints:0,attributePoints:0,attributes:{strength:0,vitality:0,agility:0,intellect:0},weather:'Céu limpo',time:'08:15',mount:{},abilities:[],combatMode:false,inCombat:false,combatTimer:0,multiplayer:{connected:false,url:'',room:'asterra-01',players:0,latencyMs:0,quality:'offline',reconnecting:false},settings:{renderDistance:2,pixelRatio:1,uiScale:1.2,invertCameraX:false,invertCameraY:false,invertCamera:false,multiplayerUrl:''},playerPosition:{x:0,z:0},stats:{kills:0,bosses:0,dungeons:0},ores:0,party:{id:null,leaderId:null,members:[],totalXP:0},onlinePlayers:[],economy:{label:'Mercado dos Despertos',description:'Itens iniciais',theme:'Aurora'}}
+const initial={playerName:'',needsNickname:true,level:1,xp:0,nextXp:120,hp:120,maxHp:120,stamina:100,maxStamina:100,gold:220,atk:16,def:5,critChance:0,zone:'Vila Aurora',zoneId:'aurora',currentCity:'Cidadela Aurora',inventory:[],equipment:{},quests:[],guildMissions:[],guildRank:'E',guildRankIndex:0,guildPoints:0,attributePoints:0,attributes:{strength:0,vitality:0,agility:0,intellect:0},weather:'Céu limpo',time:'08:15',mount:{},abilities:[],combatMode:false,inCombat:false,combatTimer:0,multiplayer:{connected:false,url:'',room:'asterra-global',players:0,latencyMs:0,quality:'offline',reconnecting:false},settings:{renderDistance:2,pixelRatio:1,uiScale:1.2,invertCameraX:false,invertCameraY:false,invertCamera:false,multiplayerUrl:''},playerPosition:{x:0,z:0},stats:{kills:0,bosses:0,dungeons:0},ores:0,party:{id:null,leaderId:null,members:[],totalXP:0},onlinePlayers:[],economy:{label:'Mercado dos Despertos',description:'Itens iniciais',theme:'Aurora'}}
 const slotNames={weapon:'Arma',armor:'Armadura',boots:'Botas',talisman:'Talismã'}
 const roleTitle={inventory:'Inventário & Equipamento',grimoire:'Grimório do Despertar (Roleta de Almas)',travel:'Moço Viajante (Rotas de Caravana)',quests:'Missões',guild:'Guilda de Aventureiros',townhall:'Prefeitura de Aurora (Juramento do Cavaleiro)',attributes:'Atributos',merchant:'Mercador',blacksmith:'Ferreiro Rúnico',stable:'Estábulos & Domação de Montarias',map:'Mapa de Asterra',settings:'Configurações',trade:'Troca entre Jogadores'}
 const fallbackAbilities=[{slot:1,name:'Corte Astral',short:'Corte',icon:'✦',cost:14,remaining:0,ready:true},{slot:2,name:'Onda Astral',short:'Onda',icon:'✹',cost:28,remaining:0,ready:true},{slot:3,name:'Passo Etéreo',short:'Passo',icon:'➠',cost:22,remaining:0,ready:true}]
-const multiplayerLobbies=[{id:'asterra-01',name:'Lobby Aurora'},{id:'asterra-02',name:'Lobby Lúmen'},{id:'asterra-03',name:'Lobby Cinéreo'},{id:'asterra-04',name:'Lobby Safira'},{id:'asterra-05',name:'Lobby Veyra'},{id:'asterra-06',name:'Lobby Noctis'}]
+const multiplayerLobbies=[{id:'asterra-global',name:'Asterra Global'}]
 
 function getViewportState(){
   if(typeof window==='undefined')return{w:1366,h:768,isCoarse:false,isMobile:false,isTablet:false,isDesktop:true,isTouch:false,isLandscape:true}
@@ -241,7 +241,7 @@ export default function App(){
       {panel==='map'&&<WorldMap hud={hud}/>} 
       {panel==='settings'&&<Settings hud={hud} apply={v=>call('applySettings',v)} connect={url=>call('connectMultiplayer',url)} setName={name=>call('setPlayerName',name)} call={call}/>} 
     </Overlay>}
-    {hud.needsNickname&&<AuthGate initialServer={hud.multiplayer?.room||'asterra-01'} onLogin={(session,profile)=>call('setPlayerAccount',session,profile)}/>}
+    {hud.needsNickname&&<AuthGate initialServer={hud.multiplayer?.room||'asterra-global'} onLogin={(session,profile)=>call('setPlayerAccount',session,profile)}/>}
     
     {hud.dungeonModal && <GateModal modal={hud.dungeonModal} call={call} onClose={() => call('closeGateModal')} />}
     {hud.dungeonCompletion && <DungeonCompletionModal completion={hud.dungeonCompletion} onClose={() => call('closeDungeonCompletion')} />}
@@ -702,7 +702,7 @@ function MobileControls({hud,abilities,call,touch,onHelp}){
       <button onClick={()=>{setMenuOpen(false);onHelp()}}>❔<small>Ajuda</small></button>
     </div>}
     {!hud.uiPanel&&<>
-      {hud.multiplayer?.connected&&<div className={`mobile-network-chip glass ${hud.multiplayer?.quality||''}`}><b>● ONLINE</b><span>{hud.multiplayer.players||0}</span><small>{String(hud.multiplayer?.room||'asterra-01').replace('asterra-','L')}</small>{hud.multiplayer.latencyMs>0&&<small>{Math.round(hud.multiplayer.latencyMs)} ms</small>}</div>}
+      {hud.multiplayer?.connected&&<div className={`mobile-network-chip glass ${hud.multiplayer?.quality||''}`}><b>● ONLINE</b><span>{hud.multiplayer.players||0}</span><small>{String(hud.multiplayer?.room||'asterra-global').replace('asterra-','L')}</small>{hud.multiplayer.latencyMs>0&&<small>{Math.round(hud.multiplayer.latencyMs)} ms</small>}</div>}
       {hud.actionButton&&<button disabled={hud.actionButton.blocked} className={`mobile-prominent-action ${hud.actionButton.type||''} ${hud.actionButton.blocked?'blocked':''}`} onClick={()=>call('interact')} aria-label={hud.actionButton.label}><span>{hud.actionButton.icon||'☞'}</span><div><b>{hud.actionButton.label}</b>{hud.actionButton.detail&&<small>{hud.actionButton.detail}</small>}</div><em>{hud.actionButton.blocked?'EQUIPE':'TOCAR'}</em></button>}
       
       {/* Dynamic Left Touch Zone for Movement Joystick */}
@@ -1404,7 +1404,7 @@ function Settings({hud,apply,connect,setName,call}){
   const [sbUrl, setSbUrl] = useState(supabaseCfg.url || '')
   const [sbKey, setSbKey] = useState(supabaseCfg.key || '')
   const [sbStatus, setSbStatus] = useState('')
-  const currentLobby=hud.multiplayer?.room||s.multiplayerRoom||'asterra-01'
+  const currentLobby=hud.multiplayer?.room||s.multiplayerRoom||'asterra-global'
 
   const handleSaveSupabase = () => {
     saveSupabaseConfig(sbUrl, sbKey)
@@ -1559,14 +1559,14 @@ function Setting({label,value,children}){return <label className="setting"><span
 function formatRefresh(ms){if(ms==null)return '--:--';const s=Math.max(0,Math.ceil(ms/1000));return `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`}
 
 
-function AuthGate({ initialServer = 'asterra-01', onLogin }) {
+function AuthGate({ initialServer = 'asterra-global', onLogin }) {
   const [mode, setMode] = useState('login')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [selectedServer, setSelectedServer] = useState(() => {
     const saved = getSavedAccountSession()
-    return saved?.server || initialServer || 'asterra-01'
+    return saved?.server || initialServer || 'asterra-global'
   })
   const [loading, setLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')

@@ -3,7 +3,7 @@ import { WORLD, ZONES, RARITIES, CITIES, ROADS, LANDMARKS, NPC_DEFS, PORTAL_NAME
 import { hash2, clamp, damp, zoneAt, weightedPick, fmtTime } from './utils.js'
 import { AssetLibrary } from './assetLoader.js'
 import { defaultClassState, starterInventory, defaultQuestState, merchantStock, shopRefreshInfo, makeItem, makeMaterialDrop, makeResourceDrop, makeTool, rollLootRarity, normalizeSaveState, totalEquipmentStats, progressQuest, activateQuest, claimQuest, refreshGuildBoard, activateGuildMission, progressGuildMissions, claimGuildMission, getGuildRank, guildRankRequirement, calculateKillXP, resolveEntityProgression, attributeBonuses, calculateGrimoireCost, getNextGrimoireLevel } from './rpgSystems.js'
-import { MultiplayerClient, sameOriginMultiplayerUrl, sameOriginHttpMultiplayerUrl } from './multiplayer.js'
+import { MultiplayerClient, sameOriginMultiplayerUrl, sameOriginHttpMultiplayerUrl } from './supabaseMultiplayerV3.js'
 import { CLASSES_LIST, rollDestinyClass, CLASS_RANKS, getClassRankInfo } from './classesData.js'
 import { TRAVEL_NODES, calculateTravelCost, rollRoadAmbush, defaultTravelState } from './fastTravel.js'
 import { GateManager } from './dungeons/GateManager.js'
@@ -30,7 +30,7 @@ export class ShadowGame {
     let savedSession = null
     try { savedSession = JSON.parse(localStorage.getItem('shadow_rpg_account_session') || 'null') } catch {}
     const savedNick = (savedSession?.username || localStorage.getItem('shadow-ascension-nick') || '').trim()
-    const savedLobby = (savedSession?.server || localStorage.getItem('shadow-ascension-last-lobby') || '').trim() || 'asterra-01'
+    const savedLobby = (savedSession?.server || localStorage.getItem('shadow-ascension-last-lobby') || '').trim() || 'asterra-global'
     const hasValidLogin = Boolean(savedSession?.accountId && savedSession?.username)
     if (savedSession?.accountId) localStorage.setItem('shadow-ascension-player-id', savedSession.accountId)
     this.settings={renderDistance:2,pixelRatio:Math.min(window.devicePixelRatio||1,1.5),uiScale:1.2,shadows:true,invertCameraX:false,invertCameraY:false,invertCamera:false,multiplayerUrl:localStorage.getItem('shadow-ascension-mp-url')||''}
@@ -2682,7 +2682,7 @@ applyEnemyNetworkState(st){
   setPlayerAccount(session, profile = null){
     if(!session) return false
     const username = session.username || 'Aventureiro'
-    const server = session.server || 'asterra-01'
+    const server = session.server || 'asterra-global'
     this.state.playerName = username
     this.state.needsNickname = false
     this.state.multiplayer.room = server
@@ -2718,9 +2718,9 @@ applyEnemyNetworkState(st){
     this.toast('Você saiu da sua conta.')
   }
   connectMultiplayer(url){const value=String(url||'').trim();this.settings.multiplayerUrl=value;this.state.multiplayer.url=value;localStorage.setItem('shadow-ascension-mp-url',value);if(value)this.multiplayer.connect(value);else this.multiplayer.disconnect();this.saveGame()}
-  setMultiplayerLobby(room){const next=this.multiplayer?.setRoom?.(room)||String(room||'asterra-01');this.state.multiplayer.room=next;localStorage.setItem('shadow-ascension-last-lobby',next);this.toast(`Entrando no ${next.replace('asterra-','Lobby ')}...`);this.saveGame();return next}
-  profileSnapshot(){const room=this.multiplayer?.room||this.state.multiplayer?.room||localStorage.getItem('shadow-ascension-last-lobby')||'asterra-01';return{state:{...this.state,version:8,target:null,dungeon:null,uiPanel:null,dialogue:null,portal:null,interactionPrompt:null,merchant:[],minimap:null,mapSnapshot:null,party:{id:null,leaderId:null,members:[],totalXP:0},onlinePlayers:[],multiplayer:{connected:false,url:this.settings.multiplayerUrl,room,players:0}},position:{x:this.player?.position.x||0,z:this.player?.position.z||0},dayHours:this.dayHours,settings:this.settings,multiplayerRoom:room,discovered:[...this.discovered]}}
-  applyServerProfile(game,updatedAt=0){try{const incoming=normalizeSaveState({...this.state,...(game.state||{}),version:8,target:null,dungeon:null,uiPanel:null,dialogue:null});this.state={...this.state,...incoming,needsNickname:!incoming.playerName,party:{id:null,leaderId:null,members:[],totalXP:0}};if(game.position){this.player.position.set(Number(game.position.x)||0,0,Number(game.position.z)||0)}this.dayHours=game.dayHours??this.dayHours;this.discovered=new Set(game.discovered||[]);const liveUrl=this.multiplayer?.url||this.settings.multiplayerUrl;this.settings={...this.settings,...(game.settings||{}),multiplayerUrl:liveUrl||game.settings?.multiplayerUrl||''};this.state.settings=this.settings;this.state.multiplayer.url=this.settings.multiplayerUrl;const liveRoom=this.multiplayer?.room||localStorage.getItem('shadow-ascension-last-lobby')||game.multiplayerRoom||this.state.multiplayer.room||'asterra-01';this.state.multiplayer.room=liveRoom;localStorage.setItem('shadow-ascension-last-lobby',liveRoom);this.localUpdatedAt=updatedAt;this.recalcStats();if(this.state.playerName)this.setPlayerName(this.state.playerName)}catch{}}
+  setMultiplayerLobby(room){const next=this.multiplayer?.setRoom?.(room)||String(room||'asterra-global');this.state.multiplayer.room=next;localStorage.setItem('shadow-ascension-last-lobby',next);this.toast(`Entrando no ${next.replace('asterra-','Lobby ')}...`);this.saveGame();return next}
+  profileSnapshot(){const room=this.multiplayer?.room||this.state.multiplayer?.room||localStorage.getItem('shadow-ascension-last-lobby')||'asterra-global';return{state:{...this.state,version:8,target:null,dungeon:null,uiPanel:null,dialogue:null,portal:null,interactionPrompt:null,merchant:[],minimap:null,mapSnapshot:null,party:{id:null,leaderId:null,members:[],totalXP:0},onlinePlayers:[],multiplayer:{connected:false,url:this.settings.multiplayerUrl,room,players:0}},position:{x:this.player?.position.x||0,z:this.player?.position.z||0},dayHours:this.dayHours,settings:this.settings,multiplayerRoom:room,discovered:[...this.discovered]}}
+  applyServerProfile(game,updatedAt=0){try{const incoming=normalizeSaveState({...this.state,...(game.state||{}),version:8,target:null,dungeon:null,uiPanel:null,dialogue:null});this.state={...this.state,...incoming,needsNickname:!incoming.playerName,party:{id:null,leaderId:null,members:[],totalXP:0}};if(game.position){this.player.position.set(Number(game.position.x)||0,0,Number(game.position.z)||0)}this.dayHours=game.dayHours??this.dayHours;this.discovered=new Set(game.discovered||[]);const liveUrl=this.multiplayer?.url||this.settings.multiplayerUrl;this.settings={...this.settings,...(game.settings||{}),multiplayerUrl:liveUrl||game.settings?.multiplayerUrl||''};this.state.settings=this.settings;this.state.multiplayer.url=this.settings.multiplayerUrl;const liveRoom=this.multiplayer?.room||localStorage.getItem('shadow-ascension-last-lobby')||game.multiplayerRoom||this.state.multiplayer.room||'asterra-global';this.state.multiplayer.room=liveRoom;localStorage.setItem('shadow-ascension-last-lobby',liveRoom);this.localUpdatedAt=updatedAt;this.recalcStats();if(this.state.playerName)this.setPlayerName(this.state.playerName)}catch{}}
   updateMultiplayer(dt){
     const world=this.currentWorldId()
     for(const r of this.remotePlayers.values()){
@@ -2804,7 +2804,7 @@ applyEnemyNetworkState(st){
       if(!data){const v5=localStorage.getItem('shadow-ascension-save-v05');if(v5)data=JSON.parse(v5)}
       if(!data){const v4=localStorage.getItem('shadow-ascension-save-v04');if(v4)data=JSON.parse(v4)}
       if(!data){const legacy=localStorage.getItem('shadow-ascension-save-v03');if(legacy){const old=JSON.parse(legacy);data={state:old.state,position:old.position}}}
-      if(!data)return;this.state=normalizeSaveState({...this.state,...data.state,version:8,target:null,dungeon:null,uiPanel:null,dialogue:null});this.state.needsNickname=true;this.state.party={id:null,leaderId:null,members:[],totalXP:0};this.savedPosition=data.position||this.savedPosition;this.settings={...this.settings,...(data.settings||data.state?.settings||{})};this.state.settings=this.settings;const rememberedRoom=localStorage.getItem('shadow-ascension-last-lobby')||data.multiplayerRoom||data.state?.multiplayer?.room||this.state.multiplayer?.room||'asterra-01';this.state.multiplayer={...this.state.multiplayer,room:rememberedRoom};localStorage.setItem('shadow-ascension-last-lobby',rememberedRoom);this.dayHours=data.dayHours??this.dayHours;this.savedDiscovered=data.discovered||[];this.localUpdatedAt=data.updatedAt||0;if(this.state.playerName){localStorage.setItem('shadow-ascension-nick',this.state.playerName)}
+      if(!data)return;this.state=normalizeSaveState({...this.state,...data.state,version:8,target:null,dungeon:null,uiPanel:null,dialogue:null});this.state.needsNickname=true;this.state.party={id:null,leaderId:null,members:[],totalXP:0};this.savedPosition=data.position||this.savedPosition;this.settings={...this.settings,...(data.settings||data.state?.settings||{})};this.state.settings=this.settings;const rememberedRoom=localStorage.getItem('shadow-ascension-last-lobby')||data.multiplayerRoom||data.state?.multiplayer?.room||this.state.multiplayer?.room||'asterra-global';this.state.multiplayer={...this.state.multiplayer,room:rememberedRoom};localStorage.setItem('shadow-ascension-last-lobby',rememberedRoom);this.dayHours=data.dayHours??this.dayHours;this.savedDiscovered=data.discovered||[];this.localUpdatedAt=data.updatedAt||0;if(this.state.playerName){localStorage.setItem('shadow-ascension-nick',this.state.playerName)}
     }catch{}
   }
 

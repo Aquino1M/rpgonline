@@ -11,7 +11,8 @@
     "server:lan": "node server/server.js --host 0.0.0.0 --port 8765",
     "lan": "npm run build && npm run server:lan",
     "import:pack2": "node tools/import-packs.mjs PACK PACK2",
-    "import:packs": "node tools/import-packs.mjs PACK PACK2"
+    "import:packs": "node tools/import-packs.mjs PACK PACK2",
+    "test:multiplayer": "node tools/test-supabase-multiplayer-2players.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.116.0",
