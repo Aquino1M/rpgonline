@@ -7,6 +7,7 @@ import './game/mobileOnlineV094.js'
 import './game/mobileGameplayV095.js'
 import App from './App.jsx'
 import './styles.css'
+import './tablet.css'
 import { installClientLogger } from './game/clientLogger.js'
 import { initPWA } from './game/pwaService.js'
 
