@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { WORLD, ZONES, RARITIES, CITIES, ROADS, LANDMARKS, NPC_DEFS, PORTAL_NAMES, MODEL_MANIFEST, WORLD_MAP, ABILITIES, GUILD_RANKS, CITY_ECONOMIES, SAFE_SPAWNS, RESPAWN_RULES, ADVENTURER_BOTS, CITY_GUARDS_CONFIG } from './config.js'
+import { WORLD, ZONES, RARITIES, CITIES, ROADS, LANDMARKS, NPC_DEFS, PORTAL_NAMES, MODEL_MANIFEST, WORLD_MAP, ABILITIES, GUILD_RANKS, CITY_ECONOMIES, SAFE_SPAWNS, RESPAWN_RULES, ADVENTURER_BOTS, CITY_GUARDS_CONFIG, HORSE_BREEDS } from './config.js'
 import { hash2, clamp, damp, zoneAt, weightedPick, fmtTime } from './utils.js'
 import { AssetLibrary } from './assetLoader.js'
 import { defaultClassState, starterInventory, defaultQuestState, merchantStock, shopRefreshInfo, makeItem, makeMaterialDrop, makeResourceDrop, makeTool, rollLootRarity, normalizeSaveState, totalEquipmentStats, progressQuest, activateQuest, claimQuest, refreshGuildBoard, activateGuildMission, progressGuildMissions, claimGuildMission, getGuildRank, guildRankRequirement, calculateKillXP, resolveEntityProgression, attributeBonuses, calculateGrimoireCost, getNextGrimoireLevel } from './rpgSystems.js'
@@ -34,7 +34,7 @@ export class ShadowGame {
       version:8,playerName:savedNick,needsNickname:true,level:1,xp:0,nextXp:120,hp:120,maxHp:120,baseMaxHp:120,stamina:100,maxStamina:100,baseMaxStamina:100,gold:220,
       baseAtk:16,baseDef:5,atk:16,def:5,speed:7.1,zone:'Vila Aurora',zoneId:'aurora',target:null,dungeon:null,boss:null,
       inventory:starterInventory(),equipment:{weapon:null,armor:null,boots:null,talisman:null},quests:defaultQuestState(),
-      mount:{unlocked:false,active:false,name:'Corcel de Aurora'},classState:defaultClassState(),travelState:defaultTravelState(),ambush:null,uiPanel:null,dialogue:null,interactionPrompt:null,
+      mount:{unlocked:false,active:false,oathCompleted:false,name:'Corcel de Aurora',currentHorseId:'horse_aurora',speedBonus:4.7,tamedHorses:[]},classState:defaultClassState(),travelState:defaultTravelState(),ambush:null,uiPanel:null,dialogue:null,interactionPrompt:null,
       weather:'Céu limpo',time:'08:15',timeHours:8.25,portal:null,merchant:[],toast:null,settings:this.settings,
       worldMap:WORLD_MAP,playerPosition:{x:0,z:0},playerHeading:0,stats:{kills:0,dungeons:0,bosses:0},ores:2,
       abilities:ABILITIES.map(a=>({...a,remaining:0,ready:true})),currentCity:null,combatMode:false,
@@ -122,7 +122,7 @@ export class ShadowGame {
     const ear1=mesh(new THREE.ConeGeometry(.1,.32,5),dark),ear2=ear1.clone();ear1.position.set(-.14,1.12,.15);ear2.position.set(.14,1.12,.15);neck.add(ear1,ear2)
     const saddle=mesh(new THREE.BoxGeometry(.9,.18,.8),saddleMat);saddle.position.set(0,1.55,-.08);g.add(saddle)
     const legs=[];for(const [x,z] of [[-.38,.52],[.38,.52],[-.38,-.52],[.38,-.52]]){const p=new THREE.Group();p.position.set(x,.86,z);const l=mesh(new THREE.CapsuleGeometry(.11,.68,4,6),coat);l.position.y=-.42;p.add(l);g.add(p);legs.push(p)}
-    this.mountRig={body,neck,legs}; return g
+    this.mountRig={body,neck,neckMesh,head,legs,coat}; return g
   }
 
   makeHouse(x,z,scale=1,color=0xe7d5ad,roofColor=0x8c4739){
@@ -332,7 +332,7 @@ export class ShadowGame {
     const body=mesh(new THREE.CapsuleGeometry(.32,.8,5,9),mat(def.color));body.position.y=1.05;g.add(body)
     const head=mesh(new THREE.SphereGeometry(.26,12,10),mat(0xe6b38c));head.position.y=1.78;g.add(head)
     const hair=mesh(new THREE.SphereGeometry(.275,10,7,0,Math.PI*2,0,Math.PI*.55),mat(def.id==='brann'?0x5b2d23:0x342b27));hair.position.y=1.87;g.add(hair)
-    const marker=mesh(new THREE.OctahedronGeometry(.14),new THREE.MeshBasicMaterial({color:def.role==='quest'?0xffd34f:def.role==='merchant'?0x70e1a1:def.role==='blacksmith'?0xff855e:0x8bd5ff}));marker.position.y=2.55;g.add(marker)
+    const marker=mesh(new THREE.OctahedronGeometry(.14),new THREE.MeshBasicMaterial({color:def.role==='quest'?0xffd34f:def.role==='merchant'?0x70e1a1:def.role==='blacksmith'?0xff855e:def.role==='townhall'?0x64b5f6:def.role==='guild'?0xba68c8:def.role==='stable'?0xeab308:0x8bd5ff}));marker.position.y=2.55;g.add(marker)
     return {g,def,marker,body,head,hair}
   }
 
@@ -858,8 +858,12 @@ export class ShadowGame {
   }
   updateMobLabel(e){
     const l=e.label;if(!l)return;const ctx=l.canvas.getContext('2d'),pct=Math.max(0,Math.min(1,e.hp/e.maxHp));ctx.clearRect(0,0,320,82)
-    ctx.fillStyle='rgba(3,8,14,.88)';ctx.roundRect(4,4,312,72,12);ctx.fill();ctx.strokeStyle=e.boss?'#d78cff':'rgba(180,220,245,.42)';ctx.lineWidth=2;ctx.stroke()
-    ctx.font='700 24px Inter,Arial';ctx.fillStyle='#fff';ctx.textAlign='center';ctx.fillText(`${e.boss?'★ ':''}${e.name}  •  Lv.${e.level}`,160,31)
+    ctx.fillStyle='rgba(3,8,14,.88)';ctx.roundRect(4,4,312,72,12);ctx.fill()
+    const rank = e.level >= 10 ? (1 + Math.floor((e.level - 10) / 20)) : 0
+    const rankRom = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'][rank] || (rank ? `★${rank}` : '')
+    const rankTag = rankRom ? ` [Rank ${rankRom}]` : ''
+    ctx.strokeStyle=e.boss?'#d78cff':(rank>0?'#38bdf8':'rgba(180,220,245,.42)');ctx.lineWidth=2;ctx.stroke()
+    ctx.font='700 22px Inter,Arial';ctx.fillStyle=e.boss?'#d78cff':(rank>0?'#38bdf8':'#fff');ctx.textAlign='center';ctx.fillText(`${e.boss?'★ ':''}${e.name}${rankTag}  •  Lv.${e.level}`,160,31)
     ctx.fillStyle='#141b24';ctx.fillRect(22,43,276,18);ctx.fillStyle=e.boss?'#b746e0':'#e54d5d';ctx.fillRect(22,43,276*pct,18);ctx.strokeStyle='rgba(255,255,255,.5)';ctx.strokeRect(22,43,276,18)
     ctx.font='700 13px Inter,Arial';ctx.fillStyle='#fff';ctx.fillText(`${Math.max(0,Math.ceil(e.hp))} / ${Math.ceil(e.maxHp)}`,160,57);l.texture.needsUpdate=true;l.lastHp=e.hp;l.lastLevel=e.level
   }
@@ -1349,7 +1353,7 @@ export class ShadowGame {
       baseDef+=Math.round(bossBonus*50)
     }
     this.state.atk=Math.round(baseAtk+gear.atk+attr.atk);this.state.def=Math.round(baseDef+gear.def+attr.def)
-    this.state.speed=baseSpd+gear.speed+attr.speed+(this.state.mount.active?4.7:0)
+    this.state.speed=baseSpd+gear.speed+attr.speed+(this.state.mount.active?(this.state.mount.speedBonus||4.7):0)
     this.state.critChance=Number(((gear.crit||0)+attr.crit+(cls.stats?.critChance?cls.stats.critChance*100:0)+(rankInfo?.critBonus||0)).toFixed(1))
     this.state.abilityDamageMult=(attr.abilityMult||1)*(1+(rankInfo?.abilityBonus||0))
     this.state.maxHp=Math.round((this.state.baseMaxHp||120)+attr.maxHp);this.state.maxStamina=Math.round((this.state.baseMaxStamina||100)+attr.maxStamina)
@@ -1363,6 +1367,12 @@ export class ShadowGame {
     const { next }=getClassRankInfo(currentRank)
     if(!next){
       this.toast('Esta classe já atingiu o Grau Máximo!')
+      return false
+    }
+    const reqQuestId = `ascension_rank_${next.rank}`
+    const ascensionQ = (this.state.quests || []).find(q => q.id === reqQuestId)
+    if (!ascensionQ || ascensionQ.status !== 'done') {
+      this.toast(`⚠️ Conclua a missão de ascensão "${ascensionQ?.title || 'Prova de Ascensão'}" antes de evoluir!`)
       return false
     }
     if((this.state.level||1)<next.minLevel){
@@ -1737,30 +1747,71 @@ export class ShadowGame {
       p.dist+=step
       p.pos.addScaledVector(p.dir,step)
       p.mesh.position.copy(p.pos)
+      p.mesh.rotation.x += 7 * dt
+      p.mesh.rotation.y += 9 * dt
 
-      let hitTarget=null
-      const candidates=[...this.enemies.filter(e=>!e.dead&&e.g.visible),...this.bots.filter(b=>!b.dead&&b.g.visible)]
-      for(const e of candidates){
-        const mobCenter=e.g.position.clone()
-        mobCenter.y+=(e.boss?1.8:1.1)
-        const hitRadius=e.boss?2.4:1.25
-        if(p.pos.distanceTo(mobCenter)<=hitRadius){
-          hitTarget=e
-          break
+      if(p.fromMob){
+        let hit = false
+        const targetBot = p.victimBot
+        if(targetBot && !targetBot.dead && targetBot.g.visible){
+          const center = targetBot.g.position.clone().add(new THREE.Vector3(0,1,0))
+          if(p.pos.distanceTo(center) <= 1.3){
+            hit = true
+            const dealt = Math.max(2, Math.round(p.dmg - targetBot.def * 0.35))
+            targetBot.hp = Math.max(0, targetBot.hp - dealt)
+            this.spawnDamageText(targetBot.g.position, dealt, false)
+            this.spawnAbilityRing(p.color||0x22c55e, 1.8, 0.4)
+            this.updatePlayerNameplate(targetBot.label, { name: `${targetBot.name} [IA]`, level: targetBot.level, hp: targetBot.hp, maxHp: targetBot.maxHp, guildRank: targetBot.guildRank }, false)
+            if(targetBot.hp <= 0) this.killBot(targetBot, { byPlayer: false })
+          }
+        } else {
+          const playerCenter = this.player.position.clone().add(new THREE.Vector3(0,1,0))
+          if(p.pos.distanceTo(playerCenter) <= 1.25){
+            hit = true
+            if(this.invuln <= 0 && !this.isInsideCitySafeZone(this.player.position.x, this.player.position.z, 1)){
+              let dealt = Math.max(2, Math.round(p.dmg - this.state.def * 0.38))
+              if(this.state.blocking) dealt = Math.max(1, Math.round(dealt * 0.3))
+              this.state.hp = Math.max(0, this.state.hp - dealt)
+              this.spawnDamageText(this.player.position, dealt, false)
+              this.spawnAbilityRing(p.color||0x22c55e, 2.0, 0.5)
+              this.haptic(35)
+            }
+          }
         }
-      }
 
-      if(hitTarget||p.dist>=p.maxDist){
-        if(hitTarget){
-          this.damageEnemy(hitTarget,p.dmg,{knockback:.35,crit:p.crit})
-          this.spawnAbilityRing(0xffd56b,1.2,.25)
+        if(hit || p.dist >= p.maxDist){
+          p.mesh.parent?.remove(p.mesh)
+          p.mesh.traverse(o=>{
+            o.geometry?.dispose?.()
+            if(o.material && !Array.isArray(o.material)) o.material.dispose?.()
+          })
+          this.projectiles.splice(i,1)
         }
-        p.mesh.parent?.remove(p.mesh)
-        p.mesh.traverse(o=>{
-          o.geometry?.dispose?.()
-          if(o.material&&!Array.isArray(o.material))o.material.dispose?.()
-        })
-        this.projectiles.splice(i,1)
+      } else {
+        let hitTarget=null
+        const candidates=[...this.enemies.filter(e=>!e.dead&&e.g.visible),...this.bots.filter(b=>!b.dead&&b.g.visible)]
+        for(const e of candidates){
+          const mobCenter=e.g.position.clone()
+          mobCenter.y+=(e.boss?1.8:1.1)
+          const hitRadius=e.boss?2.4:1.25
+          if(p.pos.distanceTo(mobCenter)<=hitRadius){
+            hitTarget=e
+            break
+          }
+        }
+
+        if(hitTarget||p.dist>=p.maxDist){
+          if(hitTarget){
+            this.damageEnemy(hitTarget,p.dmg,{knockback:.35,crit:p.crit})
+            this.spawnAbilityRing(0xffd56b,1.2,.25)
+          }
+          p.mesh.parent?.remove(p.mesh)
+          p.mesh.traverse(o=>{
+            o.geometry?.dispose?.()
+            if(o.material&&!Array.isArray(o.material))o.material.dispose?.()
+          })
+          this.projectiles.splice(i,1)
+        }
       }
     }
   }
@@ -1894,12 +1945,94 @@ export class ShadowGame {
   usePotion(){const p=this.state.inventory.find(x=>x.subtype==='potion'&&(x.qty||1)>0);if(!p||this.state.hp>=this.state.maxHp)return;p.qty=(p.qty||1)-1;this.state.hp=Math.min(this.state.maxHp,this.state.hp+(p.power||50));if(p.qty<=0)this.state.inventory=this.state.inventory.filter(x=>x!==p);this.toast('Poção usada')}
 
   acceptQuest(id){activateQuest(this.state,id);this.toast('Missão aceita')}
-  claimQuest(id){const reward=claimQuest(this.state,id);if(!reward)return;this.gainXp(reward.xp||0);this.toast(reward.mount?'Montaria desbloqueada!':'Recompensa recebida')}
+  claimQuest(id){
+    const reward=claimQuest(this.state,id)
+    if(!reward)return
+    this.gainXp(reward.xp||0)
+    if(reward.mount||reward.mountPermission){
+      this.state.mount.unlocked=true
+      this.state.mount.oathCompleted=true
+      this.toast('🏆 Juramento Concluído! O Estábulo foi liberado para domação de montarias.')
+    }else{
+      this.toast('Recompensa recebida')
+    }
+    this.saveGame()
+  }
 
   toggleMount(){
-    if(!this.state.mount.unlocked){this.toast('Conclua o Juramento do Cavaleiro para liberar a montaria.');return}
+    if(!this.state.mount.unlocked&&!this.state.mount.oathCompleted){this.toast('Conclua o Juramento do Cavaleiro na Prefeitura para liberar montarias.');return}
     if(this.state.dungeon){this.toast('Montarias não entram em masmorras.');return}
-    this.state.mount.active=!this.state.mount.active;this.mountModel.visible=this.state.mount.active;this.player.position.y=this.state.mount.active?1.25:0;this.recalcStats();this.toast(this.state.mount.active?'Montaria invocada':'Montaria dispensada')
+    this.state.mount.active=!this.state.mount.active
+    this.mountModel.visible=this.state.mount.active
+    this.player.position.y=this.state.mount.active?1.25:0
+    this.applyMountVisual()
+    this.recalcStats()
+    this.toast(this.state.mount.active?`Montaria invocada (${this.state.mount.name})`:'Montaria dispensada')
+  }
+
+  tameHorse(horseId){
+    const horse=HORSE_BREEDS.find(h=>h.id===horseId)
+    if(!horse)return false
+    if(!this.state.mount.unlocked&&!this.state.mount.oathCompleted){
+      this.toast('🔒 Realize o Juramento do Cavaleiro na Prefeitura primeiro!')
+      return false
+    }
+    if((this.state.level||1)<horse.level){
+      this.toast(`⚠️ Requer Nível ${horse.level} para tentar domar o ${horse.name}!`)
+      return false
+    }
+    this.state.mount.tamedHorses||=[]
+    if(this.state.mount.tamedHorses.includes(horseId)){
+      return this.selectHorse(horseId)
+    }
+    if((this.state.gold||0)<horse.cost){
+      this.toast(`Ouro insuficiente (${horse.cost}◈ necessários)!`)
+      return false
+    }
+    this.state.gold-=horse.cost
+    const roll=Math.random()*100
+    if(roll<=horse.tameChance){
+      if(!this.state.mount.tamedHorses.includes(horse.id))this.state.mount.tamedHorses.push(horse.id)
+      this.state.mount.currentHorseId=horse.id
+      this.state.mount.name=horse.name
+      this.state.mount.speedBonus=horse.speedBonus
+      this.state.mount.unlocked=true
+      this.applyMountVisual()
+      this.recalcStats()
+      this.spawnAbilityRing(0x10b981,4.0,0.8)
+      this.toast(`🎉 Magnífico! Você domou o ${horse.name} (${horse.tameChance}% chance)!`)
+      this.saveGame()
+      return true
+    }else{
+      this.toast(`💨 O ${horse.name} resistiu aos arreios e escapou! Tente novamente.`)
+      this.saveGame()
+      return false
+    }
+  }
+
+  selectHorse(horseId){
+    const horse=HORSE_BREEDS.find(h=>h.id===horseId)
+    if(!horse)return false
+    this.state.mount.tamedHorses||=[]
+    if(!this.state.mount.tamedHorses.includes(horseId)){
+      this.toast(`Você ainda não domou o ${horse.name}!`)
+      return false
+    }
+    this.state.mount.currentHorseId=horse.id
+    this.state.mount.name=horse.name
+    this.state.mount.speedBonus=horse.speedBonus
+    this.applyMountVisual()
+    this.recalcStats()
+    this.toast(`🐎 Montaria selecionada: ${horse.name} (+${horse.speedBonus} Vel)`)
+    this.saveGame()
+    return true
+  }
+
+  applyMountVisual(){
+    if(!this.mountRig)return
+    const horse=HORSE_BREEDS.find(h=>h.id===this.state.mount?.currentHorseId)
+    const hex=horse?.color||0x6d4b35
+    if(this.mountRig.coat)this.mountRig.coat.color.setHex(hex)
   }
 
   suspendCombatForUI(){
@@ -2034,7 +2167,10 @@ export class ShadowGame {
         this.saveGame()
         return
       }
-      this.state.dialogue={name:near.def.name,title:near.def.title,text:near.def.dialogue};this.state.uiPanel=near.def.role==='quest'?'quests':near.def.role; if(near.def.role==='merchant'||near.def.role==='blacksmith'){const z=ZONES.find(q=>q.id===near.def.zoneId);this.currentMerchantZoneMin=z?.min||1;this.currentMerchantZoneMax=z?.max||300;this.currentMerchantZoneId=near.def.zoneId||'aurora';this.currentMerchantCityId=near.def.cityId||'aurora-city';this.state.currentCity=near.def.cityName||null;this.refreshShop(near.def.role)}
+      this.state.dialogue={name:near.def.name,title:near.def.title,text:near.def.dialogue};
+      this.state.uiPanel=near.def.role==='quest'?'quests':near.def.role;
+      if(near.def.role==='merchant'||near.def.role==='blacksmith'){const z=ZONES.find(q=>q.id===near.def.zoneId);this.currentMerchantZoneMin=z?.min||1;this.currentMerchantZoneMax=z?.max||300;this.currentMerchantZoneId=near.def.zoneId||'aurora';this.currentMerchantCityId=near.def.cityId||'aurora-city';this.state.currentCity=near.def.cityName||null;this.refreshShop(near.def.role)}
+      if(near.def.role==='guild')refreshGuildBoard(this.state)
       return
     }
     const resourceTarget=this.getCrosshairResourceNode(4.2,.45)
@@ -2083,10 +2219,11 @@ export class ShadowGame {
       e.attackAnim=Math.max(0,(e.attackAnim||0)-dt);e.specialTimer=(e.specialTimer??999)-dt
       const gait=Math.sin(t*7+e.phase)*.55;e.legs[0].rotation.x=gait;e.legs[1].rotation.x=-gait
       const lunge=e.attackAnim>0?Math.sin(Math.min(1,e.attackAnim/.34)*Math.PI)*.28:0;e.body.position.y=e.baseBodyY+Math.sin(t*3+e.phase)*.025;e.body.rotation.x=damp(e.body.rotation.x,e.attackAnim>0?-.38:0,12,dt);e.head.rotation.x=damp(e.head.rotation.x,e.attackAnim>0?.22:0,12,dt)
-      if(e.specialTimer<=0&&d<12){
+      if(e.specialTimer<=0&&d<14){
         const keyName=e.name.toLowerCase()
         e.specialTimer=e.specialCooldown||(e.boss?6:Math.max(4.5,8.5-Math.min(4,e.level*0.04)))
         e.attackAnim=.65
+        const mobRank = (e.level >= 10) ? (1 + Math.floor((e.level - 10) / 20)) : 0
         if(e.boss){
           const targetPos=victim.position.clone()
           this.spawnAbilityRing(0xef4444,4.2,1.2)
@@ -2105,35 +2242,8 @@ export class ShadowGame {
               }
             }
           },1100)
-        }else if(keyName.includes('slime')){
-          this.spawnAbilityRing(0x22c55e,2.6,.75)
-          this.toast(`💦 ${e.name} cuspiu Rajada Ácida!`)
-          const dmg=Math.max(2,Math.round(e.atk*1.15))
-          if(!victimBot&&d<6.5&&this.invuln<=0&&!this.isInsideCitySafeZone(this.player.position.x,this.player.position.z,1)){
-            this.state.hp=Math.max(0,this.state.hp-Math.max(1,Math.round(dmg-this.state.def*.3)))
-          }
-        }else if(keyName.includes('golem')||keyName.includes('gigante')||keyName.includes('bruto')||keyName.includes('colosso')||keyName.includes('xisto')){
-          this.spawnAbilityRing(0xf59e0b,5.0,.7)
-          this.toast(`💥 ${e.name} desferiu Impacto Sísmico!`)
-          if(d<5.2){
-            const dmg=Math.max(2,Math.round(e.atk*1.35))
-            if(victimBot){
-              victimBot.hp=Math.max(0,victimBot.hp-Math.max(1,Math.round(dmg-victimBot.def*.38)))
-            }else if(this.invuln<=0&&!this.isInsideCitySafeZone(this.player.position.x,this.player.position.z,1)){
-              this.state.hp=Math.max(0,this.state.hp-Math.max(1,Math.round(dmg-this.state.def*.4)))
-            }
-          }
-        }else if(keyName.includes('esqueleto')||keyName.includes('espectro')||keyName.includes('treant')||keyName.includes('cavaleiro')){
-          this.spawnAbilityRing(0xa855f7,3.5,.8)
-          this.toast(`💀 ${e.name} canalizou Onda Umbral!`)
-          if(d<5.0){
-            const dmg=Math.max(2,Math.round(e.atk*1.25))
-            if(victimBot){
-              victimBot.hp=Math.max(0,victimBot.hp-Math.max(1,Math.round(dmg-victimBot.def*.35)))
-            }else if(this.invuln<=0&&!this.isInsideCitySafeZone(this.player.position.x,this.player.position.z,1)){
-              this.state.hp=Math.max(0,this.state.hp-Math.max(1,Math.round(dmg-this.state.def*.38)))
-            }
-          }
+        }else if(e.level>=10){
+          this.spawnMobSpecialAttack(e, victim, victimBot, mobRank)
         }else{
           this.spawnAbilityRing(0xef4444,2.8,.5)
           this.toast(`🐺 ${e.name} usou Investida Furiosa!`)
@@ -2149,6 +2259,62 @@ export class ShadowGame {
       }
       if(d<16&&d>1.7){const dir=victim.position.clone().sub(e.g.position);dir.y=0;if(dir.lengthSq())dir.normalize();const step=(e.boss?2.2:2.75)*dt,next=e.g.position.clone().addScaledVector(dir,step),safe=this.cityAt(next.x,next.z,2.5);if(!safe&&this.canOccupy(next.x,next.z,e.boss?1.1:.55)){e.g.position.copy(next)}else if(safe){const away=e.g.position.clone().sub(new THREE.Vector3(safe.x,0,safe.z)).normalize();e.g.position.addScaledVector(away,step*.45)}e.g.rotation.y=Math.atan2(dir.x,dir.z);if(lunge)e.g.position.addScaledVector(dir,lunge*dt)}
       if(d<=1.85&&performance.now()-e.last>1100){e.last=performance.now();e.attackAnim=.34;if(victimBot){const dmg=Math.max(1,Math.round(e.atk-victimBot.def*.42));victimBot.hp=Math.max(0,victimBot.hp-dmg);this.updatePlayerNameplate(victimBot.label,{name:`${victimBot.name} [IA]`,level:victimBot.level,hp:victimBot.hp,maxHp:victimBot.maxHp,guildRank:victimBot.guildRank},false);if(victimBot.hp<=0)this.killBot(victimBot,{byPlayer:false})}else if(!this.isInsideCitySafeZone(this.player.position.x,this.player.position.z,1)&&this.invuln<=0){let dmg=Math.max(1,Math.round(e.atk-this.state.def*.45));if(this.state.blocking)dmg=Math.max(1,Math.round(dmg*.3));this.state.hp=Math.max(0,this.state.hp-dmg)}}
+    }
+  }
+
+  spawnMobSpecialAttack(mob, victim, victimBot, rank=1){
+    const key=mob.name.toLowerCase()
+    let effectType='acid', color=0x22c55e, emissive=0x15803d, namePower='Gosma Ácida', speed=13.5, maxDist=24
+    const dmgMult=1.0+(rank-1)*0.35
+    const dmg=Math.max(3,Math.round(mob.atk*1.25*dmgMult))
+    const scale=Math.min(2.1,0.85+(rank-1)*0.22)
+    let pGeo,pMat
+
+    if(key.includes('slime')){
+      effectType='acid'; color=0x22c55e; emissive=0x16a34a; namePower='Gosma Ácida'; speed=13.2
+      pGeo=new THREE.SphereGeometry(0.25*scale,12,12)
+      pMat=new THREE.MeshStandardMaterial({color,emissive,emissiveIntensity:0.95,roughness:0.25})
+    }else if(key.includes('golem')||key.includes('gigante')||key.includes('bruto')||key.includes('colosso')||key.includes('xisto')){
+      effectType='boulder'; color=0xb45309; emissive=0x78350f; namePower='Rocha Sísmica'; speed=11.5
+      pGeo=new THREE.DodecahedronGeometry(0.32*scale,0)
+      pMat=new THREE.MeshStandardMaterial({color,emissive,emissiveIntensity:0.85,roughness:0.75})
+    }else if(key.includes('esqueleto')||key.includes('espectro')||key.includes('treant')||key.includes('cavaleiro')||key.includes('cinzento')){
+      effectType='void'; color=0xa855f7; emissive=0x6b21a8; namePower='Orbe Umbral'; speed=14.2
+      pGeo=new THREE.SphereGeometry(0.26*scale,12,12)
+      pMat=new THREE.MeshStandardMaterial({color,emissive,emissiveIntensity:1.1,roughness:0.3})
+    }else{
+      effectType='wind'; color=0x38bdf8; emissive=0x0284c7; namePower='Lâmina de Vento'; speed=16.0
+      pGeo=new THREE.TorusGeometry(0.28*scale,0.08*scale,8,16)
+      pMat=new THREE.MeshStandardMaterial({color,emissive,emissiveIntensity:1.0,roughness:0.3})
+    }
+
+    const pMesh=new THREE.Mesh(pGeo,pMat)
+    pMesh.castShadow=true
+    const startPos=mob.g.position.clone().add(new THREE.Vector3(0,mob.boss?1.8:0.95,0))
+    const targetPos=victim.position.clone().add(new THREE.Vector3(0,1.0,0))
+    pMesh.position.copy(startPos)
+    const dir=targetPos.clone().sub(startPos).normalize()
+    this.worldRoot.add(pMesh)
+
+    this.projectiles.push({
+      fromMob:true,
+      mob,
+      victimBot,
+      mesh:pMesh,
+      pos:startPos,
+      dir,
+      speed,
+      dist:0,
+      maxDist,
+      dmg,
+      rank,
+      effectType,
+      color
+    })
+
+    const rankRom=['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'][rank]||`★${rank}`
+    if(!victimBot){
+      this.toast(`⚡ ${mob.name} disparou ${namePower} (Rank ${rankRom})!`)
     }
   }
 
@@ -2257,7 +2423,7 @@ export class ShadowGame {
       let near=null,dist=4.3
       for(const n of this.npcs){const d=n.g.position.distanceTo(this.player.position);if(d<dist){near=n;dist=d}}
       if(near){
-        const roleIcon=near.def.role==='merchant'?'🛒':near.def.role==='blacksmith'?'⚒️':near.def.role==='traveler'?'🐎':'📜'
+        const roleIcon=near.def.role==='merchant'?'🛒':near.def.role==='blacksmith'?'⚒️':near.def.role==='traveler'?'🧭':near.def.role==='townhall'?'🏛️':near.def.role==='guild'?'⚔️':near.def.role==='stable'?'🐎':'📜'
         prompt=`E — falar com ${near.def.name} (${near.def.title})`
         action={type:'npc',label:`Falar com ${near.def.name}`,icon:roleIcon}
       }
@@ -2579,7 +2745,7 @@ applyEnemyNetworkState(st){
       bosses,activeBosses,
     }
     this.state.guildRank=getGuildRank(this.state.guildRankIndex||0).id;this.state.onlinePlayers=[...this.remotePlayers.entries()].filter(([,r])=>r.g.visible).map(([id,r])=>({id,name:r.data?.name||'Aventureiro',level:r.data?.level||1,guildRank:r.data?.guildRank||'E',partyId:r.data?.partyId||null}));this.updatePlayerNameplate(this.localPlayerLabel,{name:this.state.playerName||'Aventureiro',level:this.state.level,hp:this.state.hp,maxHp:this.state.maxHp,guildRank:this.state.guildRank},true)
-    this.onHud?.({...this.state,minimap,mapSnapshot,inventory:[...this.state.inventory],equipment:{...this.state.equipment},quests:this.state.quests.map(q=>({...q})),classState:{...this.state.classState},travelState:{...this.state.travelState,vipCost:Math.max(5000,this.state.travelState?.vipCost||5000),nodes:{...(this.state.travelState?.nodes||{})}},settings:{...this.settings},mount:{...this.state.mount},stats:{...this.state.stats},attributes:{...this.state.attributes},guildMissions:(this.state.guildMissions||[]).map(m=>({...m,reward:{...m.reward}})),multiplayer:{...this.state.multiplayer},abilities:this.state.abilities?.map(a=>({...a}))||[]})
+    this.onHud?.({...this.state,minimap,mapSnapshot,horseBreeds:HORSE_BREEDS,inventory:[...this.state.inventory],equipment:{...this.state.equipment},quests:this.state.quests.map(q=>({...q})),classState:{...this.state.classState},travelState:{...this.state.travelState,vipCost:Math.max(5000,this.state.travelState?.vipCost||5000),nodes:{...(this.state.travelState?.nodes||{})}},settings:{...this.settings},mount:{...this.state.mount},stats:{...this.state.stats},attributes:{...this.state.attributes},guildMissions:(this.state.guildMissions||[]).map(m=>({...m,reward:{...m.reward}})),multiplayer:{...this.state.multiplayer},abilities:this.state.abilities?.map(a=>({...a}))||[]})
   }
 
   loop=()=>{

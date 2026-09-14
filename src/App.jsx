@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { ShadowGame } from './game/engine.js'
-import { EQUIPMENT_SLOTS, GUILD_RANKS, ATTRIBUTE_DEFS } from './game/config.js'
+import { EQUIPMENT_SLOTS, GUILD_RANKS, ATTRIBUTE_DEFS, HORSE_BREEDS } from './game/config.js'
 import { CLASSES_LIST, CLASS_TIERS, CLASS_RANKS, getClassRankInfo } from './game/classesData.js'
 import { TRAVEL_NODES, calculateTravelCost } from './game/fastTravel.js'
 import { calculateGrimoireCost, getNextGrimoireLevel } from './game/rpgSystems.js'
@@ -11,7 +11,7 @@ import WorldMap from './ui/WorldMap.jsx'
 
 const initial={playerName:'',needsNickname:true,level:1,xp:0,nextXp:120,hp:120,maxHp:120,stamina:100,maxStamina:100,gold:220,atk:16,def:5,critChance:0,zone:'Vila Aurora',zoneId:'aurora',currentCity:'Cidadela Aurora',inventory:[],equipment:{},quests:[],guildMissions:[],guildRank:'E',guildRankIndex:0,guildPoints:0,attributePoints:0,attributes:{strength:0,vitality:0,agility:0,intellect:0},weather:'Céu limpo',time:'08:15',mount:{},abilities:[],combatMode:false,multiplayer:{connected:false,url:'',room:'asterra-01',players:0,latencyMs:0,quality:'offline',reconnecting:false},settings:{renderDistance:2,pixelRatio:1,uiScale:1.2,invertCameraX:false,invertCameraY:false,invertCamera:false,multiplayerUrl:''},playerPosition:{x:0,z:0},stats:{kills:0,bosses:0,dungeons:0},ores:0,party:{id:null,leaderId:null,members:[],totalXP:0},onlinePlayers:[],economy:{label:'Mercado dos Despertos',description:'Itens iniciais',theme:'Aurora'}}
 const slotNames={weapon:'Arma',armor:'Armadura',boots:'Botas',talisman:'Talismã'}
-const roleTitle={inventory:'Inventário & Equipamento',grimoire:'Grimório do Despertar (Roleta de Almas)',travel:'Moço Viajante (Rotas de Caravana)',quests:'Missões',guild:'Guilda de Aventureiros',attributes:'Atributos',merchant:'Mercador',blacksmith:'Ferreiro Rúnico',stable:'Estábulos',map:'Mapa de Asterra',settings:'Configurações',trade:'Troca entre Jogadores'}
+const roleTitle={inventory:'Inventário & Equipamento',grimoire:'Grimório do Despertar (Roleta de Almas)',travel:'Moço Viajante (Rotas de Caravana)',quests:'Missões',guild:'Guilda de Aventureiros',townhall:'Prefeitura de Aurora (Juramento do Cavaleiro)',attributes:'Atributos',merchant:'Mercador',blacksmith:'Ferreiro Rúnico',stable:'Estábulos & Domação de Montarias',map:'Mapa de Asterra',settings:'Configurações',trade:'Troca entre Jogadores'}
 const fallbackAbilities=[{slot:1,name:'Corte Astral',short:'Corte',icon:'✦',cost:14,remaining:0,ready:true},{slot:2,name:'Onda Astral',short:'Onda',icon:'✹',cost:28,remaining:0,ready:true},{slot:3,name:'Passo Etéreo',short:'Passo',icon:'➠',cost:22,remaining:0,ready:true}]
 const multiplayerLobbies=[{id:'asterra-01',name:'Lobby Aurora'},{id:'asterra-02',name:'Lobby Lúmen'},{id:'asterra-03',name:'Lobby Cinéreo'},{id:'asterra-04',name:'Lobby Safira'},{id:'asterra-05',name:'Lobby Veyra'},{id:'asterra-06',name:'Lobby Noctis'}]
 
@@ -138,6 +138,7 @@ export default function App(){
     </nav>
 
     <MiniMap hud={hud} onOpenMap={()=>call('togglePanel','map')}/>
+    <ActiveQuestTrackerHUD hud={hud} onOpenQuests={()=>call('togglePanel','quests')} onClaim={id=>call('claimQuest',id)}/>
     {hud.portal&&!hud.dungeon&&<div className="portal-card glass" style={{'--portal':hud.portal.rarity.color}}><small>FENDA DETECTADA</small><strong>{hud.portal.name}</strong><span>Nv. {hud.portal.level} • <b style={{color:hud.portal.rarity.color}}>{hud.portal.rarity.name}</b> • {hud.portal.floors} andares</span><em>E para entrar</em></div>}
     {hud.dungeon&&<div className="dungeon-card glass" style={{'--portal':hud.dungeon.color}}><small>MASMORRA ATIVA</small><strong>{hud.dungeon.name}</strong><span>{hud.dungeon.rarity} • Nv.{hud.dungeon.level}</span><b>Andar {hud.dungeon.floor}/{hud.dungeon.floors}</b></div>}
     {hud.interactionPrompt&&!panel&&<div className="interaction">{hud.interactionPrompt}</div>}{hud.toast&&<div key={hud.toast.id} className="toast">{hud.toast.msg}</div>}
@@ -158,14 +159,15 @@ export default function App(){
 
     {panel&&<Overlay panelKey={panel} title={roleTitle[panel]||'Interação'} dialogue={hud.dialogue} mapMode={panel==='map'} onClose={()=>call('closePanel')}>
       {panel==='inventory'&&<Inventory hud={hud} equip={id=>call('equipItem',id)} unequip={s=>call('unequip',s)} call={call}/>} 
-      {panel==='grimoire'&&<Grimoire hud={hud} onAwaken={()=>call('awakenClass')} onSwitch={id=>call('switchClass',id)} onUpgradeRank={id=>call('upgradeClassRank',id)}/>} 
+      {panel==='grimoire'&&<Grimoire hud={hud} onAwaken={()=>call('awakenClass')} onSwitch={id=>call('switchClass',id)} onUpgradeRank={id=>call('upgradeClassRank',id)} onAcceptQuest={id=>call('acceptQuest',id)} onClaimQuest={id=>call('claimQuest',id)}/>} 
       {panel==='travel'&&<FastTravel hud={hud} onTravel={id=>call('fastTravelTo',id)} onBuyVip={id=>call('buyVipPass',id)}/>} 
       {panel==='quests'&&<Quests hud={hud} accept={id=>call('acceptQuest',id)} claim={id=>call('claimQuest',id)}/>} 
       {panel==='guild'&&<Guild hud={hud} accept={id=>call('acceptGuildMission',id)} claim={id=>call('claimGuildMission',id)} createParty={()=>call('createParty')} joinParty={id=>call('joinParty',id)} leaveParty={()=>call('leaveParty')}/>} 
+      {panel==='townhall'&&<TownHall hud={hud} accept={id=>call('acceptQuest',id)} claim={id=>call('claimQuest',id)} onOpenStable={()=>call('togglePanel','stable')}/>} 
       {panel==='attributes'&&<Attributes hud={hud} allocate={dist=>call('allocateAttributes',dist)}/>} 
       {panel==='merchant'&&<Merchant hud={hud} buy={id=>call('buyItem',id)} sell={id=>call('sellItem',id)} sellMultiple={ids=>call('sellMultipleItems',ids)}/>} 
       {panel==='blacksmith'&&<Blacksmith hud={hud} upgrade={s=>call('upgrade',s)} repair={s=>call('repairItem',s)} buy={id=>call('buyItem',id)}/>} 
-      {panel==='stable'&&<Stable hud={hud} toggle={()=>call('toggleMount')}/>} 
+      {panel==='stable'&&<Stable hud={hud} horseBreeds={hud.horseBreeds||HORSE_BREEDS} onTame={id=>call('tameHorse',id)} onSelect={id=>call('selectHorse',id)} toggle={()=>call('toggleMount')} onOpenTownHall={()=>call('togglePanel','townhall')}/>} 
       {panel==='trade'&&<TradeModal hud={hud} call={call} onClose={()=>call('closePanel')}/>}
       {panel==='map'&&<WorldMap hud={hud}/>} 
       {panel==='settings'&&<Settings hud={hud} apply={v=>call('applySettings',v)} connect={url=>call('connectMultiplayer',url)} setName={name=>call('setPlayerName',name)} call={call}/>} 
@@ -789,7 +791,295 @@ function Blacksmith({hud,upgrade,buy,repair}){
   return <><div className="economy-banner forge-economy"><div><small>FORJA REGIONAL</small><b>{eco.label||hud.currentCity||'Forja local'}</b></div><p>Melhore e repare sua durabilidade. Equipamentos quebrados perdem grande parte da eficiência.</p><span>{eco.material||'Minério regional'}</span></div><div className="blacksmith-layout"><section><div className="forge-banner"><span>🔥</span><div><h3>Forja de {hud.currentCity||'Asterra'}</h3><p>Armas, ferramentas e armaduras perdem durabilidade durante combate e coleta.</p></div><b>◆ {hud.ores||0}</b></div><div className="forge-grid">{EQUIPMENT_SLOTS.map(slot=>{const it=hud.equipment?.[slot],up=it?.upgrade||0,cost=it?Math.round(80+(up+1)*65+it.level*4):0,ore=1+Math.floor(up/3),max=Number(it?.maxDurability)||0,cur=Number.isFinite(Number(it?.durability))?Number(it.durability):max,repairCost=it&&max?Math.max(8,Math.round(Math.max(0,max-cur)*(.22+(Number(it.level)||1)*.012+itemRarityRank(it)*.09))):0;return <article key={slot} style={{'--rarity':it?.color||'#607080'}}><span>{slotIcon(slot,it)}</span><b>{it?.name||slotNames[slot]}</b><small>{it?`${it.rarity} • Nv.${it.level} • +${up}${max?` • Dur. ${Math.round(cur)}/${max}`:''}`:'Nenhum item equipado'}</small><div className="forge-actions"><button disabled={!it||up>=10||hud.gold<cost||(hud.ores||0)<ore} onClick={()=>upgrade(slot)}>{up>=10?'Máximo':`Melhorar ${cost}◈ + ${ore}◆`}</button>{it&&max>0&&cur<max&&<button className="repair-btn" disabled={hud.gold<repairCost} onClick={()=>repair(slot)}>🔧 Reparar {repairCost}◈</button>}</div></article>})}</div></section><aside className="smith-shop"><div className="section-title"><div><small>ARMAS & ARMADURAS</small><h3>Comprar na forja</h3></div><span>◈ {hud.gold}</span></div><div className="smith-stock shop-scroll-list">{weapons.map(it=><article key={it.id} className="shop-scroll-card" style={{'--rarity':it.color}}><ItemCard item={it} compact/><button type="button" disabled={hud.gold<it.value} onClick={()=>buy(it.id)}>Comprar • {it.value}◈</button></article>)}</div></aside></div></>
 }
 
-function Stable({hud,toggle}){return <div className="stable"><div className="mount-preview">♞</div><h3>{hud.mount?.name||'Corcel de Aurora'}</h3><p>{hud.mount?.unlocked?'Seu vínculo com a montaria está estabelecido. Ela aumenta bastante a velocidade no mundo aberto.':'Mira só entrega a montaria após o Juramento do Cavaleiro.'}</p><button disabled={!hud.mount?.unlocked} onClick={toggle}>{hud.mount?.active?'Dispensar montaria':'Invocar montaria'}</button></div>}
+function ActiveQuestTrackerHUD({ hud, onOpenQuests, onClaim }) {
+  const [collapsed, setCollapsed] = useState(false)
+  const activeQuests = (hud.quests || []).filter(q => q.status === 'active' || q.status === 'ready')
+
+  if (!activeQuests.length) return null
+
+  return (
+    <aside className={`active-quest-tracker glass ${collapsed ? 'collapsed' : ''}`} aria-label="Rastreador de Missões">
+      <header onClick={() => setCollapsed(c => !c)}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <span className="tracker-icon">📜</span>
+          <b>MISSÕES ATIVAS ({activeQuests.length})</b>
+        </div>
+        <button
+          type="button"
+          className="tracker-collapse-btn"
+          title={collapsed ? 'Expandir' : 'Recolher'}
+          onClick={e => { e.stopPropagation(); setCollapsed(c => !c) }}
+        >
+          {collapsed ? '+' : '−'}
+        </button>
+      </header>
+      {!collapsed && (
+        <div className="tracker-content">
+          {activeQuests.map(q => {
+            const isReady = q.status === 'ready'
+            const pctVal = Math.min(100, Math.max(0, ((q.progress || 0) / Math.max(1, q.goal || 1)) * 100))
+            return (
+              <article key={q.id} className={`tracker-item ${isReady ? 'ready' : ''}`} onClick={onOpenQuests}>
+                <div className="tracker-title-row">
+                  <strong title={q.title}>{q.title}</strong>
+                  {isReady ? (
+                    <button
+                      type="button"
+                      className="tracker-claim-btn"
+                      onClick={e => { e.stopPropagation(); onClaim?.(q.id) }}
+                    >
+                      ✓ Entregar
+                    </button>
+                  ) : (
+                    <span className="tracker-progress-num">{q.progress || 0}/{q.goal}</span>
+                  )}
+                </div>
+                <p className="tracker-desc">{q.text}</p>
+                <div className="tracker-bar-wrap">
+                  <div className={`tracker-bar ${isReady ? 'ready' : ''}`} style={{ width: `${pctVal}%` }} />
+                </div>
+                <div className="tracker-meta">
+                  <small>Solicitante: <b>{q.giver}</b></small>
+                  <small>{isReady ? '🎉 Pronto para entregar!' : '⚔ Em progresso'}</small>
+                </div>
+              </article>
+            )
+          })}
+        </div>
+      )}
+    </aside>
+  )
+}
+
+function TownHall({ hud, accept, claim, onOpenStable }) {
+  const oathQuest = (hud.quests || []).find(q => q.id === 'rider_oath')
+  const isOathDone = oathQuest?.status === 'done' || hud.mount?.oathCompleted || hud.mount?.unlocked
+  const isOathReady = oathQuest?.status === 'ready'
+  const isOathActive = oathQuest?.status === 'active'
+
+  return (
+    <div className="townhall-layout">
+      <div className="townhall-hero glass">
+        <div className="townhall-avatar">🏛️</div>
+        <div className="townhall-meta">
+          <small>CIDADELA AURORA • GABINETE DO PREFEITO</small>
+          <h3>Lorde Aldrich</h3>
+          <p>
+            "Bem-vindo à Prefeitura de Aurora, cidadão dos Despertos. Sob o decreto soberano de Asterra,
+            concedemos títulos de cavalaria e autorização dos Estábulos apenas àqueles que provam bravura e lealdade às muralhas."
+          </p>
+        </div>
+      </div>
+
+      <div className="townhall-content">
+        <section className="townhall-card glass">
+          <header className="townhall-card-header">
+            <div>
+              <span className="oath-badge">👑 DECRETO MUNICIPAL</span>
+              <h4>Juramento do Cavaleiro</h4>
+            </div>
+            {isOathDone ? (
+              <span className="oath-status done">✓ Concluído</span>
+            ) : isOathReady ? (
+              <span className="oath-status ready">Pronto para Consagrar</span>
+            ) : isOathActive ? (
+              <span className="oath-status active">Em Andamento</span>
+            ) : (
+              <span className="oath-status available">Disponível</span>
+            )}
+          </header>
+
+          <p className="oath-desc">
+            {oathQuest?.text || 'Elimine 3 ameaças fora dos portões da Cidadela para jurar lealdade ao reino e receber a licença oficial de cavaleiro e domador de montarias.'}
+          </p>
+
+          <div className="oath-objectives">
+            <b>Objetivo da Provação:</b>
+            <div className="oath-counter">
+              <span>Eliminar criaturas no mundo aberto:</span>
+              <strong>{oathQuest?.progress || (isOathDone ? 3 : 0)} / 3</strong>
+            </div>
+            <Bar value={isOathDone ? 100 : Math.min(100, ((oathQuest?.progress || 0) / 3) * 100)} cls="questbar" />
+          </div>
+
+          <div className="oath-reward-box">
+            <b>Recompensas Oficiais:</b>
+            <div className="oath-rewards">
+              <span>🏅 <b>Título de Cavaleiro de Aurora</b></span>
+              <span>🐎 <b>Licença dos Estábulos</b> (Domação e Montaria)</span>
+              <span>◈ <b>+150 Ouro</b></span>
+              <span>✨ <b>+220 XP</b></span>
+            </div>
+          </div>
+
+          <div className="oath-actions">
+            {isOathDone ? (
+              <div className="oath-completed-banner">
+                <p>🏆 Seu juramento foi consagrado! Os estábulos de Mira estão totalmente liberados para domação e escolha de montarias.</p>
+                <button type="button" className="btn-primary" onClick={onOpenStable}>
+                  🐎 Abrir Estábulos & Domar Cavalos
+                </button>
+              </div>
+            ) : isOathReady ? (
+              <button type="button" className="btn-primary pulse" onClick={() => claim('rider_oath')}>
+                🏅 Prestar Juramento & Receber Título de Cavaleiro
+              </button>
+            ) : isOathActive ? (
+              <div className="oath-hunting-info">
+                <span>⚔ Saia pelas muralhas de Aurora e derrote 3 monstros para completar o juramento.</span>
+              </div>
+            ) : (
+              <button type="button" className="btn-primary" onClick={() => accept('rider_oath')}>
+                📜 Aceitar o Juramento do Cavaleiro
+              </button>
+            )}
+          </div>
+        </section>
+      </div>
+    </div>
+  )
+}
+
+function Stable({ hud, horseBreeds = HORSE_BREEDS, onTame, onSelect, toggle, onOpenTownHall }) {
+  const isUnlocked = Boolean(hud.mount?.unlocked || hud.mount?.oathCompleted)
+  const currentHorseId = hud.mount?.currentHorseId || 'horse_aurora'
+  const tamedList = hud.mount?.tamedHorses || (isUnlocked ? ['horse_aurora'] : [])
+  const activeHorse = (horseBreeds || HORSE_BREEDS).find(h => h.id === currentHorseId) || (horseBreeds || HORSE_BREEDS)[0]
+
+  return (
+    <div className="stable-layout">
+      {!isUnlocked && (
+        <div className="stable-locked-alert glass">
+          <div className="alert-icon">🔒</div>
+          <div className="alert-text">
+            <h4>Acesso Restrito aos Estábulos</h4>
+            <p>
+              Por decreto municipal, a domação de cavalos exige que você preste o <b>Juramento do Cavaleiro</b> na Prefeitura de Aurora com o <b>Lorde Aldrich</b>.
+            </p>
+            <button type="button" className="btn-alert" onClick={onOpenTownHall}>
+              🏛️ Ir até a Prefeitura de Aurora
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Card do Cavalo Domado Atual */}
+      <section className="tamed-horse-card glass">
+        <div className="tamed-badge">🐎 MONTARIA PRINCIPAL</div>
+        <div className="tamed-body">
+          <div className="tamed-avatar" style={{ '--horse-col': `#${(activeHorse?.color || 0x6d4b35).toString(16).padStart(6, '0')}` }}>
+            🐎
+          </div>
+          <div className="tamed-info">
+            <div className="tamed-header">
+              <h3>{hud.mount?.name || activeHorse?.name || 'Corcel de Aurora'}</h3>
+              <span className="tamed-speed-badge">+{((hud.mount?.speedBonus || activeHorse?.speedBonus || 4.7)).toFixed(1)} Velocidade</span>
+            </div>
+            <p>{activeHorse?.desc || 'Seu leal companheiro veloz para explorar o vasto mundo de Asterra.'}</p>
+            <div className="tamed-meta">
+              <span><b>Status:</b> {hud.mount?.active ? '♞ Convocado no mundo' : '💤 No estábulo'}</span>
+              <span><b>Cavalos Domados:</b> {tamedList.length} raça(s)</span>
+            </div>
+          </div>
+          <div className="tamed-actions">
+            <button
+              type="button"
+              disabled={!isUnlocked}
+              className={`tamed-toggle-btn ${hud.mount?.active ? 'active' : ''}`}
+              onClick={toggle}
+            >
+              {hud.mount?.active ? 'Dispensar Montaria' : '♞ Invocar Montaria'}
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {/* Catálogo de Domação */}
+      <section className="stable-catalog-section">
+        <div className="section-title">
+          <div>
+            <small>ESTÁBULOS DE ASTERRA</small>
+            <h3>Catálogo de Cavalos & Domação</h3>
+          </div>
+          <span className="catalog-subtitle">Compre tentativas até domar raças superiores</span>
+        </div>
+
+        <div className="horse-grid">
+          {(horseBreeds || HORSE_BREEDS).map(horse => {
+            const isTamed = tamedList.includes(horse.id)
+            const isCurrent = currentHorseId === horse.id
+            const canAfford = (hud.gold || 0) >= horse.cost
+            const hasLevel = (hud.level || 1) >= horse.level
+
+            return (
+              <article
+                key={horse.id}
+                className={`horse-card glass ${isTamed ? 'tamed' : ''} ${isCurrent ? 'current' : ''}`}
+                style={{ '--horse-tint': `#${horse.color.toString(16).padStart(6, '0')}` }}
+              >
+                <header>
+                  <div>
+                    <span className="horse-lvl-badge">Nv. {horse.level}</span>
+                    <h4>{horse.name}</h4>
+                  </div>
+                  {isCurrent ? (
+                    <span className="horse-tag current">★ Ativo</span>
+                  ) : isTamed ? (
+                    <span className="horse-tag tamed">✓ Domado</span>
+                  ) : (
+                    <span className="horse-chance-badge">{horse.tameChance}% chance</span>
+                  )}
+                </header>
+
+                <p className="horse-desc">{horse.desc}</p>
+
+                <div className="horse-stats-row">
+                  <span>⚡ <b>+{horse.speedBonus.toFixed(1)}</b> Velocidade</span>
+                  <span>◈ <b>{horse.cost}</b> ouro/tentativa</span>
+                </div>
+
+                <div className="horse-chance-meter">
+                  <div className="chance-fill" style={{ width: `${Math.min(100, horse.tameChance)}%` }} />
+                </div>
+
+                <footer className="horse-card-footer">
+                  {isCurrent ? (
+                    <button type="button" disabled className="btn-horse-action current">
+                      ✓ Montaria Atual
+                    </button>
+                  ) : isTamed ? (
+                    <button
+                      type="button"
+                      className="btn-horse-action select"
+                      onClick={() => onSelect?.(horse.id)}
+                    >
+                      Montar Este Cavalo
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={!isUnlocked || !hasLevel || !canAfford}
+                      className="btn-horse-action tame"
+                      onClick={() => onTame?.(horse.id)}
+                    >
+                      {!isUnlocked
+                        ? 'Requer Juramento'
+                        : !hasLevel
+                        ? `Requer Nv. ${horse.level}`
+                        : !canAfford
+                        ? `Falta Ouro (${horse.cost}◈)`
+                        : `🎯 Tentar Domar (${horse.cost}◈)`}
+                    </button>
+                  )}
+                </footer>
+              </article>
+            )
+          })}
+        </div>
+      </section>
+    </div>
+  )
+}
 
 function Settings({hud,apply,connect,setName,call}){
   const [s,setS]=useState({
@@ -1151,7 +1441,7 @@ function AuthGate({ initialServer = 'asterra-01', onLogin }) {
   )
 }
 
-function Grimoire({ hud, onAwaken, onSwitch, onUpgradeRank }) {
+function Grimoire({ hud, onAwaken, onSwitch, onUpgradeRank, onAcceptQuest, onClaimQuest }) {
   const activeId = hud.classState?.activeClassId || 'mercenary_swordsman'
   const unlockedIds = hud.classState?.unlockedClassIds || ['mercenary_swordsman']
   const awakeningCount = hud.classState?.awakeningCount || 0
@@ -1167,7 +1457,11 @@ function Grimoire({ hud, onAwaken, onSwitch, onUpgradeRank }) {
   const hasEvolveLevel = nextRankInfo ? (hud.level >= nextRankInfo.minLevel) : false
   const hasEvolveGrimoires = nextRankInfo ? (grimoireQty >= nextRankInfo.costGrimoires) : false
   const hasEvolveGold = nextRankInfo ? ((hud.gold || 0) >= nextRankInfo.costGold) : false
-  const canEvolve = nextRankInfo && hasEvolveLevel && hasEvolveGrimoires && hasEvolveGold
+
+  const reqQuestId = nextRankInfo ? `ascension_rank_${nextRankInfo.rank}` : null
+  const ascensionQ = reqQuestId ? (hud.quests || []).find(q => q.id === reqQuestId) : null
+  const hasAscensionDone = ascensionQ ? ascensionQ.status === 'done' : true
+  const canEvolve = nextRankInfo && hasEvolveLevel && hasEvolveGrimoires && hasEvolveGold && hasAscensionDone
 
   const nextReqLevel = getNextGrimoireLevel(awakeningCount)
   const cost = calculateGrimoireCost(awakeningCount)
@@ -1227,6 +1521,29 @@ function Grimoire({ hud, onAwaken, onSwitch, onUpgradeRank }) {
                   <span style={{color:hasEvolveGold?'#fcd34d':'#f87171'}}>{nextRankInfo.costGold}◈ Ouro {hasEvolveGold?'✓':'(Insuficiente)'}</span>
                   <span style={{color:hasEvolveGrimoires?'#c084fc':'#f87171'}}>{nextRankInfo.costGrimoires} Grimório(s) {hasEvolveGrimoires?'✓':'(Falta)'}</span>
                 </div>
+
+                {ascensionQ && (
+                  <div className="ascension-req-box" style={{margin:'6px 0 8px',padding:'7px 9px',borderRadius:'8px',background:'rgba(2,6,12,0.6)',border:`1px solid ${hasAscensionDone?'rgba(74,222,128,0.4)':ascensionQ.status==='ready'?'rgba(251,191,36,0.6)':'rgba(239,68,68,0.3)'}`}}>
+                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:'6px',fontSize:'9px'}}>
+                      <span style={{color:'#e2e8f0'}}>📜 <b>Prova Obrigatória:</b> {ascensionQ.title}</span>
+                      {hasAscensionDone ? (
+                        <b style={{color:'#4ade80'}}>✓ Concluída</b>
+                      ) : ascensionQ.status === 'ready' ? (
+                        <button type="button" onClick={()=>onClaimQuest?.(ascensionQ.id)} style={{background:'#10b981',color:'#fff',border:'none',borderRadius:'6px',padding:'2px 6px',fontSize:'8px',fontWeight:700,cursor:'pointer'}}>
+                          ✓ Entregar Missão
+                        </button>
+                      ) : ascensionQ.status === 'active' ? (
+                        <b style={{color:'#38bdf8'}}>[ {ascensionQ.progress||0} / {ascensionQ.goal} ]</b>
+                      ) : (
+                        <button type="button" onClick={()=>onAcceptQuest?.(ascensionQ.id)} style={{background:'#3b82f6',color:'#fff',border:'none',borderRadius:'6px',padding:'2px 6px',fontSize:'8px',fontWeight:700,cursor:'pointer'}}>
+                          Aceitar Prova
+                        </button>
+                      )}
+                    </div>
+                    <small style={{display:'block',color:'#94a3b8',fontSize:'8px',marginTop:'3px'}}>{ascensionQ.text}</small>
+                  </div>
+                )}
+
                 <button
                   type="button"
                   className="evolve-class-btn"
@@ -1234,7 +1551,7 @@ function Grimoire({ hud, onAwaken, onSwitch, onUpgradeRank }) {
                   onClick={()=>onUpgradeRank?.(activeId)}
                   style={{width:'100%',padding:'7px 10px',borderRadius:'8px',background:canEvolve?'linear-gradient(135deg, #f59e0b, #d97706)':'rgba(255,255,255,0.06)',color:canEvolve?'#000':'#64748b',fontWeight:700,fontSize:'11px',border:'none',cursor:canEvolve?'pointer':'not-allowed',boxShadow:canEvolve?'0 0 12px rgba(245,158,11,0.4)':'none'}}
                 >
-                  {canEvolve ? `⚡ Evoluir ${activeCls.name} para ${nextRankInfo.name}` : !hasEvolveLevel ? `Requer Nível ${nextRankInfo.minLevel} (Atual: ${hud.level})` : !hasEvolveGrimoires ? `Requer ${nextRankInfo.costGrimoires} Grimório(s)` : `Requer ${nextRankInfo.costGold}◈ Ouro`}
+                  {canEvolve ? `⚡ Evoluir ${activeCls.name} para ${nextRankInfo.name}` : !hasEvolveLevel ? `Requer Nível ${nextRankInfo.minLevel} (Atual: ${hud.level})` : !hasAscensionDone ? `Requer concluir: ${ascensionQ?.title || 'Missão de Ascensão'}` : !hasEvolveGrimoires ? `Requer ${nextRankInfo.costGrimoires} Grimório(s)` : `Requer ${nextRankInfo.costGold}◈ Ouro`}
                 </button>
               </>
             ) : (

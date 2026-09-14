@@ -71,8 +71,11 @@ export const QUESTS = [
   {id:'first_hunt', title:'Primeira Patrulha', giver:'Lyra', type:'kill', target:'any', goal:5, minLevel:1, reward:{xp:240,gold:220}, text:'Elimine 5 criaturas fora da Cidadela Aurora.'},
   {id:'lumen_alpha', title:'Uivo na Pradaria', giver:'Lyra', type:'boss', target:'Alfa Lúmen', goal:1, minLevel:8, reward:{xp:900,gold:520,item:'Rara'}, text:'Derrote o Alfa Lúmen que domina a Pradaria.'},
   {id:'forge_trial', title:'Aço e Éter', giver:'Brann', type:'upgrade', target:'weapon', goal:1, minLevel:4, reward:{xp:420,gold:180}, text:'Melhore uma arma no ferreiro.'},
-  {id:'portal_step', title:'Além do Portal', giver:'Lyra', type:'dungeon', target:'clear', goal:1, minLevel:10, reward:{xp:1400,gold:900,item:'Épica'}, text:'Conclua uma masmorra de qualquer raridade.'},
-  {id:'rider_oath', title:'Juramento do Cavaleiro', giver:'Mira', type:'level', target:'level', goal:15, minLevel:1, reward:{xp:300,gold:250,mount:true}, text:'Alcance o nível 15 para receber sua primeira montaria.'},
+  {id:'rider_oath', title:'Juramento do Cavaleiro', giver:'Lorde Aldrich', role:'townhall', type:'kill', target:'any', goal:3, minLevel:1, reward:{xp:400,gold:350,mountPermission:true}, text:'Elimine 3 monstros invasores para prestar o Juramento na Prefeitura e obter a Permissão Real de Doma no Estábulo.'},
+  {id:'ascension_rank_2', title:'Ascensão Marcial: Grau II', giver:'Grimório', role:'grimoire', type:'kill', target:'any', goal:10, minLevel:20, reward:{xp:1200,gold:600}, text:'Elimine 10 monstros para provar sua perícia e desbloquear a evolução para o Grau II de classe.'},
+  {id:'ascension_rank_3', title:'Ascensão Marcial: Grau III', giver:'Grimório', role:'grimoire', type:'boss', target:'any', goal:1, minLevel:50, reward:{xp:3500,gold:1500}, text:'Derrote 1 Chefe de Área para demonstrar seu poder e desbloquear o Grau III de classe.'},
+  {id:'ascension_rank_4', title:'Ascensão Marcial: Grau IV', giver:'Grimório', role:'grimoire', type:'dungeon', target:'clear', goal:1, minLevel:90, reward:{xp:7000,gold:3500}, text:'Conclua uma Masmorra para desbloquear a maestria Grau IV de classe.'},
+  {id:'ascension_rank_5', title:'Ascensão Soberana: Grau V', giver:'Grimório', role:'grimoire', type:'boss', target:'any', goal:2, minLevel:150, reward:{xp:18000,gold:8000}, text:'Derrote 2 Chefes de Área para alcançar o Grau Divino/Soberano de classe.'},
   {id:'lumen_patrol', title:'Patrulha de Lúmen', giver:'Cael', type:'kill', target:'any', goal:8, minLevel:8, reward:{xp:720,gold:420}, text:'Elimine 8 criaturas nos arredores do Bastião Lúmen.'},
   {id:'forest_guard', title:'Raízes em Perigo', giver:'Eira', type:'boss', target:'Cervo Espectral', goal:1, minLevel:25, reward:{xp:1800,gold:900,item:'Rara'}, text:'Derrote o Cervo Espectral e proteja o Refúgio Cinéreo.'},
   {id:'coast_guard', title:'Maré Abissal', giver:'Neris', type:'boss', target:'Leviatã de Espuma', goal:1, minLevel:55, reward:{xp:3600,gold:1750,item:'Épica'}, text:'Enfrente o Leviatã de Espuma que ameaça Porto Safira.'},
@@ -270,7 +273,11 @@ export function attributeBonuses(attributes={}){
 
 export function normalizeSaveState(state){
   const equipment={weapon:null,armor:null,boots:null,talisman:null,...(state.equipment||{})}
-  const quests=Array.isArray(state.quests)&&state.quests.length?state.quests:defaultQuestState()
+  const baseQuests=defaultQuestState()
+  const existingQuests=Array.isArray(state.quests)?state.quests:[]
+  const existingMap=new Map(existingQuests.map(q=>[q.id,q]))
+  const quests=baseQuests.map(bq=>existingMap.get(bq.id)?{...bq,...existingMap.get(bq.id)}:bq)
+  for(const eq of existingQuests){if(!quests.some(q=>q.id===eq.id))quests.push(eq)}
   const normalizeItem=it=>{
     if(!it||!['weapon','armor','boots','talisman'].includes(it.type))return it
     let subtype=it.subtype
@@ -290,12 +297,24 @@ export function normalizeSaveState(state){
   if(!hasBow){
     inventory=[{...makeItem('weapon',Math.max(1,state.level||1),'Comum','Arco do Caçador'), subtype:'bow'},...inventory]
   }
+  const rawMount=state.mount||{}
+  const initialTamed=Array.isArray(rawMount.tamedHorses)?rawMount.tamedHorses:(rawMount.unlocked?['horse_aurora']:[])
   return {
     ...state,
     inventory,
     equipment:normalizedEquipment,
     quests,
-    mount:{unlocked:false,active:false,name:'Corcel de Aurora',...(state.mount||{})},
+    mount:{
+      unlocked:false,
+      active:false,
+      oathCompleted:false,
+      name:'Corcel de Aurora',
+      currentHorseId:'horse_aurora',
+      speedBonus:4.7,
+      tamedHorses:initialTamed,
+      ...rawMount,
+      tamedHorses:initialTamed
+    },
     classState:{...defaultClassState(),...(state.classState||{})},
     travelState:{...defaultTravelState(),...(state.travelState||{}),vipCost:5000},
     attributes:{strength:0,vitality:0,agility:0,intellect:0,...(state.attributes||{})},
@@ -336,7 +355,10 @@ export function claimQuest(state,id){
   const q=state.quests.find(x=>x.id===id)
   if(!q||q.status!=='ready')return null
   q.status='done';state.gold+=q.reward.gold||0
-  if(q.reward.mount)state.mount.unlocked=true
+  if(q.reward.mount||q.reward.mountPermission){
+    state.mount.unlocked=true
+    state.mount.oathCompleted=true
+  }
   if(q.reward.item)state.inventory.unshift(makeItem('talisman',Math.max(1,state.level),q.reward.item,`${q.reward.item} — Selo do Explorador`))
   return q.reward
 }

@@ -31,8 +31,10 @@ export const ZONES = [
 for(const zone of ZONES){zone.x0*=WORLD.worldScale;zone.x1*=WORLD.worldScale;zone.z0*=WORLD.worldScale;zone.z1*=WORLD.worldScale}
 
 export const CITIES = [
-  {id:'aurora-city',zoneId:'aurora',name:'Cidadela Aurora',x:0,z:0,halfW:32,halfH:29,radius:34,wallRadius:34,style:'meadow',accent:'#f0d690',wall:0xa59b86,roof:0x8f4939,npcNames:['Lyra','Orin','Brann'],services:[
+  {id:'aurora-city',zoneId:'aurora',name:'Cidadela Aurora',x:0,z:0,halfW:32,halfH:29,radius:34,wallRadius:34,style:'meadow',accent:'#f0d690',wall:0xa59b86,roof:0x8f4939,npcNames:['Lyra','Orin','Brann','Kaelan','Lorde Aldrich'],services:[
     {id:'aurora-quest',role:'quest',name:'Lyra',title:'Capitã dos Exploradores',x:7,z:8,color:0x6d8fd6},
+    {id:'aurora-guild',role:'guild',name:'Kaelan',title:'Mestre da Guilda',x:-14,z:6,color:0xeab308},
+    {id:'aurora-townhall',role:'townhall',name:'Lorde Aldrich',title:'Prefeito de Aurora',x:2,z:-14,color:0x60a5fa},
     {id:'aurora-merchant',role:'merchant',name:'Orin',title:'Mercador de Aurora',x:-8,z:5,color:0xd6a76d},
     {id:'aurora-blacksmith',role:'blacksmith',name:'Brann',title:'Ferreiro Rúnico',x:10,z:-9,color:0xb8654b},
     {id:'aurora-stable',role:'stable',name:'Mira',title:'Mestra dos Estábulos',x:-11,z:-10,color:0x83a65e},
@@ -132,8 +134,27 @@ export const WORLD_MAP = {
   cities: CITIES.map(c=>({id:c.id,zoneId:c.zoneId,name:c.name,x:c.x,z:c.z,halfW:c.halfW,halfH:c.halfH,services:c.services.map(s=>({id:s.id,role:s.role,name:s.name,title:s.title,x:s.x,z:s.z}))})),
 }
 
-const dialogueForRole=(role,cityName)=>role==='merchant'?`Bem-vindo a ${cityName}. Eu compro os espólios dos monstros e vendo suprimentos.`:role==='blacksmith'?`A forja de ${cityName} transforma drops e minério em equipamentos dignos de um caçador.`:role==='stable'?'Cuide de sua montaria e ela levará você além das muralhas.':role==='traveler'?'Minha caravana viaja entre os postos e cidadelas de Asterra. Para onde deseja viajar?':`As muralhas seguram as criaturas, mas os portais continuam surgindo do lado de fora.`
+const dialogueForRole=(role,cityName)=>
+  role==='merchant'?`Bem-vindo a ${cityName}. Eu compro os espólios dos monstros e vendo suprimentos.`
+  :role==='blacksmith'?`A forja de ${cityName} transforma drops e minério em equipamentos dignos de um caçador.`
+  :role==='stable'?'Cuide de sua montaria e ela levará você além das muralhas. Cavaleiros juramentados na Prefeitura podem domar cavalos aqui.'
+  :role==='traveler'?'Minha caravana viaja entre os postos e cidadelas de Asterra. Para onde deseja viajar?'
+  :role==='townhall'?'Bem-vindo à Prefeitura da Cidadela. Aqui são concedidos os decretos reais e o solene Juramento do Cavaleiro.'
+  :role==='guild'?'Esta é a Guilda de Aventureiros. Contratos de caça, promoções de rank e equipes são gerenciados aqui.'
+  :`As muralhas seguram as criaturas, mas os portais continuam surgindo do lado de fora.`
+
 export const NPC_DEFS = CITIES.flatMap(c=>c.services.map(s=>({...s,cityId:c.id,zoneId:c.zoneId,cityName:c.name,dialogue:dialogueForRole(s.role,c.name)})))
+
+export const HORSE_BREEDS = [
+  { id: 'pony_aurora', name: 'Pônei de Aurora', level: 1, cost: 80, chance: 85, speedBonus: 2.2, color: 0x8b5a2b, icon: '🐴', desc: 'Dócil e resistente, ideal para os primeiros passos além da cidadela.' },
+  { id: 'steed_meadow', name: 'Corcel das Pradarias', level: 10, cost: 260, chance: 65, speedBonus: 3.4, color: 0xc19a6b, icon: '🐎', desc: 'Veloz como o vento que sopra nas colinas de Lúmen.' },
+  { id: 'stallion_gold', name: 'Garanhão Dourado', level: 25, cost: 650, chance: 48, speedBonus: 4.8, color: 0xeab308, icon: '✨', desc: 'Cavalo imponente com crina dourada e passada firme.' },
+  { id: 'runic_forest', name: 'Corcel Rúnico do Bosque', level: 50, cost: 1600, chance: 35, speedBonus: 6.2, color: 0x475569, icon: '🌲', desc: 'Cavalo místico com cascos que brilham com runas verdes.' },
+  { id: 'destrier_sapphire', name: 'Destrier de Safira', level: 80, cost: 3500, chance: 22, speedBonus: 7.8, color: 0x0284c7, icon: '🌊', desc: 'Couraçado para guerra, destemido contra as feras marinhas.' },
+  { id: 'nightmare_crimson', name: 'Pesadelo Carmesim', level: 120, cost: 7200, chance: 14, speedBonus: 9.6, color: 0xdc2626, icon: '🔥', desc: 'Nascido nas brasas dos Ermos, com olhos ardentes e cascos de fogo.' },
+  { id: 'shadow_void', name: 'Corcel Umbral das Sombras', level: 180, cost: 14000, chance: 9, speedBonus: 11.5, color: 0x6b21a8, icon: '🌑', desc: 'Cavalga entre as dobras do éter, quase invisível na névoa.' },
+  { id: 'pegasus_celestial', name: 'Pégaso Celestial Soberano', level: 250, cost: 29000, chance: 5, speedBonus: 14.0, color: 0xf8fafc, icon: '👑', desc: 'A lenda alada das alturas divinas. Velocidade e majestade incomparáveis.' }
+]
 
 export const PORTAL_NAMES = ['Fenda do Eco','Portal Astral','Fenda da Lua Negra','Ruptura do Vigia','Portal de Veyra','Fenda Carmesim','Abismo Errante']
 
