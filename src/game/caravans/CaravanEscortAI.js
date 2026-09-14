@@ -323,7 +323,8 @@ export class CaravanEscortAI {
       // Hit monster
       threat.hp -= guard.atk
       if (threat.hp <= 0) {
-        this.game.kill?.(threat)
+        if (this.game.killByBot) this.game.killByBot(threat, guard)
+        else this.game.kill?.(threat)
       }
     }
   }
@@ -343,7 +344,10 @@ export class CaravanEscortAI {
       this.game.toast?.(`🏹 ${guard.name} disparou contra você: -${guard.atk} HP!`)
     } else if (threat.hp !== undefined) {
       threat.hp -= guard.atk
-      if (threat.hp <= 0) this.game.kill?.(threat)
+      if (threat.hp <= 0) {
+        if (this.game.killByBot) this.game.killByBot(threat, guard)
+        else this.game.kill?.(threat)
+      }
     }
   }
 }

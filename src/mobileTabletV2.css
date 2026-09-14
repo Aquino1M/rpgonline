@@ -7,8 +7,8 @@
   --touch-k:1;
   --t-gutter:9px;--t-hud-w:214px;--t-mini-w:118px;--t-stick:108px;
   --t-stick-knob:44px;--t-action:51px;--t-attack:66px;--t-action-gap:7px;
-  --t-power:49px;--t-menu:50px;--t-menu-cell:58px;--t-hit:42px;
-  --t-font:10px;--t-small:7px;--t-title:15px;--t-window-pad:9px;
+  --t-power:49px;--t-menu:50px;--t-menu-cell:58px;--t-hit:44px;
+  --t-font:13px;--t-small:11px;--t-title:18px;--t-window-pad:12px;
 }
 
 /* ---------- Dungeon HUD: never share the minimap corner ---------- */
@@ -311,8 +311,7 @@
   .app.touch-ui .mobile-network-chip{top:calc(var(--t-menu) + 14px)!important;right:var(--t-gutter)!important}
   .app.touch-ui .window{width:98vw!important;height:96dvh!important;max-height:96dvh!important}
   .app.touch-ui .window>header{min-height:38px!important}
-  .app.touch-ui .window-inventory .paperdoll{display:none!important}
-  .app.touch-ui .window-inventory .inventory-rpg{grid-template-columns:minmax(155px,.62fr) minmax(0,1.38fr)!important}
+  .app.touch-ui .window-inventory .inventory-rpg{grid-template-columns:minmax(210px,.75fr) minmax(0,1.25fr)!important}
   .app.touch-ui .window-inventory .bag-grid{grid-template-columns:repeat(4,minmax(88px,1fr))!important}
 }
 
@@ -331,8 +330,7 @@
   .app.touch-ui .window-travel .travel-layout,
   .app.touch-ui .window-guild .guild-layout,
   .app.touch-ui .window-attributes .attributes-layout{grid-template-columns:1fr!important}
-  .app.touch-ui .window-inventory .character-hub{max-height:230px!important}
-  .app.touch-ui .window-inventory .paperdoll{display:none!important}
+  .app.touch-ui .window-inventory .character-hub{max-height:none!important}
   .app.touch-ui .window-inventory .bag-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
   .app.touch-ui .window-merchant .shop-scroll-list{grid-template-columns:1fr!important}
   .app.touch-ui .window-blacksmith .smith-stock{grid-template-columns:1fr!important}

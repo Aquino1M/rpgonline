@@ -14,6 +14,7 @@ const slotNames={weapon:'Arma',armor:'Armadura',boots:'Botas',talisman:'Talismã
 const roleTitle={inventory:'Inventário & Equipamento',grimoire:'Grimório do Despertar (Roleta de Almas)',travel:'Moço Viajante (Rotas de Caravana)',quests:'Missões',guild:'Guilda de Aventureiros',townhall:'Prefeitura de Aurora (Juramento do Cavaleiro)',attributes:'Atributos',merchant:'Mercador',blacksmith:'Ferreiro Rúnico',stable:'Estábulos & Domação de Montarias',map:'Mapa de Asterra',settings:'Configurações',trade:'Troca entre Jogadores'}
 const fallbackAbilities=[{slot:1,name:'Corte Astral',short:'Corte',icon:'✦',cost:14,remaining:0,ready:true},{slot:2,name:'Onda Astral',short:'Onda',icon:'✹',cost:28,remaining:0,ready:true},{slot:3,name:'Passo Etéreo',short:'Passo',icon:'➠',cost:22,remaining:0,ready:true}]
 const multiplayerLobbies=[{id:'asterra-global',name:'Asterra Global'}]
+const getRankHex=r=>{const rank=String(r||'E');if(rank.startsWith('ZZZ'))return'#ff4fd8';if(rank.startsWith('ZZ'))return'#c84fff';if(rank.startsWith('Z'))return'#9d62ff';if(rank.startsWith('EX'))return'#ff6b77';if(rank.startsWith('SSS'))return'#ffa233';if(rank.startsWith('SS'))return'#ffcf45';if(rank.startsWith('S'))return'#f5df71';if(rank==='A')return'#d18cff';if(rank==='B')return'#68b9ff';if(rank==='C')return'#72d89c';if(rank==='D')return'#a7bdcc';return'#94a3b8'}
 
 function getViewportState(){
   if(typeof window==='undefined')return{w:1366,h:768,isCoarse:false,isMobile:false,isTablet:false,isDesktop:true,isTouch:false,isLandscape:true}
@@ -77,6 +78,13 @@ export default function App(){
     return()=>{window.removeEventListener('resize',sync);window.removeEventListener('orientationchange',sync);window.visualViewport?.removeEventListener('resize',sync)}
   },[])
   useEffect(()=>{game.current?.setTouchDeviceMode?.(!!viewport.isTouch)},[viewport.isTouch])
+  useEffect(()=>{
+    if(!hud?.gateAnnouncement)return
+    const timer=setTimeout(()=>{
+      game.current?.dismissGateAnnouncement?.()
+    },3000)
+    return()=>clearTimeout(timer)
+  },[hud?.gateAnnouncement])
 
   const pct=(a,b)=>Math.max(0,Math.min(100,b?100*a/b:0))
   const hp=pct(hud.hp,hud.maxHp),st=pct(hud.stamina,hud.maxStamina),xp=pct(hud.xp,hud.nextXp)
@@ -165,11 +173,15 @@ export default function App(){
       />
     )}
     {hud.gateAnnouncement && (
-      <div className="gate-announcement-banner glass" style={{position:'absolute',top:'90px',left:'50%',transform:'translateX(-50%)',padding:'12px 24px',borderRadius:'16px',border:`2px solid ${hud.gateAnnouncement.rankColor || '#38bdf8'}`,boxShadow:`0 0 28px ${hud.gateAnnouncement.rankColor || '#38bdf8'}40, 0 10px 30px rgba(0,0,0,0.6)`,zIndex:20,display:'flex',flexDirection:'column',alignItems:'center',gap:'4px',animation:'toastin .3s ease-out'}}>
+      <div className="gate-announcement-banner glass" style={{position:'absolute',top:'82px',left:'50%',transform:'translateX(-50%)',padding:'12px 28px',borderRadius:'16px',border:`2px solid ${hud.gateAnnouncement.rankColor || '#38bdf8'}`,boxShadow:`0 0 28px ${hud.gateAnnouncement.rankColor || '#38bdf8'}40, 0 10px 30px rgba(0,0,0,0.6)`,zIndex:20,display:'flex',flexDirection:'column',alignItems:'center',gap:'4px',animation:'toastin .3s ease-out'}}>
+        <button type="button" onClick={() => call('dismissGateAnnouncement')} style={{position:'absolute',top:'8px',right:'10px',background:'none',border:'none',color:'#94a3b8',fontSize:'14px',cursor:'pointer',padding:'2px 6px',lineHeight:1}} title="Fechar aviso">✕</button>
         <b style={{color:'#facc15',fontSize:'12px',letterSpacing:'.1em'}}>{hud.gateAnnouncement.title}</b>
         <strong style={{fontSize:'16px',color:'#f8fafc'}}>{hud.gateAnnouncement.gateName}</strong>
         <span style={{fontSize:'11px',color:'#cbd5e1'}}>Rank <b style={{color:hud.gateAnnouncement.rankColor}}>{hud.gateAnnouncement.rank}</b> • Nv. {hud.gateAnnouncement.levelRange} • {hud.gateAnnouncement.rounds || hud.gateAnnouncement.floors || 4} Rounds • {hud.gateAnnouncement.zoneName}</span>
-        <button type="button" onClick={() => call('setDestinationMarker', { x: hud.gateAnnouncement.x, z: hud.gateAnnouncement.z, rank: hud.gateAnnouncement.rank, name: hud.gateAnnouncement.gateName, color: hud.gateAnnouncement.rankColor, rankConfig: { color: hud.gateAnnouncement.rankColor } })} style={{marginTop:'6px',padding:'6px 14px',fontSize:'11px',fontWeight:'bold',background:'rgba(56,189,248,0.25)',border:'1px solid #38bdf8',color:'#38bdf8',borderRadius:'8px',cursor:'pointer'}}>🎯 MARCAR DESTINO</button>
+        <button type="button" onClick={() => {
+          call('setDestinationMarker', { x: hud.gateAnnouncement.x, z: hud.gateAnnouncement.z, rank: hud.gateAnnouncement.rank, name: hud.gateAnnouncement.gateName, color: hud.gateAnnouncement.rankColor, rankConfig: { color: hud.gateAnnouncement.rankColor } })
+          call('dismissGateAnnouncement')
+        }} style={{marginTop:'6px',padding:'6px 14px',fontSize:'11px',fontWeight:'bold',background:'rgba(56,189,248,0.25)',border:'1px solid #38bdf8',color:'#38bdf8',borderRadius:'8px',cursor:'pointer'}}>🎯 MARCAR DESTINO</button>
       </div>
     )}
     {hud.portal&&!hud.dungeon&&<div className="portal-card glass" style={{'--portal':hud.portal.rarity.color}}><small>FENDA DETECTADA</small><strong>{hud.portal.name}</strong><span>Nv. {hud.portal.level} • <b style={{color:hud.portal.rarity.color}}>{hud.portal.rarity.name}</b> • {hud.portal.rounds || hud.portal.floors || 4} rounds</span><em>E para entrar</em></div>}
@@ -326,13 +338,28 @@ function Inventory({hud,equip,unequip,call}){
         {/* CHARACTER SECTION */}
         <section className={`character-hub ${mobileTab==='bag' ? 'hide-mobile' : ''}`}>
           <div className="hub-title"><span>PERSONAGEM</span><b>Nível {hud.level}</b></div>
-          <div className="paperdoll">
-            <div className="paperdoll-glow"/>
-            <div className="paper-human"><i className="ph-head"/><i className="ph-body"/><i className="ph-arm left"/><i className="ph-arm right"/><i className="ph-leg left"/><i className="ph-leg right"/></div>
-            <EquipNode cls="weapon-node" slot="weapon" item={gear.weapon} unequip={unequip} onSelect={()=>setInspectSlot('weapon')}/>
-            <EquipNode cls="armor-node" slot="armor" item={gear.armor} unequip={unequip} onSelect={()=>setInspectSlot('armor')}/>
-            <EquipNode cls="talisman-node" slot="talisman" item={gear.talisman} unequip={unequip} onSelect={()=>setInspectSlot('talisman')}/>
-            <EquipNode cls="boots-node" slot="boots" item={gear.boots} unequip={unequip} onSelect={()=>setInspectSlot('boots')}/>
+          <div className="character-display-stage">
+            <div className="hero-avatar-center">
+              <div className="hero-avatar-aura" style={{ '--rank-color': getRankHex(hud.guildRank || 'E') }} />
+              <div className="hero-avatar-silhouette">
+                <span className="hero-avatar-emoji">{activeClass?.icon || '⚔️'}</span>
+              </div>
+              <div className="hero-name-badge">
+                <strong>{hud.playerName || 'Aventureiro'}</strong>
+                <small style={{ color: activeTier?.color || '#38bdf8' }}>{activeClass?.name || 'Mercenário'}</small>
+                <span className="hero-rank-tag" style={{ color: getRankHex(hud.guildRank || 'E') }}>Rank {hud.guildRank || 'E'}</span>
+              </div>
+            </div>
+            <div className="equip-slots-layout">
+              <div className="equip-col left">
+                <EquipNode cls="armor-node" slot="armor" item={gear.armor} unequip={unequip} onSelect={()=>setInspectSlot('armor')}/>
+                <EquipNode cls="weapon-node" slot="weapon" item={gear.weapon} unequip={unequip} onSelect={()=>setInspectSlot('weapon')}/>
+              </div>
+              <div className="equip-col right">
+                <EquipNode cls="talisman-node" slot="talisman" item={gear.talisman} unequip={unequip} onSelect={()=>setInspectSlot('talisman')}/>
+                <EquipNode cls="boots-node" slot="boots" item={gear.boots} unequip={unequip} onSelect={()=>setInspectSlot('boots')}/>
+              </div>
+            </div>
           </div>
           <div className="combat-stats">
             <div><small>DAMAGE</small><b>{hud.atk}</b></div>

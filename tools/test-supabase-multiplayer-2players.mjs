@@ -90,13 +90,13 @@ function createTestClient(playerId, playerName, startPos) {
     ws.on('message', (raw) => {
       let msg
       try { msg = JSON.parse(raw.toString()) } catch { return }
-
       if (msg.event === 'phx_reply' && msg.ref === '1' && msg.payload.status === 'ok') {
         joined = true
         console.log(`[${playerName}] phx_reply OK! Entrou no canal global. Enviando presence track...`)
         client.trackPresence()
       } else if (msg.event === 'presence_state') {
         const state = msg.payload || {}
+        console.log(`[${playerName}] presence_state payload keys:`, Object.keys(state))
         for (const [key, presences] of Object.entries(state)) {
           if (key !== playerId) {
             client.otherPlayersSeen.add(key)
@@ -105,6 +105,7 @@ function createTestClient(playerId, playerName, startPos) {
         }
       } else if (msg.event === 'presence_diff') {
         const joins = msg.payload?.joins || {}
+        console.log(`[${playerName}] presence_diff joins keys:`, Object.keys(joins))
         for (const [key, presences] of Object.entries(joins)) {
           if (key !== playerId) {
             client.otherPlayersSeen.add(key)
@@ -140,11 +141,16 @@ function createTestClient(playerId, playerName, startPos) {
 async function main() {
   console.log('\n--- 1. Conectando Conta 1: Guerreiro Alpha ---')
   const account1 = await createTestClient('player_alpha_001', 'Guerreiro Alpha', { x: 10, y: 0, z: -20 })
+  // Allow Account 1's initial presence track to register on the Supabase Realtime channel
+  await new Promise(r => setTimeout(r, 1000))
 
   console.log('\n--- 2. Conectando Conta 2: Mago Beta ---')
   const account2 = await createTestClient('player_beta_002', 'Mago Beta', { x: 12, y: 0, z: -18 })
 
-  // Wait for presence propagation
+  // Wait for presence propagation and simulate active game loop presence heartbeat
+  await new Promise(r => setTimeout(r, 1000))
+  account1.trackPresence()
+  account2.trackPresence()
   await new Promise(r => setTimeout(r, 1500))
 
   console.log('\n--- 3. Testando Broadcast de Movimento: Alpha -> Mundo ---')

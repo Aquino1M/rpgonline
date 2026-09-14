@@ -21,10 +21,10 @@ export class GateManager {
   }
 
   spawnInitialGates() {
-    // Spawn 4 initial gates across the world
+    // Spawn 4 initial gates across the world silently so no alert pops up on boot
     const ranks = ['E', 'D', 'C', 'B']
     for (let i = 0; i < ranks.length; i++) {
-      this.spawnGate({ rankKey: ranks[i] })
+      this.spawnGate({ rankKey: ranks[i], silent: true })
     }
   }
 
@@ -67,7 +67,7 @@ export class GateManager {
     }
   }
 
-  spawnGate({ rankKey = 'C', pos = null }) {
+  spawnGate({ rankKey = 'C', pos = null, silent = false }) {
     const rank = GATE_RANKS[rankKey] || GATE_RANKS.C
     const themes = Object.keys(DUNGEON_THEMES)
     const themeKey = themes[Math.floor(Math.random() * themes.length)]
@@ -125,31 +125,35 @@ export class GateManager {
 
     this.activeGates.push(gate)
 
-    // Global announcement banner (lasts strictly 3 seconds)
-    const isHighRank = rankKey === 'S' || rankKey === 'A'
-    const title = isHighRank ? '🚨 EVENTO MUNDIAL — PRESENÇA PODEROSA DETECTADA' : '⚠ NOVA MASMORRA DETECTADA'
-    this.game.toast?.(`${title}: ${gate.name} em ${gate.zoneName}!`)
-    if (this.game.state) {
-      this.game.state.gateAnnouncement = {
-        id: gate.id,
-        title,
-        gateName: gate.name,
-        rank: gate.rankKey,
-        rankColor: gate.rankConfig.color,
-        levelRange: `${gate.rankConfig.levelRange[0]}–${gate.rankConfig.levelRange[1]}`,
-        zoneName: gate.zoneName,
-        floors: gate.totalFloors,
-        rounds: gate.totalRounds,
-        x: gate.x,
-        z: gate.z,
-        expiresAt: gate.expiresAt,
-        timestamp: Date.now()
-      }
-      setTimeout(() => {
-        if (this.game.state?.gateAnnouncement?.id === gate.id) {
-          this.game.state.gateAnnouncement = null
+    // Global announcement banner (only for runtime spawns, lasts strictly 3 seconds)
+    if (!silent) {
+      const isHighRank = rankKey === 'S' || rankKey === 'A'
+      const title = isHighRank ? '🚨 EVENTO MUNDIAL — PRESENÇA PODEROSA DETECTADA' : '⚠ NOVA MASMORRA DETECTADA'
+      this.game.toast?.(`${title}: ${gate.name} em ${gate.zoneName}!`)
+      if (this.game.state) {
+        this.game.state.gateAnnouncement = {
+          id: gate.id,
+          title,
+          gateName: gate.name,
+          rank: gate.rankKey,
+          rankColor: gate.rankConfig.color,
+          levelRange: `${gate.rankConfig.levelRange[0]}–${gate.rankConfig.levelRange[1]}`,
+          zoneName: gate.zoneName,
+          floors: gate.totalFloors,
+          rounds: gate.totalRounds,
+          x: gate.x,
+          z: gate.z,
+          expiresAt: gate.expiresAt,
+          timestamp: Date.now()
         }
-      }, 3000)
+        this.game.emitHud?.()
+        setTimeout(() => {
+          if (this.game.state?.gateAnnouncement?.id === gate.id) {
+            this.game.state.gateAnnouncement = null
+            this.game.emitHud?.()
+          }
+        }, 3000)
+      }
     }
 
     // Sync to state for Minimap / World Map markers

@@ -79,6 +79,26 @@ export default function WorldMap({hud}){
     if(showMobs)for(const b of data.bosses||[]){const [x,y]=toMap(b.x,b.z);if(!inside(x,y))continue;ctx.fillStyle='#e43e56';ctx.strokeStyle='#ffe4e8';ctx.lineWidth=1;ctx.save();ctx.translate(x,y);ctx.rotate(Math.PI/4);ctx.fillRect(-4,-4,8,8);ctx.strokeRect(-4,-4,8,8);ctx.restore()}
     for(const a of data.adventurers||[]){const [x,y]=toMap(a.x,a.z);if(!inside(x,y))continue;ctx.fillStyle=a.hostile?'#ff9b4f':'#4fc3ff';ctx.strokeStyle='#eefaff';ctx.lineWidth=1;ctx.beginPath();ctx.arc(x,y,4.5,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.fillStyle='#06121d';ctx.font='900 6px Inter,sans-serif';ctx.fillText('A',x,y+.4)}
 
+    // Remote Players
+    for(const rp of data.players || []){
+      const [rx,ry]=toMap(rp.x,rp.z)
+      if(!inside(rx,ry,30))continue
+      ctx.save()
+      ctx.shadowColor='#10b981';ctx.shadowBlur=10
+      ctx.fillStyle='#10b981';ctx.strokeStyle='#ffffff';ctx.lineWidth=2
+      ctx.beginPath();ctx.arc(rx,ry,6,0,Math.PI*2);ctx.fill();ctx.stroke()
+      ctx.shadowBlur=0
+      if(rp.heading!=null){
+        ctx.strokeStyle='#34d399';ctx.lineWidth=2;ctx.beginPath()
+        ctx.moveTo(rx,ry);ctx.lineTo(rx+Math.sin(rp.heading)*10,ry-Math.cos(rp.heading)*10);ctx.stroke()
+      }
+      ctx.font='900 10px Inter,sans-serif';ctx.textAlign='center';ctx.textBaseline='middle'
+      ctx.strokeStyle='rgba(0,0,0,0.85)';ctx.lineWidth=3
+      ctx.strokeText(rp.name||'Aventureiro',rx,ry-11)
+      ctx.fillStyle='#6ee7b7';ctx.fillText(rp.name||'Aventureiro',rx,ry-11)
+      ctx.restore()
+    }
+
     const [px,py]=toMap(player.x,player.z);drawPlayer(ctx,px,py,player.heading||0)
   },[data,fog,showMobs,hud.playerPosition,zoom,pan,hud.destinationMarker])
 

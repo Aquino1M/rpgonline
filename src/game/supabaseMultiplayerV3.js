@@ -27,11 +27,25 @@ const SUPABASE_KEY = String(
 
 const hasSupabase = () => /^https:\/\/.+\.supabase\.co\/?$/i.test(SUPABASE_URL) && SUPABASE_KEY.length > 20
 const makeId = () => {
-  const existing = storage?.getItem('shadow-ascension-player-id')
-  if (existing) return existing
-  const id = globalThis.crypto?.randomUUID?.() || `player-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,10)}`
-  storage?.setItem('shadow-ascension-player-id', id)
-  return id
+  if (typeof window !== 'undefined') {
+    try {
+      const rawSession = window.localStorage?.getItem('shadow_rpg_account_session')
+      if (rawSession) {
+        const sess = JSON.parse(rawSession)
+        if (sess?.accountId) return String(sess.accountId)
+      }
+    } catch {}
+    const tabId = window.sessionStorage?.getItem('shadow-ascension-player-id')
+    if (tabId) return tabId
+    const existing = window.localStorage?.getItem('shadow-ascension-player-id')
+    const id = (globalThis.crypto?.randomUUID?.() || `player-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,10)}`)
+    try { window.sessionStorage?.setItem('shadow-ascension-player-id', id) } catch {}
+    if (!existing) {
+      try { window.localStorage?.setItem('shadow-ascension-player-id', id) } catch {}
+    }
+    return id
+  }
+  return `player-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,10)}`
 }
 const uid = () => globalThis.crypto?.randomUUID?.() || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2,10)}`
 const cleanName = v => String(v || 'Aventureiro')
@@ -334,6 +348,17 @@ export class MultiplayerClient {
     return GLOBAL_MULTIPLAYER_ROOM
   }
 
+  setPlayerId(id) {
+    if (!id) return
+    const changed = this.playerId !== id
+    this.playerId = id
+    this.id = id
+    if (this.lastState) this.lastState.id = id
+    if (changed && this.connected) {
+      this.connect()
+    }
+  }
+
   connect(url=this.url) {
     this.wanted = true
     this.room = GLOBAL_MULTIPLAYER_ROOM
@@ -342,14 +367,18 @@ export class MultiplayerClient {
     const token = ++this._connectToken
     this._teardown()
 
-    const localWs = legacyWsUrl()
-    const explicitLegacy = /^wss?:\/\//i.test(this.url) || /^https?:\/\//i.test(this.url) || this.url.startsWith('/api/')
-    if (localWs || (explicitLegacy && !this.url.startsWith('supabase://'))) {
-      this._connectLegacy(this.url || localWs, token)
+    const explicitLegacy = (this.url && (/^wss?:\/\//i.test(this.url) || /^https?:\/\//i.test(this.url) || this.url.startsWith('/api/'))) && !this.url.startsWith('supabase://')
+    if (explicitLegacy) {
+      this._connectLegacy(this.url, token)
       return
     }
     if (hasSupabase()) {
       this._connectSupabase(token)
+      return
+    }
+    const localWs = legacyWsUrl()
+    if (localWs) {
+      this._connectLegacy(localWs, token)
       return
     }
     const http = legacyHttpUrl()

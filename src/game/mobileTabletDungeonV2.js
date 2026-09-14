@@ -51,11 +51,11 @@ function syncUiScale(game) {
   set('--t-power', `${Math.round(49 * k)}px`)
   set('--t-menu', `${Math.round(50 * k)}px`)
   set('--t-menu-cell', `${Math.round(58 * k)}px`)
-  set('--t-hit', `${Math.max(38, Math.round(42 * k))}px`)
-  set('--t-font', `${Math.max(8, Math.round(10 * k))}px`)
-  set('--t-small', `${Math.max(6, Math.round(7 * k))}px`)
-  set('--t-title', `${Math.max(12, Math.round(15 * k))}px`)
-  set('--t-window-pad', `${Math.max(6, Math.round(9 * k))}px`)
+  set('--t-hit', `${Math.max(40, Math.round(44 * k))}px`)
+  set('--t-font', `${Math.max(12, Math.round(13 * k))}px`)
+  set('--t-small', `${Math.max(10, Math.round(11 * k))}px`)
+  set('--t-title', `${Math.max(16, Math.round(18 * k))}px`)
+  set('--t-window-pad', `${Math.max(8, Math.round(12 * k))}px`)
 }
 
 function markLegacyDungeonDecor(game) {

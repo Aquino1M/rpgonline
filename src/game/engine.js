@@ -2585,8 +2585,10 @@ export class ShadowGame {
     const grip=mesh(new THREE.CylinderGeometry(.045,.045,.28,8),leather);grip.position.y=.17;swordPivot.add(grip)
 
     const marker=this.makePlayerNameplate(player,false);marker.position.y=2.76;g.add(marker)
+    g.position.set(Number(player.x)||0, Number(player.y)||0, Number(player.z)||0)
+    g.rotation.y = Number(player.r)||0
     this.scene.add(g)
-    return {g,hips,torso,neck,head,shoulderL,shoulderR,armL,armR,legL,legR,bootL,bootR,cape,swordPivot,marker,target:{x:player.x||0,y:player.y||0,z:player.z||0,r:player.r||0},data:player,phase:Math.random()*Math.PI*2}
+    return {g,hips,torso,neck,head,shoulderL,shoulderR,armL,armR,legL,legR,bootL,bootR,cape,swordPivot,marker,target:{x:Number(player.x)||0,y:Number(player.y)||0,z:Number(player.z)||0,r:Number(player.r)||0},data:player,phase:Math.random()*Math.PI*2}
   }
   makePlayerNameplate(data={},local=false){
     const c=document.createElement('canvas');c.width=640;c.height=184;const tx=new THREE.CanvasTexture(c);tx.minFilter=THREE.LinearFilter;tx.magFilter=THREE.LinearFilter
@@ -2690,7 +2692,12 @@ applyEnemyNetworkState(st){
     localStorage.setItem('shadow-ascension-last-lobby', server)
     if(session.accountId){
       localStorage.setItem('shadow-ascension-player-id', session.accountId)
-      if(this.multiplayer) this.multiplayer.playerId = session.accountId
+      try { sessionStorage.setItem('shadow-ascension-player-id', session.accountId) } catch {}
+      if(this.multiplayer) {
+        this.multiplayer.playerId = session.accountId
+        this.multiplayer.id = session.accountId
+        this.multiplayer.setPlayerId?.(session.accountId)
+      }
     }
     this.multiplayer?.setIdentity(username)
     this.multiplayer?.setRoom(server)
@@ -2832,12 +2839,14 @@ applyEnemyNetworkState(st){
     const portals=this.state.dungeon?[]:this.portals.filter(p=>near(p.x,p.z,35)).map(p=>({x:p.x,z:p.z,name:p.name,color:p.rarity.color,rarity:p.rarity.name,level:p.level}))
     const landmarks=this.state.dungeon?[]:LANDMARKS.filter(l=>near(l.x,l.z,35)).map(l=>({...l}))
     const activeBosses=this.enemies.filter(e=>!e.dead&&e.boss).map(e=>({x:e.g.position.x,z:e.g.position.z,name:e.name,level:e.level,hp:e.hp,maxHp:e.maxHp,zoneId:e.zoneId}))
+    const remotePlayersList=[...this.remotePlayers.entries()].filter(([,r])=>r.g.visible).map(([id,r])=>({id,name:r.data?.name||'Aventureiro',level:r.data?.level||1,guildRank:r.data?.guildRank||'E',partyId:r.data?.partyId||null,x:r.g.position.x,z:r.g.position.z,heading:r.g.rotation.y,world:r.data?.world||'open'}))
     const minimap={
       chunkSize:WORLD.chunkSize,player:{x:px,z:pz,heading:this.player.rotation.y},
       chunks:[...this.chunks.values()].map(c=>({cx:c.cx,cz:c.cz,zoneId:c.zone.id,hasWater:!!c.hasWater})),
       enemies,adventurers,npcs,portals,landmarks,cities:cityLocal,roads:roadLocal,dungeon:!!this.state.dungeon,activeBosses,
       gates:this.gateManager?this.gateManager.getMapGates():[],
       caravans:this.caravanManager?this.caravanManager.getMapCaravans():[],
+      players:remotePlayersList,
     }
     const bosses=ZONES.map(zone=>{
       const live=activeBosses.find(b=>b.zoneId===zone.id)
@@ -2855,9 +2864,17 @@ applyEnemyNetworkState(st){
       bosses,activeBosses,
       gates:this.gateManager?this.gateManager.getMapGates():[],
       caravans:this.caravanManager?this.caravanManager.getMapCaravans():[],
+      players:remotePlayersList,
     }
-    this.state.guildRank=getGuildRank(this.state.guildRankIndex||0).id;this.state.onlinePlayers=[...this.remotePlayers.entries()].filter(([,r])=>r.g.visible).map(([id,r])=>({id,name:r.data?.name||'Aventureiro',level:r.data?.level||1,guildRank:r.data?.guildRank||'E',partyId:r.data?.partyId||null}));this.updatePlayerNameplate(this.localPlayerLabel,{name:this.state.playerName||'Aventureiro',level:this.state.level,hp:this.state.hp,maxHp:this.state.maxHp,guildRank:this.state.guildRank},true)
+    this.state.guildRank=getGuildRank(this.state.guildRankIndex||0).id;this.state.onlinePlayers=remotePlayersList;this.updatePlayerNameplate(this.localPlayerLabel,{name:this.state.playerName||'Aventureiro',level:this.state.level,hp:this.state.hp,maxHp:this.state.maxHp,guildRank:this.state.guildRank},true)
     this.onHud?.({...this.state,destinationMarker:this.state.destinationMarker||null,caravanModal:this.state.caravanModal||null,xpNotifications:this.state.xpNotifications||[],lastXpGain:this.state.lastXpGain||null,levelUpCelebration:this.state.levelUpCelebration||null,gateAnnouncement:this.state.gateAnnouncement||null,dungeonModal:this.state.dungeonModal||null,dungeonCompletion:this.state.dungeonCompletion||null,minimap,mapSnapshot,horseBreeds:HORSE_BREEDS,inventory:[...this.state.inventory],equipment:{...this.state.equipment},quests:this.state.quests.map(q=>({...q})),classState:{...this.state.classState},travelState:{...this.state.travelState,vipCost:Math.max(5000,this.state.travelState?.vipCost||5000),nodes:{...(this.state.travelState?.nodes||{})}},settings:{...this.settings},mount:{...this.state.mount},stats:{...this.state.stats},attributes:{...this.state.attributes},guildMissions:(this.state.guildMissions||[]).map(m=>({...m,reward:{...m.reward}})),multiplayer:{...this.state.multiplayer},abilities:this.state.abilities?.map(a=>({...a}))||[]})
+  }
+
+  dismissGateAnnouncement(){
+    if(this.state?.gateAnnouncement){
+      this.state.gateAnnouncement=null
+      this.emitHud()
+    }
   }
 
   loop=()=>{

@@ -133,6 +133,34 @@ export default function MiniMap({hud,onOpenMap}){
       }
     }
 
+    // Remote Online Players (Multiplayer)
+    for(const rp of data.players || []){
+      const [rx, ry] = toMap(rp.x, rp.z)
+      const inBounds = rx >= 8 && rx <= w - 8 && ry >= 8 && ry <= h - 8
+      if(inBounds){
+        ctx.save()
+        ctx.fillStyle = '#10b981'
+        ctx.shadowColor = '#10b981'
+        ctx.shadowBlur = 8
+        ctx.beginPath(); ctx.arc(rx, ry, 4.2, 0, Math.PI * 2); ctx.fill()
+        ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.2; ctx.stroke()
+        ctx.fillStyle = '#ffffff'; ctx.font = '800 7px Inter,sans-serif'; ctx.textAlign = 'center'
+        ctx.shadowColor = '#000000'; ctx.shadowBlur = 3
+        ctx.fillText(rp.name || 'Jogador', rx, ry - 6)
+        ctx.restore()
+      } else {
+        const offX = rx - cx, offY = ry - cy, d = Math.hypot(offX, offY)
+        if(d > 0 && d < Math.min(w, h) * 2.8){
+          const edgeR = Math.min(w, h) * 0.44
+          const ex = cx + (offX / d) * edgeR, ey = cy + (offY / d) * edgeR
+          ctx.fillStyle = '#10b981'
+          ctx.beginPath(); ctx.arc(ex, ey, 3.8, 0, Math.PI * 2); ctx.fill()
+          ctx.fillStyle = '#ffffff'; ctx.font = '900 6px Inter,sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+          ctx.fillText('P', ex, ey)
+        }
+      }
+    }
+
     // Landmarks discovered near the player.
     for(const l of data.landmarks||[]){if(!visible(l.x,l.z))continue;const [x,y]=toMap(l.x,l.z);ctx.fillStyle='#f4d77b';ctx.strokeStyle='#49391f';ctx.lineWidth=1;ctx.beginPath();for(let i=0;i<8;i++){const a=-Math.PI/2+i*Math.PI/4,r=i%2?2.4:5.2,px=x+Math.cos(a)*r,py=y+Math.sin(a)*r;i?ctx.lineTo(px,py):ctx.moveTo(px,py)}ctx.closePath();ctx.fill();ctx.stroke()}
 
