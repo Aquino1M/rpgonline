@@ -1002,8 +1002,8 @@ export class ShadowGame {
     const sword=mesh(new THREE.BoxGeometry(.07,.82,.045),metal);sword.position.set(.42,1.05,.12);sword.rotation.z=-.18;g.add(sword)
     const a=(index%4)*Math.PI/2,rr=city.wallRadius+9+(index%3)*3,home={x:city.x+Math.cos(a)*rr,z:city.z+Math.sin(a)*rr}
     g.position.set(home.x,0,home.z);this.worldRoot.add(g)
-    const level=Math.max(1,def.level|0),maxHp=105+level*8.5,rarity=level>=240?'Lendária':level>=150?'Épica':level>=70?'Rara':level>=20?'Incomum':'Comum'
-    const bot={adventurer:true,id:def.id,netId:def.id,name:def.name,level,guildRank:def.rank||'E',temperament:def.temperament||'balanced',cityId:def.cityId,zoneId:city.zoneId,g,body,head,sword,hp:maxHp,maxHp,atk:12+level*1.72,def:4+level*.58,xp:0,nextXp:Math.round(120*Math.pow(level,1.38)),gold:70+level*5,lootItem:makeItem(index%2?'armor':'weapon',level,rarity,`${index%2?'Armadura':'Lâmina'} de ${def.name}`),dead:false,hostileToPlayer:false,lastAttack:0,respawnAt:0,home,patrol:null,target:null,phase:index*1.71}
+    const level=Math.max(1,def.level|0),maxHp=105+level*8.5,maxStamina=Math.round(100+level*2),rarity=level>=240?'Lendária':level>=150?'Épica':level>=70?'Rara':level>=20?'Incomum':'Comum'
+    const bot={adventurer:true,id:def.id,netId:def.id,name:def.name,level,guildRank:def.rank||'E',temperament:def.temperament||'balanced',cityId:def.cityId,zoneId:city.zoneId,g,body,head,sword,hp:maxHp,maxHp,stamina:maxStamina,maxStamina,atk:12+level*1.72,def:4+level*.58,xp:0,nextXp:Math.round(120*Math.pow(level,1.38)),gold:70+level*5,lootItem:makeItem(index%2?'armor':'weapon',level,rarity,`${index%2?'Armadura':'Lâmina'} de ${def.name}`),dead:false,hostileToPlayer:false,lastAttack:0,respawnAt:0,home,patrol:null,target:null,phase:index*1.71}
     const label=this.makePlayerNameplate({name:`${def.name} [IA]`,level,hp:maxHp,maxHp,guildRank:bot.guildRank},false);label.position.y=2.58;g.add(label);bot.label=label
     return bot
   }
@@ -1011,7 +1011,12 @@ export class ShadowGame {
   botGainXp(bot,amount){
     if(!bot||bot.dead)return
     bot.xp+=Math.max(0,Math.round(amount||0))
-    while(bot.xp>=bot.nextXp&&bot.level<300){bot.xp-=bot.nextXp;bot.level++;bot.nextXp=Math.round(120*Math.pow(bot.level,1.38));bot.maxHp+=8;bot.hp=bot.maxHp;bot.atk+=2;bot.def+=.6
+    while(bot.xp>=bot.nextXp&&bot.level<300){
+      bot.xp-=bot.nextXp;bot.level++;
+      bot.nextXp=Math.round(120*Math.pow(bot.level,1.38));
+      bot.maxHp+=8;bot.hp=bot.maxHp;
+      bot.maxStamina=Math.round(100+bot.level*2);bot.stamina=bot.maxStamina;
+      bot.atk+=2;bot.def+=.6
       const rank=[...GUILD_RANKS].reverse().find(r=>bot.level>=r.minLevel);if(rank)bot.guildRank=rank.id
     }
     this.updatePlayerNameplate(bot.label,{name:`${bot.name} [IA]`,level:bot.level,hp:bot.hp,maxHp:bot.maxHp,guildRank:bot.guildRank},false)
@@ -1021,26 +1026,112 @@ export class ShadowGame {
     if(this.state.dungeon){for(const bot of this.bots)bot.g.visible=false;return}
     const now=performance.now()
     for(const bot of this.bots){
-      if(bot.dead){if(now>=bot.respawnAt){bot.dead=false;bot.hostileToPlayer=false;bot.hp=bot.maxHp;bot.g.position.set(bot.home.x,0,bot.home.z);bot.g.visible=true;this.updatePlayerNameplate(bot.label,{name:`${bot.name} [IA]`,level:bot.level,hp:bot.hp,maxHp:bot.maxHp,guildRank:bot.guildRank},false)}continue}
-      const distanceToPlayer=bot.g.position.distanceTo(this.player.position);bot.g.visible=distanceToPlayer<WORLD.mobDistance*1.65;if(!bot.g.visible)continue
-      let target=null,targetIsPlayer=false
-      if(bot.hostileToPlayer&&distanceToPlayer<18){target=this.player;targetIsPlayer=true}
-      else{
-        let bd=22
-        for(const mob of this.enemies){if(mob.dead||!mob.g.visible)continue;const d=mob.g.position.distanceTo(bot.g.position);if(d<bd){target=mob;bd=d}}
+      if(bot.dead){
+        if(now>=bot.respawnAt){
+          bot.dead=false;bot.hostileToPlayer=false;
+          bot.hp=bot.maxHp;
+          bot.stamina=bot.maxStamina;
+          bot.g.position.set(bot.home.x,0,bot.home.z);
+          bot.g.visible=true;
+          this.updatePlayerNameplate(bot.label,{name:`${bot.name} [IA]`,level:bot.level,hp:bot.hp,maxHp:bot.maxHp,guildRank:bot.guildRank},false)
+        }
+        continue
       }
-      if(!target){
-        if(!bot.patrol||Math.hypot(bot.g.position.x-bot.patrol.x,bot.g.position.z-bot.patrol.z)<1.5){const ang=(hash2(bot.level+Math.floor(t*.05),bot.id.length)*Math.PI*2),rad=18+hash2(bot.id.length,bot.level)*34;bot.patrol={x:bot.home.x+Math.cos(ang)*rad,z:bot.home.z+Math.sin(ang)*rad}}
-        const dx=bot.patrol.x-bot.g.position.x,dz=bot.patrol.z-bot.g.position.z,d=Math.hypot(dx,dz);if(d>1){const nx=dx/d,nz=dz/d,step=(2.3+Math.min(2.3,bot.level/120))*dt,px=bot.g.position.x+nx*step,pz=bot.g.position.z+nz*step;if(this.canOccupy(px,pz,.48)){bot.g.position.x=px;bot.g.position.z=pz;bot.g.rotation.y=Math.atan2(nx,nz)}}
-      }else{
-        const targetPos=targetIsPlayer?this.player.position:target.g.position,dx=targetPos.x-bot.g.position.x,dz=targetPos.z-bot.g.position.z,d=Math.hypot(dx,dz),nx=d?dx/d:0,nz=d?dz/d:0;bot.g.rotation.y=Math.atan2(nx,nz)
-        if(d>2.25){const step=(bot.temperament==='aggressive'?4.2:3.5)*dt,px=bot.g.position.x+nx*step,pz=bot.g.position.z+nz*step;if(this.canOccupy(px,pz,.48)){bot.g.position.x=px;bot.g.position.z=pz}}
-        else if(now-bot.lastAttack>850){bot.lastAttack=now;bot.body.rotation.x=-.28;setTimeout(()=>{if(!bot.dead)bot.body.rotation.x=0},130);const dmg=Math.max(2,Math.round(bot.atk*(.7+Math.random()*.35)))
-          if(targetIsPlayer){if(this.invuln<=0){let dealt=Math.max(1,Math.round(dmg-this.state.def*.42));if(this.state.blocking)dealt=Math.max(1,Math.round(dealt*.32));this.state.hp=Math.max(0,this.state.hp-dealt)}}
-          else{target.hp-=dmg;this.spawnDamageText(target.g.position,dmg,false);this.flashEnemy(target,false);this.updateMobLabel(target);if(target.hp<=0)this.killByBot(target,bot)}
+
+      // Recuperação de vigor (stamina)
+      bot.maxStamina = bot.maxStamina || Math.round(100 + bot.level * 2)
+      bot.stamina = Math.min(bot.maxStamina, (bot.stamina !== undefined ? bot.stamina : bot.maxStamina) + 16 * dt)
+
+      // Regeneração de HP quando o vigor estiver em 100%
+      if(bot.stamina >= bot.maxStamina - 0.5 && bot.hp < bot.maxHp){
+        bot.hp = Math.min(bot.maxHp, bot.hp + Math.max(3.5, bot.maxHp * 0.045) * dt)
+      }
+
+      const distanceToPlayer=bot.g.position.distanceTo(this.player.position)
+      bot.g.visible=distanceToPlayer<WORLD.mobDistance*2.2
+
+      let target=null,targetIsPlayer=false
+      if(bot.hostileToPlayer&&distanceToPlayer<22){target=this.player;targetIsPlayer=true}
+      else{
+        let bd=28
+        for(const mob of this.enemies){
+          if(mob.dead||!mob.g.visible)continue
+          const d=mob.g.position.distanceTo(bot.g.position)
+          if(d<bd){target=mob;bd=d}
         }
       }
-      this.updatePlayerNameplate(bot.label,{name:`${bot.name} [IA]`,level:bot.level,hp:bot.hp,maxHp:bot.maxHp,guildRank:bot.guildRank},false)
+
+      if(!target){
+        // Bot anda pelo mundo aberto em busca de aventuras e exploração
+        if(!bot.patrol || Math.hypot(bot.g.position.x-bot.patrol.x, bot.g.position.z-bot.patrol.z) < 2.0){
+          const roamAngle = Math.random() * Math.PI * 2
+          const roamDist = 38 + Math.random() * 110
+          let px = bot.g.position.x + Math.cos(roamAngle) * roamDist
+          let pz = bot.g.position.z + Math.sin(roamAngle) * roamDist
+          px = Math.max(-500, Math.min(500, px))
+          pz = Math.max(-500, Math.min(500, pz))
+          bot.patrol = { x: px, z: pz }
+        }
+
+        const dx=bot.patrol.x-bot.g.position.x, dz=bot.patrol.z-bot.g.position.z, d=Math.hypot(dx,dz)
+        if(d>1){
+          const nx=dx/d, nz=dz/d
+          const speed = (2.4 + Math.min(2.2, bot.level/110)) * dt
+          const px=bot.g.position.x+nx*speed, pz=bot.g.position.z+nz*speed
+          if(this.canOccupy(px,pz,.48)){
+            bot.g.position.x=px
+            bot.g.position.z=pz
+            bot.g.rotation.y=Math.atan2(nx,nz)
+            bot.phase = (bot.phase || 0) + dt * 6.5
+            if(bot.sword) bot.sword.rotation.z = -0.18 + Math.sin(bot.phase) * 0.18
+            if(bot.body) bot.body.position.y = 1.02 + Math.abs(Math.sin(bot.phase)) * 0.06
+          } else {
+            bot.patrol = null
+          }
+        }
+      }else{
+        const targetPos=targetIsPlayer?this.player.position:target.g.position
+        const dx=targetPos.x-bot.g.position.x, dz=targetPos.z-bot.g.position.z
+        const d=Math.hypot(dx,dz), nx=d?dx/d:0, nz=d?dz/d:0
+        bot.g.rotation.y=Math.atan2(nx,nz)
+        if(d>2.2){
+          const step=(bot.temperament==='aggressive'?4.6:3.8)*dt
+          const px=bot.g.position.x+nx*step, pz=bot.g.position.z+nz*step
+          if(this.canOccupy(px,pz,.48)){bot.g.position.x=px;bot.g.position.z=pz}
+        }else if(now-bot.lastAttack>780){
+          // Ataque do bot gasta vigor (energia)
+          const botAttackCost = 14
+          if(bot.stamina >= botAttackCost){
+            bot.stamina -= botAttackCost
+            bot.lastAttack=now
+            bot.body.rotation.x=-.32
+            if(bot.sword) bot.sword.rotation.x = 0.6
+            setTimeout(()=>{
+              if(!bot.dead){
+                bot.body.rotation.x=0
+                if(bot.sword) bot.sword.rotation.x = 0
+              }
+            },130)
+            const dmg=Math.max(2,Math.round(bot.atk*(.75+Math.random()*.38)))
+            if(targetIsPlayer){
+              if(this.invuln<=0){
+                let dealt=Math.max(1,Math.round(dmg-this.state.def*.42))
+                if(this.state.blocking)dealt=Math.max(1,Math.round(dealt*.32))
+                this.state.hp=Math.max(0,this.state.hp-dealt)
+              }
+            }else{
+              target.hp-=dmg
+              this.spawnDamageText(target.g.position,dmg,false)
+              this.flashEnemy(target,false)
+              this.updateMobLabel(target)
+              if(target.hp<=0)this.killByBot(target,bot)
+            }
+          }
+        }
+      }
+      if(bot.g.visible){
+        this.updatePlayerNameplate(bot.label,{name:`${bot.name} [IA]`,level:bot.level,hp:Math.round(bot.hp),maxHp:bot.maxHp,guildRank:bot.guildRank},false)
+      }
     }
   }
 
@@ -1076,13 +1167,14 @@ export class ShadowGame {
     const helmet=mesh(new THREE.ConeGeometry(.28,.35,8),armorMat);helmet.position.y=2.02;g.add(helmet)
     const shield=mesh(new THREE.BoxGeometry(.1,.62,.42),goldMat);shield.position.set(-.46,1.05,.12);g.add(shield)
     const spear=mesh(new THREE.CylinderGeometry(.025,.025,1.75,6),armorMat);spear.position.set(.44,1.18,.08);spear.rotation.x=.15;g.add(spear)
-    const homeX=city.x+Math.cos(def.angle)*def.dist,homeZ=city.z+Math.sin(def.angle)*def.dist
+    const wallR = (city.wallRadius || 24) + 1.2
+    const homeX=city.x+Math.cos(def.angle)*wallR,homeZ=city.z+Math.sin(def.angle)*wallR
     g.position.set(homeX,0,homeZ);this.worldRoot.add(g)
-    const level=def.level||30,maxHp=400+level*18
+    const level=def.level||30,maxHp=450+level*20
     const guard={
-      isGuard:true,id:def.id,name:def.name,cityId:def.cityId,level,g,body,spear,shield,
-      hp:maxHp,maxHp,atk:30+level*2.8,def:20+level*1.4,home:{x:homeX,z:homeZ},
-      target:null,lastAttack:0,patrolAngle:def.angle,respawnAt:0,dead:false
+      isGuard:true,id:def.id,name:def.name,cityId:def.cityId,level,g,body,spear,shield,city,
+      hp:maxHp,maxHp,atk:32+level*3.0,def:24+level*1.5,home:{x:homeX,z:homeZ},
+      target:null,lastAttack:0,patrolAngle:def.angle,patrolSpeed:0.24+(index%2)*0.08,respawnAt:0,dead:false,phase:index*1.5
     }
     const label=this.makePlayerNameplate({name:`[DEFESA] ${def.name}`,level,hp:maxHp,maxHp,guildRank:'SSS'},false)
     label.position.y=2.68;g.add(label);guard.label=label
@@ -1101,42 +1193,61 @@ export class ShadowGame {
         continue
       }
       const distToPlayer=guard.g.position.distanceTo(this.player.position)
-      guard.g.visible=distToPlayer<WORLD.mobDistance*1.8
+      guard.g.visible=distToPlayer<WORLD.mobDistance*2.0
       if(!guard.g.visible)continue
 
-      let targetMob=null,minMobDist=30
+      if(guard.hp<guard.maxHp){
+        guard.hp=Math.min(guard.maxHp,guard.hp+guard.maxHp*0.06*dt)
+      }
+
+      const city=guard.city||CITIES.find(c=>c.id===guard.cityId)
+      let targetMob=null,minMobDist=45
       for(const mob of this.enemies){
         if(mob.dead||!mob.g.visible)continue
-        const d=mob.g.position.distanceTo(guard.home)
-        if(d<minMobDist){targetMob=mob;minMobDist=d}
+        const dGuard=mob.g.position.distanceTo(guard.g.position)
+        const dCity=city?Math.hypot(mob.g.position.x-city.x,mob.g.position.z-city.z):999
+        if(dGuard<minMobDist || (city && dCity < city.wallRadius + 20)){
+          if(dGuard<minMobDist){
+            targetMob=mob
+            minMobDist=dGuard
+          }
+        }
       }
 
       if(!targetMob){
-        const distFromHome=Math.hypot(guard.g.position.x-guard.home.x,guard.g.position.z-guard.home.z)
-        if(distFromHome>1.5){
-          const dx=guard.home.x-guard.g.position.x,dz=guard.home.z-guard.g.position.z,d=Math.hypot(dx,dz)
-          const nx=dx/d,nz=dz/d,step=3.2*dt
+        // Ronda ativa ao longo de todo o perímetro da muralha
+        const wallR=(city?.wallRadius||24)+1.4
+        guard.patrolAngle=(guard.patrolAngle||0)+guard.patrolSpeed*dt
+        const targetX=city.x+Math.cos(guard.patrolAngle)*wallR
+        const targetZ=city.z+Math.sin(guard.patrolAngle)*wallR
+        const dx=targetX-guard.g.position.x,dz=targetZ-guard.g.position.z
+        const d=Math.hypot(dx,dz)
+        if(d>0.3){
+          const nx=dx/d,nz=dz/d,step=3.8*dt
           guard.g.position.x+=nx*step;guard.g.position.z+=nz*step;guard.g.rotation.y=Math.atan2(nx,nz)
+          guard.phase=(guard.phase||0)+dt*7.5
+          if(guard.spear)guard.spear.rotation.x=0.15+Math.sin(guard.phase)*0.14
         }
       }else{
+        // Persegue e elimina monstros próximos da muralha
         const dx=targetMob.g.position.x-guard.g.position.x,dz=targetMob.g.position.z-guard.g.position.z
         const d=Math.hypot(dx,dz),nx=d?dx/d:0,nz=d?dz/d:0
         guard.g.rotation.y=Math.atan2(nx,nz)
         if(d>2.3){
-          const step=5.2*dt
+          const step=6.4*dt
           guard.g.position.x+=nx*step;guard.g.position.z+=nz*step
-        }else if(now-guard.lastAttack>700){
+        }else if(now-guard.lastAttack>600){
           guard.lastAttack=now
-          guard.spear.rotation.x=-.65
-          setTimeout(()=>{if(!guard.dead)guard.spear.rotation.x=.15},140)
-          const dmg=Math.max(18,Math.round(guard.atk*(1.1+Math.random()*.3)))
+          guard.spear.rotation.x=-.75
+          setTimeout(()=>{if(!guard.dead&&guard.spear)guard.spear.rotation.x=.15},140)
+          const dmg=Math.max(28,Math.round(guard.atk*(1.25+Math.random()*.4)))
           targetMob.hp-=dmg
           this.spawnDamageText(targetMob.g.position,dmg,true,'#fbbf24')
           this.flashEnemy(targetMob,false)
           this.updateMobLabel(targetMob)
           if(targetMob.hp<=0){
             this.killByBot(targetMob,guard)
-            this.toast(`⚔ ${guard.name} defendeu a cidadela!`)
+            this.toast(`⚔ ${guard.name} defendeu a muralha e eliminou ${targetMob.name}!`)
           }
         }
       }
@@ -1508,9 +1619,18 @@ export class ShadowGame {
   }
 
   attack(force=false){
-    if((!this.combatMode&&!force)||this.state.uiPanel||this.state.stamina<6||this.attackClock>0||this.state.dungeon?.transition)return
+    if((!this.combatMode&&!force)||this.state.uiPanel||this.attackClock>0||this.state.dungeon?.transition)return
     const isBow=this.state.equipment?.weapon?.subtype==='bow'
-    this.state.stamina-=6
+    const staminaCost=isBow?12:15
+    if(this.state.stamina<staminaCost){
+      if(!this._lastStaminaWarn||performance.now()-this._lastStaminaWarn>1600){
+        this._lastStaminaWarn=performance.now()
+        this.toast('⚡ Sem vigor suficiente para atacar! Descanse para recuperar energia.')
+      }
+      this.haptic?.(10)
+      return
+    }
+    this.state.stamina=Math.max(0,this.state.stamina-staminaCost)
     this.attackClock=isBow?.42:.34
     this.player.userData.motion='attack'
     this.rig.shoulderR.rotation.x=isBow?-1.1:-1.4
@@ -2048,17 +2168,15 @@ export class ShadowGame {
     }
     this.state.stamina=Math.min(this.state.maxStamina,this.state.stamina+18*dt)
     if(this.state.stamina>=this.state.maxStamina-0.5&&this.state.hp<this.state.maxHp&&!this.state.dungeon?.transition){
-      this.restedStaminaTimer=(this.restedStaminaTimer||0)+dt
-      if(this.restedStaminaTimer>=15.0){
-        this.restedRegenTimer=(this.restedRegenTimer||0)+dt
-        if(this.restedRegenTimer>=25.0){
-          this.restedRegenTimer=0
-          this.state.hp=Math.min(this.state.maxHp,this.state.hp+1)
-          this.spawnDamageText(this.player.position,'+1 HP (Descansado)',false,'#4ade80')
-        }
+      const hpRatePerSec=Math.max(4,this.state.maxHp*0.045)
+      this.state.hp=Math.min(this.state.maxHp,this.state.hp+hpRatePerSec*dt)
+      this.restedRegenTimer=(this.restedRegenTimer||0)+dt
+      if(this.restedRegenTimer>=1.2){
+        this.restedRegenTimer=0
+        const gainVal=Math.max(2,Math.round(hpRatePerSec*1.2))
+        this.spawnDamageText(this.player.position,`+${gainVal} HP`,false,'#4ade80')
       }
     }else{
-      this.restedStaminaTimer=0
       this.restedRegenTimer=0
     }
     this.attackClock=Math.max(0,this.attackClock-dt);this.specialClock=Math.max(0,this.specialClock-dt);this.specialAnim=Math.max(0,this.specialAnim-dt);this.invuln=Math.max(0,this.invuln-dt);this.updateAbilityCooldowns(dt)
