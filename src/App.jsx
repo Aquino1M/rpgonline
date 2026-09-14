@@ -19,20 +19,27 @@ function getViewportState(){
   if(typeof window==='undefined')return{w:1366,h:768,isCoarse:false,isMobile:false,isTablet:false,isDesktop:true,isTouch:false,isLandscape:true}
   const w=window.innerWidth||1366,h=window.innerHeight||768
   const ua=navigator.userAgent||''
-  const isMobileUA=/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua)
-  const hasFinePointer=window.matchMedia?.('(pointer: fine)').matches
-  const short=Math.min(w,h)
+  const short=Math.min(w,h),long=Math.max(w,h)
+  const maxTouch=Number(navigator.maxTouchPoints||0)
+  const primaryCoarse=!!window.matchMedia?.('(pointer: coarse)').matches
+  const anyCoarse=!!window.matchMedia?.('(any-pointer: coarse)').matches
+  const hasTouchEvent='ontouchstart' in window
+  const touchCapable=maxTouch>0||primaryCoarse||anyCoarse||hasTouchEvent
+  const isMobileUA=/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Macintosh.*Mobile/i.test(ua)
+  const isIPadDesktopUA=/Macintosh/i.test(ua)&&maxTouch>1
+  const hasFinePointer=!!window.matchMedia?.('(pointer: fine)').matches
 
-  // Real mobile phone: mobile UA and narrow/short screen, or explicit mobile emulation
-  const isPhone = isMobileUA ? (short <= 600 || w <= 950) : (short <= 520 || (w <= 768 && h <= 900 && !hasFinePointer))
-  const isTablet = !isPhone && (isMobileUA || (short <= 768 && !hasFinePointer))
-  const isDesktop = !isPhone && !isTablet
+  // Classification uses the SHORT side, not just width. That keeps an A55 landscape
+  // as phone while iPad Pro / 1200x2000 Android tablets always receive touch controls.
+  // A Windows desktop with an optional touchscreen stays desktop when it has a fine pointer.
+  const isPhone=touchCapable&&(short<=600||(isMobileUA&&short<=620&&long<=1100))
+  const tabletSized=short<=1200&&long<=2300
+  const isTablet=!isPhone&&touchCapable&&tabletSized&&(isMobileUA||isIPadDesktopUA||primaryCoarse||(!hasFinePointer&&anyCoarse))
+  const isDesktop=!isPhone&&!isTablet
+  const isMobile=isPhone
+  const isTouch=touchCapable&&(isPhone||isTablet)
 
-  const isMobile = isPhone
-  // Touch mode is ONLY for actual phones and tablets, NEVER for desktop PC!
-  const isTouch = (isPhone || isTablet) && (isMobileUA || !hasFinePointer)
-
-  return { w, h, isCoarse: !hasFinePointer, isMobile, isTablet, isDesktop, isTouch, isLandscape: w >= h }
+  return {w,h,isCoarse:primaryCoarse||!hasFinePointer,isMobile,isTablet,isDesktop,isTouch,isLandscape:w>=h}
 }
 function getAdaptiveScale(viewport,requested=1.2){
   const req=clampNum(Number(requested)||1.2,.85,2)

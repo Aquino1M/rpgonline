@@ -1,0 +1,354 @@
+/* Shadow Ascension — Mobile/Tablet audit V2
+   Loaded LAST. One coherent touch layout for phones + tablets.
+   The runtime module exposes --t-* variables from Settings > UI scale so HUD,
+   minimap, joystick, attacks, menu, skills and modal content scale together. */
+
+:root{
+  --touch-k:1;
+  --t-gutter:9px;--t-hud-w:214px;--t-mini-w:118px;--t-stick:108px;
+  --t-stick-knob:44px;--t-action:51px;--t-attack:66px;--t-action-gap:7px;
+  --t-power:49px;--t-menu:50px;--t-menu-cell:58px;--t-hit:42px;
+  --t-font:10px;--t-small:7px;--t-title:15px;--t-window-pad:9px;
+}
+
+/* ---------- Dungeon HUD: never share the minimap corner ---------- */
+.app .dungeon-card{
+  left:50%!important;right:auto!important;top:64px!important;bottom:auto!important;
+  width:min(350px,40vw)!important;min-width:0!important;max-width:calc(100vw - 24px)!important;
+  transform:translateX(-50%)!important;transform-origin:top center!important;
+  text-align:center!important;z-index:13!important;
+}
+.app .dungeon-card strong{white-space:normal!important;line-height:1.15!important}
+
+/* ---------- Every touch device gets the same control family ---------- */
+.app.touch-ui .side-menu,
+.app.touch-ui .quickbar,
+.app.touch-ui .help-button,
+.app.touch-ui .help,
+.app.touch-ui .world-status,
+.app.touch-ui .combat-mode-chip{display:none!important}
+
+.app.touch-ui .mobile-ui{
+  display:block!important;position:absolute!important;inset:0!important;z-index:9!important;
+  pointer-events:none!important;
+}
+.app.touch-ui .mobile-ui button,
+.app.touch-ui .mobile-stick,
+.app.touch-ui .mobile-menu-drawer,
+.app.touch-ui .mobile-powers-bottom{pointer-events:auto!important;touch-action:none!important;-webkit-tap-highlight-color:transparent!important}
+
+/* Explicit dark button skin fixes the white/default tablet controls. */
+.app.touch-ui .mobile-ui button{
+  appearance:none!important;-webkit-appearance:none!important;
+  color:#f2f8ff!important;background:linear-gradient(180deg,rgba(19,46,66,.97),rgba(6,20,31,.97))!important;
+  border:1px solid rgba(120,205,240,.28)!important;border-radius:14px!important;
+  box-shadow:0 7px 20px rgba(0,0,0,.32),inset 0 1px 0 rgba(255,255,255,.07)!important;
+  font-family:inherit!important;font-weight:900!important;
+}
+.app.touch-ui .mobile-ui button:active{transform:scale(.95)!important;filter:brightness(1.18)!important}
+.app.touch-ui .mobile-ui button:disabled{opacity:.46!important;filter:saturate(.45)!important}
+.app.touch-ui .mobile-ui button small{color:#c9dce8!important;font-weight:900!important;letter-spacing:.045em!important}
+
+/* Player status */
+.app.touch-ui .player-card{
+  left:max(var(--t-gutter),env(safe-area-inset-left))!important;
+  top:max(var(--t-gutter),env(safe-area-inset-top))!important;
+  width:var(--t-hud-w)!important;min-width:0!important;max-width:36vw!important;
+  padding:calc(var(--t-gutter) * .75)!important;border-radius:14px!important;
+  transform:none!important;transform-origin:top left!important;overflow:hidden!important;z-index:12!important;
+}
+.app.touch-ui .player-card .brand-row b{font-size:var(--t-font)!important;letter-spacing:.11em!important}
+.app.touch-ui .player-card .brand-row small{font-size:var(--t-small)!important}
+.app.touch-ui .player-card .class-chip{font-size:var(--t-small)!important;padding:4px 7px!important}
+.app.touch-ui .player-card .level-chip{font-size:var(--t-small)!important;padding:4px 7px!important}
+.app.touch-ui .player-card .identity-line{padding:5px 7px!important;margin-top:5px!important}
+.app.touch-ui .player-card .identity-line strong{font-size:var(--t-font)!important}
+.app.touch-ui .player-card .identity-line span{font-size:var(--t-small)!important}
+.app.touch-ui .player-card .zone-line{margin:5px 0 4px!important;padding-top:4px!important}
+.app.touch-ui .player-card .zone-line strong{font-size:calc(var(--t-font) + 1px)!important;max-width:62%!important;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.app.touch-ui .player-card .zone-line span{font-size:var(--t-small)!important}
+.app.touch-ui .player-card .bar-wrap{margin:3px 0!important}
+.app.touch-ui .player-card .bar-label{font-size:var(--t-small)!important;margin:0 0 2px 1px!important}
+.app.touch-ui .player-card .bar{height:max(6px,calc(var(--t-small) - 1px))!important}
+.app.touch-ui .player-card .currency-row{display:none!important}
+
+/* Minimap scales from the same setting. */
+.app.touch-ui .minimap{
+  right:max(var(--t-gutter),env(safe-area-inset-right))!important;
+  top:max(var(--t-gutter),env(safe-area-inset-top))!important;bottom:auto!important;
+  width:var(--t-mini-w)!important;min-width:0!important;padding:calc(var(--t-gutter) * .55)!important;
+  border-radius:14px!important;transform:none!important;zoom:1!important;z-index:12!important;
+}
+.app.touch-ui .mini-header b,.app.touch-ui .mini-header span{font-size:var(--t-small)!important}
+.app.touch-ui .mini-field{height:calc(var(--t-mini-w) * .60)!important;margin:4px 0!important;border-radius:10px!important}
+.app.touch-ui .minimap>small,.app.touch-ui .mini-legend{font-size:var(--t-small)!important}
+
+/* Menu opens beside minimap. */
+.app.touch-ui .mobile-menu-toggle{
+  display:flex!important;position:absolute!important;z-index:22!important;
+  right:calc(var(--t-mini-w) + var(--t-gutter) + 8px)!important;
+  top:max(var(--t-gutter),env(safe-area-inset-top))!important;
+  width:var(--t-menu)!important;height:var(--t-menu)!important;min-width:var(--t-menu)!important;min-height:var(--t-menu)!important;
+  align-items:center!important;justify-content:center!important;flex-direction:column!important;gap:1px!important;
+  font-size:calc(var(--t-title) + 3px)!important;
+}
+.app.touch-ui .mobile-menu-toggle small{font-size:var(--t-small)!important}
+.app.touch-ui .mobile-menu-drawer{
+  display:grid!important;position:absolute!important;z-index:21!important;
+  right:calc(var(--t-mini-w) + var(--t-gutter) + 8px)!important;
+  top:calc(max(var(--t-gutter),env(safe-area-inset-top)) + var(--t-menu) + 7px)!important;
+  grid-template-columns:repeat(3,var(--t-menu-cell))!important;gap:var(--t-action-gap)!important;
+  padding:var(--t-gutter)!important;width:auto!important;max-width:none!important;
+  border-radius:16px!important;background:rgba(3,14,24,.97)!important;border:1px solid rgba(117,208,246,.25)!important;
+  box-shadow:0 18px 50px rgba(0,0,0,.52)!important;
+}
+.app.touch-ui .mobile-menu-drawer button{
+  width:var(--t-menu-cell)!important;height:var(--t-menu-cell)!important;min-width:var(--t-menu-cell)!important;min-height:var(--t-menu-cell)!important;
+  font-size:calc(var(--t-title) + 2px)!important;padding:3px!important;
+}
+.app.touch-ui .mobile-menu-drawer small{font-size:var(--t-small)!important;max-width:90%!important;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* Dynamic analog on left. */
+.app.touch-ui .mobile-stick{
+  display:block!important;position:absolute!important;z-index:14!important;
+  left:max(var(--t-gutter),env(safe-area-inset-left))!important;
+  bottom:max(var(--t-gutter),env(safe-area-inset-bottom))!important;
+  width:var(--t-stick)!important;height:var(--t-stick)!important;
+  border-radius:50%!important;background:radial-gradient(circle,rgba(41,76,98,.52),rgba(3,16,27,.72) 68%)!important;
+  border:2px solid rgba(142,217,246,.24)!important;box-shadow:inset 0 0 25px rgba(0,0,0,.4),0 8px 25px rgba(0,0,0,.25)!important;
+}
+.app.touch-ui .mobile-stick:before{content:"";position:absolute;inset:17%;border:1px solid rgba(184,228,246,.13);border-radius:50%}
+.app.touch-ui .mobile-stick i{
+  position:absolute!important;left:50%!important;top:50%!important;
+  width:var(--t-stick-knob)!important;height:var(--t-stick-knob)!important;
+  margin:calc(var(--t-stick-knob) / -2)!important;border-radius:50%!important;
+  background:linear-gradient(180deg,#80d7f4,#1e6587)!important;border:2px solid rgba(232,250,255,.52)!important;
+  box-shadow:0 7px 18px rgba(0,0,0,.4)!important;pointer-events:none!important;
+}
+
+/* A55-style 3x2 action block, also used by iPad/tablet. */
+.app.touch-ui .mobile-actions{
+  display:grid!important;position:absolute!important;z-index:15!important;
+  right:max(var(--t-gutter),env(safe-area-inset-right))!important;
+  bottom:max(var(--t-gutter),env(safe-area-inset-bottom))!important;
+  grid-template-columns:repeat(3,var(--t-action))!important;grid-template-rows:repeat(2,var(--t-action))!important;
+  gap:var(--t-action-gap)!important;width:auto!important;height:auto!important;transform:none!important;pointer-events:none!important;
+}
+.app.touch-ui .mobile-actions button,
+.app.touch-ui .mobile-actions .mobile-attack,
+.app.touch-ui .mobile-actions .mobile-block,
+.app.touch-ui .mobile-actions .mobile-dash,
+.app.touch-ui .mobile-actions .mobile-use,
+.app.touch-ui .mobile-actions .mobile-run,
+.app.touch-ui .mobile-actions .mobile-jump{
+  position:static!important;inset:auto!important;right:auto!important;bottom:auto!important;
+  width:var(--t-action)!important;height:var(--t-action)!important;min-width:var(--t-action)!important;min-height:var(--t-action)!important;
+  border-radius:50%!important;font-size:calc(var(--t-title) + 4px)!important;padding:2px!important;
+  display:flex!important;align-items:center!important;justify-content:center!important;flex-direction:column!important;gap:0!important;pointer-events:auto!important;
+}
+.app.touch-ui .mobile-actions button small{font-size:var(--t-small)!important;line-height:1!important;margin-top:1px!important}
+.app.touch-ui .mobile-actions .mobile-attack{background:linear-gradient(180deg,#a8313c,#59151d)!important;border-color:rgba(255,128,139,.55)!important;box-shadow:0 0 19px rgba(239,68,68,.24),0 7px 20px rgba(0,0,0,.32)!important}
+.app.touch-ui .mobile-actions .mobile-block{background:linear-gradient(180deg,#245474,#102d45)!important}
+.app.touch-ui .mobile-actions .mobile-dash{background:linear-gradient(180deg,#294f6f,#112b42)!important}
+.app.touch-ui .mobile-actions .mobile-use{background:linear-gradient(180deg,#1f6b65,#103a3c)!important}
+.app.touch-ui .mobile-actions .mobile-run.active{background:linear-gradient(180deg,#19865e,#0d4f3d)!important;border-color:#6ee7b7!important}
+.app.touch-ui .mobile-actions .mobile-jump{background:linear-gradient(180deg,#415d91,#23365e)!important;border-color:rgba(157,196,255,.42)!important}
+
+/* Skills/potions/mount: same scale, horizontally scrollable instead of disappearing. */
+.app.touch-ui .mobile-powers,
+.app.touch-ui .mobile-menu-row{display:none!important}
+.app.touch-ui .mobile-powers-bottom{
+  display:flex!important;position:absolute!important;z-index:14!important;
+  left:50%!important;bottom:max(var(--t-gutter),env(safe-area-inset-bottom))!important;
+  transform:translateX(-50%)!important;gap:var(--t-action-gap)!important;
+  padding:calc(var(--t-gutter) * .55)!important;border-radius:14px!important;
+  background:rgba(3,14,24,.78)!important;border:1px solid rgba(115,199,234,.18)!important;
+  backdrop-filter:blur(8px)!important;-webkit-backdrop-filter:blur(8px)!important;
+  max-width:42vw!important;overflow-x:auto!important;overflow-y:hidden!important;scrollbar-width:none!important;
+}
+.app.touch-ui .mobile-powers-bottom::-webkit-scrollbar{display:none}
+.app.touch-ui .mobile-powers-bottom button{
+  position:relative!important;flex:0 0 var(--t-power)!important;width:var(--t-power)!important;height:var(--t-power)!important;
+  min-width:var(--t-power)!important;min-height:var(--t-power)!important;border-radius:12px!important;padding:2px!important;
+  display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;
+}
+.app.touch-ui .mobile-powers-bottom button>span{font-size:calc(var(--t-title) + 3px)!important;line-height:1!important}
+.app.touch-ui .mobile-powers-bottom button>small{font-size:var(--t-small)!important;max-width:90%!important;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.app.touch-ui .mobile-powers-bottom button>em{position:absolute;inset:0;display:grid;place-items:center;border-radius:11px;background:rgba(0,0,0,.58);font-style:normal;font-size:var(--t-font);font-weight:900}
+
+.app.touch-ui .mobile-prominent-action{
+  z-index:16!important;min-height:var(--t-hit)!important;font-size:var(--t-font)!important;
+  border-radius:14px!important;padding:7px 10px!important;
+}
+.app.touch-ui .mobile-network-chip{z-index:13!important;font-size:var(--t-small)!important}
+
+/* Dungeon status: centered top on mobile/tablet, and target card moves below it. */
+.app.touch-ui .dungeon-card{
+  left:50%!important;right:auto!important;top:max(var(--t-gutter),env(safe-area-inset-top))!important;
+  width:min(310px,38vw)!important;max-width:42vw!important;padding:8px 12px!important;
+  transform:translateX(-50%)!important;z-index:18!important;
+}
+.app.touch-ui .dungeon-card small{font-size:var(--t-small)!important}
+.app.touch-ui .dungeon-card strong{font-size:var(--t-title)!important}
+.app.touch-ui .dungeon-card span,.app.touch-ui .dungeon-card div{font-size:var(--t-font)!important}
+.app.touch-ui .dungeon-card button{min-height:30px!important;font-size:var(--t-small)!important}
+.app.touch-ui .target-card{top:calc(max(var(--t-gutter),env(safe-area-inset-top)) + 84px)!important;z-index:12!important}
+
+/* ---------- Touch windows: readable, scrollable, and all buttons tappable ---------- */
+.app.touch-ui .overlay-shell{
+  z-index:30!important;padding:max(5px,env(safe-area-inset-top)) max(5px,env(safe-area-inset-right)) max(5px,env(safe-area-inset-bottom)) max(5px,env(safe-area-inset-left))!important;
+  align-items:center!important;justify-content:center!important;overflow:hidden!important;
+}
+.app.touch-ui .window{
+  width:min(96vw,1120px)!important;height:min(92dvh,860px)!important;max-width:96vw!important;max-height:92dvh!important;
+  border-radius:16px!important;transform:none!important;zoom:1!important;overflow:hidden!important;
+}
+.app.touch-ui .window>header{
+  flex:0 0 auto!important;min-height:var(--t-hit)!important;padding:calc(var(--t-window-pad) * .75) var(--t-window-pad)!important;
+  gap:8px!important;align-items:center!important;
+}
+.app.touch-ui .window>header h2{font-size:var(--t-title)!important;line-height:1.1!important}
+.app.touch-ui .window>header small{font-size:var(--t-small)!important}
+.app.touch-ui .window>header p{font-size:var(--t-small)!important;line-height:1.25!important;margin-top:2px!important}
+.app.touch-ui .window>header>button{
+  width:var(--t-hit)!important;height:var(--t-hit)!important;min-width:var(--t-hit)!important;min-height:var(--t-hit)!important;
+  font-size:calc(var(--t-title) + 3px)!important;touch-action:manipulation!important;
+}
+.app.touch-ui .window-body{
+  min-height:0!important;overflow-y:auto!important;overflow-x:hidden!important;
+  padding:var(--t-window-pad)!important;font-size:var(--t-font)!important;
+  -webkit-overflow-scrolling:touch!important;overscroll-behavior:contain!important;
+}
+.app.touch-ui .window-body button,
+.app.touch-ui .window-body input,
+.app.touch-ui .window-body select{
+  min-height:var(--t-hit)!important;font-size:var(--t-font)!important;touch-action:manipulation!important;-webkit-tap-highlight-color:transparent!important;
+}
+.app.touch-ui .window-body button{
+  color:#eef8ff!important;background:linear-gradient(180deg,rgba(29,72,98,.96),rgba(12,39,58,.96))!important;
+  border:1px solid rgba(123,204,239,.25)!important;border-radius:10px!important;padding:6px 8px!important;
+}
+.app.touch-ui .window-body button.active{border-color:#63cef5!important;background:linear-gradient(180deg,#286b8d,#17465f)!important;color:#fff!important}
+.app.touch-ui .window-body button:disabled{opacity:.42!important}
+
+/* Inventory/equipment: same state/actions, larger touch targets. */
+.app.touch-ui .window-inventory .inventory-rpg{
+  display:grid!important;grid-template-columns:minmax(190px,.72fr) minmax(0,1.28fr)!important;
+  gap:var(--t-window-pad)!important;height:100%!important;min-height:0!important;
+}
+.app.touch-ui .window-inventory .character-hub,
+.app.touch-ui .window-inventory .bag-rpg{
+  min-height:0!important;height:100%!important;overflow-y:auto!important;padding:var(--t-window-pad)!important;
+}
+.app.touch-ui .window-inventory .paperdoll{min-height:150px!important;transform:none!important;margin:0!important}
+.app.touch-ui .window-inventory .bag-category-tabs,
+.app.touch-ui .window-inventory .rarity-filter-row{
+  display:flex!important;flex-wrap:wrap!important;gap:6px!important;position:static!important;overflow:visible!important;
+}
+.app.touch-ui .window-inventory .bag-category-tabs button,
+.app.touch-ui .window-inventory .rarity-filter-row button{min-height:var(--t-hit)!important;flex:0 0 auto!important}
+.app.touch-ui .window-inventory .bag-grid-scroll{overflow-y:auto!important;max-height:none!important;min-height:0!important;-webkit-overflow-scrolling:touch!important}
+.app.touch-ui .window-inventory .bag-grid{grid-template-columns:repeat(3,minmax(105px,1fr))!important;gap:7px!important}
+.app.touch-ui .window-inventory .item-card{min-height:125px!important;padding:8px!important}
+.app.touch-ui .window-inventory .item-card b{font-size:var(--t-font)!important}
+.app.touch-ui .window-inventory .item-card small,.app.touch-ui .window-inventory .item-card span{font-size:var(--t-small)!important}
+.app.touch-ui .window-inventory .item-card footer button{min-height:var(--t-hit)!important;font-size:var(--t-font)!important}
+.app.touch-ui .window-inventory .equip-node{min-height:var(--t-hit)!important;touch-action:manipulation!important}
+
+/* Merchant: tabs + vertical internal list, no tiny 27px controls. */
+.app.touch-ui .window-merchant .merchant-modern{gap:8px!important;height:100%!important;min-height:0!important}
+.app.touch-ui .window-merchant .merchant-gold-header{padding:8px 10px!important;min-height:var(--t-hit)!important}
+.app.touch-ui .window-merchant .gold-highlight b{font-size:var(--t-title)!important}
+.app.touch-ui .window-merchant .gold-highlight small,
+.app.touch-ui .window-merchant .economy-tag small,
+.app.touch-ui .window-merchant .economy-tag span{font-size:var(--t-small)!important}
+.app.touch-ui .window-merchant .merchant-mode-tabs{display:grid!important;grid-template-columns:1fr 1fr!important;gap:7px!important}
+.app.touch-ui .window-merchant .merchant-mode-tabs button{min-height:var(--t-hit)!important;font-size:var(--t-font)!important}
+.app.touch-ui .window-merchant .shop-category-tabs{display:flex!important;flex-wrap:wrap!important;gap:6px!important;position:static!important;background:transparent!important}
+.app.touch-ui .window-merchant .shop-category-tabs button{min-height:var(--t-hit)!important;font-size:var(--t-font)!important}
+.app.touch-ui .window-merchant .shop-scroll-list{
+  display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:7px!important;
+  max-height:none!important;min-height:0!important;overflow-y:auto!important;overflow-x:hidden!important;-webkit-overflow-scrolling:touch!important;
+}
+.app.touch-ui .window-merchant .shop-scroll-card{min-width:0!important;min-height:135px!important;padding:7px!important}
+.app.touch-ui .window-merchant .shop-scroll-card>button{min-height:var(--t-hit)!important;font-size:var(--t-font)!important}
+
+/* Blacksmith / forge */
+.app.touch-ui .window-blacksmith .blacksmith-layout{display:grid!important;grid-template-columns:minmax(0,1.2fr) minmax(220px,.8fr)!important;gap:8px!important;min-height:0!important}
+.app.touch-ui .window-blacksmith .blacksmith-layout>section,
+.app.touch-ui .window-blacksmith .smith-shop{min-height:0!important;overflow-y:auto!important;padding:var(--t-window-pad)!important}
+.app.touch-ui .window-blacksmith .forge-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:7px!important}
+.app.touch-ui .window-blacksmith .forge-grid article{padding:8px!important}
+.app.touch-ui .window-blacksmith .forge-grid b{font-size:var(--t-font)!important}
+.app.touch-ui .window-blacksmith .forge-grid small{font-size:var(--t-small)!important}
+.app.touch-ui .window-blacksmith .forge-actions button{min-height:var(--t-hit)!important;font-size:var(--t-small)!important}
+.app.touch-ui .window-blacksmith .smith-stock{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:7px!important}
+
+/* Settings & all remaining panels inherit the same scale instead of staying tiny. */
+.app.touch-ui .window-settings .setting,
+.app.touch-ui .window-settings .profile-setting,
+.app.touch-ui .window-settings .multiplayer-setting,
+.app.touch-ui .window-settings .save-backup-setting{padding:var(--t-window-pad)!important;gap:8px!important}
+.app.touch-ui .window-settings .setting b,
+.app.touch-ui .window-settings .profile-setting b,
+.app.touch-ui .window-settings .multiplayer-setting b{font-size:var(--t-font)!important}
+.app.touch-ui .window-settings .setting small,
+.app.touch-ui .window-settings .profile-setting small,
+.app.touch-ui .window-settings .multiplayer-setting small,
+.app.touch-ui .window-settings .camera-setting-note,
+.app.touch-ui .window-settings .settings-note{font-size:var(--t-small)!important;line-height:1.3!important}
+.app.touch-ui .window-settings input[type=range]{min-height:32px!important}
+
+/* ---------- Landscape: phone/tablet layout matching Galaxy A55 reference ---------- */
+@media (orientation:landscape) and (max-height:720px){
+  .app.touch-ui .player-card{max-width:30vw!important;max-height:32vh!important}
+  .app.touch-ui .player-card .currency-row{display:none!important}
+  .app.touch-ui .minimap{max-width:18vw!important}
+  .app.touch-ui .dungeon-card{top:max(5px,env(safe-area-inset-top))!important;width:min(310px,40vw)!important;max-width:40vw!important}
+  .app.touch-ui .target-card{top:82px!important;width:min(280px,36vw)!important}
+  .app.touch-ui .mobile-powers-bottom{max-width:40vw!important}
+  .app.touch-ui .mobile-prominent-action{bottom:calc(var(--t-action) * 2 + var(--t-action-gap) + 14px)!important;left:50%!important;max-width:34vw!important;transform:translateX(-50%)!important}
+  .app.touch-ui .mobile-network-chip{top:calc(var(--t-menu) + 14px)!important;right:var(--t-gutter)!important}
+  .app.touch-ui .window{width:98vw!important;height:96dvh!important;max-height:96dvh!important}
+  .app.touch-ui .window>header{min-height:38px!important}
+  .app.touch-ui .window-inventory .paperdoll{display:none!important}
+  .app.touch-ui .window-inventory .inventory-rpg{grid-template-columns:minmax(155px,.62fr) minmax(0,1.38fr)!important}
+  .app.touch-ui .window-inventory .bag-grid{grid-template-columns:repeat(4,minmax(88px,1fr))!important}
+}
+
+/* ---------- Portrait phone/tablet: same design, stacked windows ---------- */
+@media (orientation:portrait){
+  .app.touch-ui .player-card{max-width:52vw!important}
+  .app.touch-ui .minimap{max-width:30vw!important}
+  .app.touch-ui .dungeon-card{top:calc(max(var(--t-gutter),env(safe-area-inset-top)) + var(--t-mini-w) + 18px)!important;width:min(520px,78vw)!important;max-width:78vw!important}
+  .app.touch-ui .target-card{top:calc(max(var(--t-gutter),env(safe-area-inset-top)) + var(--t-mini-w) + 132px)!important;width:min(420px,72vw)!important}
+  .app.touch-ui .mobile-menu-drawer{grid-template-columns:repeat(3,var(--t-menu-cell))!important}
+  .app.touch-ui .mobile-powers-bottom{bottom:calc(var(--t-stick) + var(--t-gutter) + 12px)!important;max-width:62vw!important}
+  .app.touch-ui .mobile-prominent-action{bottom:calc(var(--t-stick) + var(--t-power) + 34px)!important;left:50%!important;transform:translateX(-50%)!important;max-width:70vw!important}
+  .app.touch-ui .window{width:96vw!important;height:91dvh!important}
+  .app.touch-ui .window-inventory .inventory-rpg,
+  .app.touch-ui .window-blacksmith .blacksmith-layout,
+  .app.touch-ui .window-travel .travel-layout,
+  .app.touch-ui .window-guild .guild-layout,
+  .app.touch-ui .window-attributes .attributes-layout{grid-template-columns:1fr!important}
+  .app.touch-ui .window-inventory .character-hub{max-height:230px!important}
+  .app.touch-ui .window-inventory .paperdoll{display:none!important}
+  .app.touch-ui .window-inventory .bag-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  .app.touch-ui .window-merchant .shop-scroll-list{grid-template-columns:1fr!important}
+  .app.touch-ui .window-blacksmith .smith-stock{grid-template-columns:1fr!important}
+}
+
+/* Large portrait tablets: still touch UI, but use available width more efficiently. */
+@media (pointer:coarse) and (orientation:portrait) and (min-width:700px){
+  .app.touch-ui .player-card{max-width:34vw!important}
+  .app.touch-ui .minimap{max-width:22vw!important}
+  .app.touch-ui .window-inventory .inventory-rpg{grid-template-columns:minmax(220px,.72fr) minmax(0,1.28fr)!important}
+  .app.touch-ui .window-inventory .character-hub{max-height:none!important}
+  .app.touch-ui .window-inventory .paperdoll{display:block!important}
+  .app.touch-ui .window-inventory .bag-grid{grid-template-columns:repeat(3,minmax(110px,1fr))!important}
+  .app.touch-ui .window-blacksmith .blacksmith-layout{grid-template-columns:minmax(0,1.15fr) minmax(240px,.85fr)!important}
+  .app.touch-ui .window-merchant .shop-scroll-list{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+}
+
+/* Mouse/desktop keeps its native controls; only dungeon status is recentered above. */
+.app.is-desktop .mobile-ui,.app.mouse-ui:not(.is-mobile) .mobile-ui{display:none!important;pointer-events:none!important}
