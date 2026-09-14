@@ -5,6 +5,7 @@ import { CLASSES_LIST, CLASS_TIERS, CLASS_RANKS, getClassRankInfo } from './game
 import { TRAVEL_NODES, calculateTravelCost } from './game/fastTravel.js'
 import { calculateGrimoireCost, getNextGrimoireLevel } from './game/rpgSystems.js'
 import { getSupabaseConfig, saveSupabaseConfig, getSavedAccountSession, registerAccount, loginAccount, clearAccountSession } from './game/supabaseService.js'
+import { promptInstallApp, toggleFullScreen, subscribePWA, getPWAState } from './game/pwaService.js'
 import MiniMap from './ui/Minimap.jsx'
 import WorldMap from './ui/WorldMap.jsx'
 
@@ -56,7 +57,9 @@ export default function App(){
   const [hud,setHud]=useState(initial)
   const [help,setHelp]=useState(false)
   const [viewport,setViewport]=useState(()=>getViewportState())
+  const [pwaState,setPwaState]=useState(getPWAState)
 
+  useEffect(()=>subscribePWA(setPwaState),[])
   useEffect(()=>{game.current=new ShadowGame(canvas.current,setHud);return()=>game.current?.destroy?.()},[])
   useEffect(()=>{
     const sync=()=>setViewport(getViewportState())
@@ -111,7 +114,16 @@ export default function App(){
       <div className="currency-row"><span>◈ {hud.gold} ouro</span><span>◆ {hud.ores||0} minério</span><span>📖 {grimoireQty} grimório{grimoireQty!==1?'s':''}</span></div>
     </section>
 
-    <div className="world-status glass"><span>☀ {hud.time}</span><span>{weatherIcon(hud.weather)} {hud.weather}</span>{hud.multiplayer?.connected&&<b className="online-status">● ONLINE {hud.multiplayer.players||0} {hud.multiplayer.transport==='supabase'?'(SUPABASE)':hud.multiplayer.transport==='http'?'(VERCEL)':'(LAN)'}</b>}{hud.mount?.active&&<b>♞ Montado</b>}</div>
+    <div className="world-status glass">
+      <span>☀ {hud.time}</span>
+      <span>{weatherIcon(hud.weather)} {hud.weather}</span>
+      {hud.multiplayer?.connected&&<b className="online-status">● ONLINE {hud.multiplayer.players||0} {hud.multiplayer.transport==='supabase'?'(SUPABASE)':hud.multiplayer.transport==='http'?'(VERCEL)':'(LAN)'}</b>}
+      {hud.mount?.active&&<b>♞ Montado</b>}
+      <button type="button" className="hud-mini-btn" onClick={toggleFullScreen} title="Alternar Modo Tela Cheia">⛶ Tela Cheia</button>
+      {!pwaState.isInstalled && (
+        <button type="button" className="hud-mini-btn" onClick={promptInstallApp} title="Instalar Aplicativo no Windows / Mobile">📲 Instalar App</button>
+      )}
+    </div>
     {hud.target&&<div className={`target-card glass ${hud.target.boss?'boss':''}`}><div><b>{hud.target.boss?'★ CHEFE — ':''}{hud.target.name}</b><span>Nv.{hud.target.level}</span></div><Bar value={pct(hud.target.hp,hud.target.maxHp)} cls="enemy"/></div>}
 
     <nav className="side-menu glass" aria-label="Menus">
@@ -836,6 +848,20 @@ function Settings({hud,apply,connect,setName,call}){
   }
 
   return <div className="settings">
+    <div className="save-backup-setting glass" style={{ borderColor: 'rgba(56, 189, 248, 0.35)' }}>
+      <div>
+        <b>📱 Aplicativo & Modo de Tela</b>
+        <small>Instale no Windows ou celular para jogar como app nativo em tela cheia sem barras de navegador.</small>
+      </div>
+      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '8px' }}>
+        <button type="button" className="save-btn" onClick={() => promptInstallApp()}>
+          📲 Instalar Aplicativo
+        </button>
+        <button type="button" className="save-btn" onClick={() => toggleFullScreen()}>
+          ⛶ Alternar Tela Cheia
+        </button>
+      </div>
+    </div>
     {getSavedAccountSession() && (
       <div className="save-backup-setting glass" style={{ borderColor: 'rgba(56, 189, 248, 0.35)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
@@ -944,11 +970,22 @@ function AuthGate({ initialServer = 'asterra-01', onLogin }) {
   })
   const [loading, setLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
+  const [savedNick, setSavedNick] = useState('')
+  const [pwaState, setPwaState] = useState(getPWAState)
+
+  useEffect(() => {
+    return subscribePWA(setPwaState)
+  }, [])
 
   useEffect(() => {
     const saved = getSavedAccountSession()
-    if (saved && saved.username && saved.accountId) {
-      onLogin(saved, null)
+    const lastNick = (saved?.username || localStorage.getItem('shadow-ascension-nick') || localStorage.getItem('rpg_player_nick') || '').trim()
+    if (lastNick) {
+      setUsername(lastNick)
+      setSavedNick(lastNick)
+    }
+    if (saved?.server) {
+      setSelectedServer(saved.server)
     }
   }, [])
 
@@ -957,11 +994,7 @@ function AuthGate({ initialServer = 'asterra-01', onLogin }) {
     setErrorMsg('')
     const clean = username.trim()
     if (!clean) {
-      setErrorMsg('Informe o nome de usuário.')
-      return
-    }
-    if (!password) {
-      setErrorMsg('Informe sua senha.')
+      setErrorMsg('Informe o nome ou nickname do aventureiro.')
       return
     }
     if (mode === 'register') {
@@ -969,7 +1002,7 @@ function AuthGate({ initialServer = 'asterra-01', onLogin }) {
         setErrorMsg('O nome de usuário deve ter pelo menos 3 caracteres.')
         return
       }
-      if (password.length < 4) {
+      if (password && password.length < 4) {
         setErrorMsg('A senha deve ter pelo menos 4 caracteres.')
         return
       }
@@ -982,7 +1015,7 @@ function AuthGate({ initialServer = 'asterra-01', onLogin }) {
     setLoading(true)
     try {
       if (mode === 'register') {
-        const res = await registerAccount({ username: clean, password, server: selectedServer })
+        const res = await registerAccount({ username: clean, password: password || '1234', server: selectedServer })
         if (!res.ok) {
           setErrorMsg(res.error || 'Erro ao criar conta.')
           setLoading(false)
@@ -990,7 +1023,7 @@ function AuthGate({ initialServer = 'asterra-01', onLogin }) {
         }
         onLogin(res.session, null)
       } else {
-        const res = await loginAccount({ username: clean, password, server: selectedServer })
+        const res = await loginAccount({ username: clean, password: password || '', server: selectedServer })
         if (!res.ok) {
           setErrorMsg(res.error || 'Erro ao entrar na conta.')
           setLoading(false)
@@ -1008,11 +1041,27 @@ function AuthGate({ initialServer = 'asterra-01', onLogin }) {
   return (
     <div className="auth-gate" onKeyDown={e => e.stopPropagation()}>
       <div className="auth-card" onKeyDown={e => e.stopPropagation()}>
-        <div className="auth-header">
-          <small>SHADOW ASCENSION MMORPG</small>
-          <h1>{mode === 'login' ? 'Portal de Acesso' : 'Criar Nova Conta'}</h1>
-          <p>{mode === 'login' ? 'Entre na sua conta para carregar seu progresso salvo.' : 'Crie sua conta única para jogar e salvar na nuvem.'}</p>
+        <div className="auth-pwa-bar">
+          <button type="button" className="auth-pwa-btn" onClick={promptInstallApp} title="Instalar no Windows ou Celular para rodar como Aplicativo">
+            📲 {pwaState.isInstalled ? 'App Instalado' : 'Instalar App'}
+          </button>
+          <button type="button" className="auth-pwa-btn" onClick={toggleFullScreen} title="Alternar Modo Tela Cheia">
+            ⛶ {pwaState.isFullscreen ? 'Janela Normal' : 'Tela Cheia'}
+          </button>
         </div>
+
+        <div className="auth-header">
+          <small>ASTERRA ONLINE MMORPG</small>
+          <h1>{mode === 'login' ? 'Portal de Acesso' : 'Criar Nova Conta'}</h1>
+          <p>{mode === 'login' ? 'Seu portal permanece aberto para escolher seu servidor e entrar.' : 'Crie sua conta para jogar e salvar seu progresso na nuvem.'}</p>
+        </div>
+
+        {savedNick && mode === 'login' && (
+          <div className="auth-saved-badge">
+            <span>👤 Aventureiro memorizado: <b>{savedNick}</b></span>
+            <small>Clique em <b>⚔ Entrar no Mundo</b> para continuar sua aventura!</small>
+          </div>
+        )}
 
         <div className="auth-tabs">
           <button
@@ -1035,7 +1084,7 @@ function AuthGate({ initialServer = 'asterra-01', onLogin }) {
           {errorMsg && <div className="auth-error">⚠ {errorMsg}</div>}
 
           <div className="auth-field">
-            <label>Nome do Aventureiro</label>
+            <label>Nome do Aventureiro (Nickname)</label>
             <input
               autoFocus
               type="text"
@@ -1048,12 +1097,15 @@ function AuthGate({ initialServer = 'asterra-01', onLogin }) {
           </div>
 
           <div className="auth-field">
-            <label>Senha</label>
+            <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>Senha</span>
+              {mode === 'login' && <span style={{ fontSize: '10px', color: '#94a3b8' }}>(opcional se joga com Nick)</span>}
+            </label>
             <input
               type="password"
               value={password}
               onChange={e => setPassword(e.target.value)}
-              placeholder="Sua senha secreta"
+              placeholder={mode === 'login' ? 'Sua senha secreta (ou deixe em branco)' : 'Sua senha (mínimo 4 caracteres)'}
               disabled={loading}
             />
           </div>
@@ -1073,7 +1125,7 @@ function AuthGate({ initialServer = 'asterra-01', onLogin }) {
 
           <div className="auth-servers-section">
             <label>
-              <b>Servidor Escolhido:</b>
+              <b>Servidor Selecionado:</b>
               <span>{multiplayerLobbies.find(x => x.id === selectedServer)?.name || selectedServer}</span>
             </label>
             <div className="auth-servers-grid">
@@ -1091,7 +1143,7 @@ function AuthGate({ initialServer = 'asterra-01', onLogin }) {
           </div>
 
           <button type="submit" className="auth-submit-btn" disabled={loading}>
-            {loading ? 'Conectando ao Supabase...' : mode === 'login' ? '⚔ Entrar no Servidor' : '✨ Criar Conta e Jogar'}
+            {loading ? 'Conectando ao Mundo...' : mode === 'login' ? '⚔ Entrar no Mundo' : '✨ Criar Conta e Jogar'}
           </button>
         </form>
       </div>

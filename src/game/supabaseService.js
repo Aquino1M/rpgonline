@@ -264,13 +264,12 @@ export async function registerAccount({ username, password, server = 'asterra-01
   }
 }
 
-export async function loginAccount({ username, password, server = null }) {
+export async function loginAccount({ username, password = '', server = null }) {
   const client = getSupabaseClient()
   if (!client) return { ok: false, error: 'Servidor Supabase não conectado. Verifique sua conexão.' }
 
   const cleanUser = String(username || '').trim().replace(/[^\p{L}\p{N} _.\-]/gu, '')
-  if (!cleanUser) return { ok: false, error: 'Informe o nome de usuário.' }
-  if (!password) return { ok: false, error: 'Informe sua senha.' }
+  if (!cleanUser) return { ok: false, error: 'Informe o nome de usuário ou nickname.' }
 
   const accountId = `acc_${cleanUser.toLowerCase()}`
 
@@ -285,17 +284,68 @@ export async function loginAccount({ username, password, server = null }) {
       return { ok: false, error: `Erro ao buscar conta: ${error.message}` }
     }
 
+    // Se o perfil ainda não existe no Supabase, cria automaticamente com o Nick
     if (!data) {
-      return { ok: false, error: 'Conta não encontrada. Verifique o nome ou crie uma conta nova.' }
+      const passwordHash = password ? await hashPassword(password) : null
+      const now = new Date().toISOString()
+      const newProfile = {
+        id: accountId,
+        name: cleanUser,
+        level: 1,
+        guild_rank: 'E',
+        last_lobby: server || 'asterra-01',
+        game_data: {
+          auth: {
+            username: cleanUser,
+            passwordHash,
+            createdAt: Date.now()
+          }
+        },
+        updated_at: now
+      }
+      await client.from('player_profiles').insert(newProfile)
+
+      const session = {
+        accountId,
+        username: cleanUser,
+        server: server || 'asterra-01',
+        loginTime: Date.now()
+      }
+      saveAccountSession(session)
+
+      return {
+        ok: true,
+        session,
+        profile: {
+          id: accountId,
+          name: cleanUser,
+          level: 1,
+          guildRank: 'E',
+          lastLobby: server || 'asterra-01',
+          updatedAt: Date.now(),
+          game: null
+        },
+        isNew: true
+      }
     }
 
     const savedAuth = data.game_data?.auth
     const expectedHash = savedAuth?.passwordHash
 
-    const inputHash = await hashPassword(password)
-
-    if (expectedHash && inputHash !== expectedHash) {
-      return { ok: false, error: 'Senha incorreta. Verifique e tente novamente.' }
+    // Se a conta já possui senha cadastrada, exige a validação da senha
+    if (expectedHash) {
+      if (!password) {
+        return { ok: false, error: 'Esta conta possui senha cadastrada. Digite a senha para entrar.' }
+      }
+      const inputHash = await hashPassword(password)
+      if (inputHash !== expectedHash) {
+        return { ok: false, error: 'Senha incorreta. Verifique e tente novamente.' }
+      }
+    } else if (password) {
+      // Se a conta não tinha senha (apenas nick) e o usuário digitou uma agora, salva a senha
+      const newHash = await hashPassword(password)
+      const updatedGameData = { ...(data.game_data || {}), auth: { ...(savedAuth || {}), username: cleanUser, passwordHash: newHash } }
+      await client.from('player_profiles').update({ game_data: updatedGameData }).eq('id', accountId)
     }
 
     const chosenServer = server || data.last_lobby || 'asterra-01'
