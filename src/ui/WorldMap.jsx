@@ -61,8 +61,19 @@ export default function WorldMap({hud}){
         ctx.strokeStyle='#ffffff';ctx.lineWidth=2.5;ctx.fillStyle=hud.destinationMarker.color||'#38bdf8'
         ctx.beginPath();ctx.arc(dx,dy,7,0,Math.PI*2);ctx.fill();ctx.stroke()
         ctx.font='900 8px Inter,sans-serif';ctx.fillStyle='#ffffff';ctx.strokeStyle='rgba(0,0,0,.8)';ctx.lineWidth=2
-        ctx.strokeText('DESTINO',dx,dy-11);ctx.fillText('DESTINO',dx,dy-11)
+        ctx.strokeText(hud.destinationMarker.name || 'DESTINO',dx,dy-11);ctx.fillText(hud.destinationMarker.name || 'DESTINO',dx,dy-11)
       }
+    }
+
+    // Caravans
+    for(const c of data.caravans || []){
+      const [x,y]=toMap(c.x,c.z)
+      if(!inside(x,y))continue
+      ctx.fillStyle=c.color||'#f59e0b'
+      ctx.font='900 11px Inter,sans-serif'
+      ctx.fillText(c.icon||'🚚',x,y)
+      ctx.font='700 7px Inter,sans-serif';ctx.strokeStyle='rgba(0,0,0,.85)';ctx.lineWidth=2
+      ctx.strokeText(c.name,x,y+10);ctx.fillStyle='#ffffff';ctx.fillText(c.name,x,y+10)
     }
 
     if(showMobs)for(const b of data.bosses||[]){const [x,y]=toMap(b.x,b.z);if(!inside(x,y))continue;ctx.fillStyle='#e43e56';ctx.strokeStyle='#ffe4e8';ctx.lineWidth=1;ctx.save();ctx.translate(x,y);ctx.rotate(Math.PI/4);ctx.fillRect(-4,-4,8,8);ctx.strokeRect(-4,-4,8,8);ctx.restore()}
@@ -71,71 +82,55 @@ export default function WorldMap({hud}){
     const [px,py]=toMap(player.x,player.z);drawPlayer(ctx,px,py,player.heading||0)
   },[data,fog,showMobs,hud.playerPosition,zoom,pan,hud.destinationMarker])
 
-  const onMouseDown=e=>{
-    if(e.button!==0)return
-    dragRef.current={ active: true, startX: e.clientX, startY: e.clientY, initialPanX: pan.x, initialPanZ: pan.z }
-    setIsDragging(true)
-  }
+  const activePointers = useRef(new Map())
+  const initialPinch = useRef(null)
 
-  const onMouseMove=e=>{
-    if(!dragRef.current.active||!ref.current||!data)return
-    const rect=ref.current.getBoundingClientRect()
-    const limit=data.limit||WORLD.worldLimit
-    const viewWorld=limit*2/zoom
-    const dx=e.clientX-dragRef.current.startX
-    const dy=e.clientY-dragRef.current.startY
-    const worldDx=(dx/rect.width)*viewWorld
-    const worldDz=(dy/rect.height)*viewWorld
-    setPan({ x: dragRef.current.initialPanX-worldDx, z: dragRef.current.initialPanZ-worldDz })
-  }
-
-  const onMouseUp=()=>{
-    dragRef.current.active=false
-    setIsDragging(false)
-  }
-
-  const touchStart=e=>{
-    if(e.touches.length===1){
-      const t=e.touches[0]
-      dragRef.current={ active: true, startX: t.clientX, startY: t.clientY, initialPanX: pan.x, initialPanZ: pan.z }
+  const onPointerDown = e => {
+    e.currentTarget.setPointerCapture?.(e.pointerId)
+    activePointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    if (activePointers.current.size === 1) {
+      dragRef.current = { active: true, startX: e.clientX, startY: e.clientY, initialPanX: pan.x, initialPanZ: pan.z }
       setIsDragging(true)
-    }else if(e.touches.length===2){
-      dragRef.current.active=false
+    } else if (activePointers.current.size === 2) {
+      dragRef.current.active = false
       setIsDragging(false)
-      const [a,b]=e.touches,dist=Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY)
-      pinch.current={dist,zoom}
-      e.preventDefault()
+      const pts = Array.from(activePointers.current.values())
+      const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y)
+      initialPinch.current = { dist, zoom }
     }
   }
 
-  const touchMove=e=>{
-    if(e.touches.length===1&&dragRef.current.active&&ref.current&&data){
-      const t=e.touches[0]
-      const rect=ref.current.getBoundingClientRect()
-      const limit=data.limit||WORLD.worldLimit
-      const viewWorld=limit*2/zoom
-      const dx=t.clientX-dragRef.current.startX
-      const dy=t.clientY-dragRef.current.startY
-      const worldDx=(dx/rect.width)*viewWorld
-      const worldDz=(dy/rect.height)*viewWorld
-      setPan({ x: dragRef.current.initialPanX-worldDx, z: dragRef.current.initialPanZ-worldDz })
-      e.preventDefault()
-    }else if(e.touches.length===2&&pinch.current){
-      const [a,b]=e.touches,dist=Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY)
-      setMapZoom(pinch.current.zoom*(dist/Math.max(20,pinch.current.dist)))
-      e.preventDefault()
+  const onPointerMove = e => {
+    if (!activePointers.current.has(e.pointerId)) return
+    activePointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+
+    if (activePointers.current.size === 1 && dragRef.current.active && ref.current && data) {
+      const rect = ref.current.getBoundingClientRect()
+      const limit = data.limit || WORLD.worldLimit
+      const viewWorld = limit * 2 / zoom
+      const dx = e.clientX - dragRef.current.startX
+      const dy = e.clientY - dragRef.current.startY
+      const worldDx = (dx / rect.width) * viewWorld
+      const worldDz = (dy / rect.height) * viewWorld
+      setPan({ x: dragRef.current.initialPanX - worldDx, z: dragRef.current.initialPanZ - worldDz })
+    } else if (activePointers.current.size === 2 && initialPinch.current) {
+      const pts = Array.from(activePointers.current.values())
+      const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y)
+      setMapZoom(initialPinch.current.zoom * (dist / Math.max(20, initialPinch.current.dist)))
     }
   }
 
-  const touchEnd=e=>{
-    if(e.touches.length===0){
-      dragRef.current.active=false
-      pinch.current=null
+  const onPointerUp = e => {
+    try { e.currentTarget.releasePointerCapture?.(e.pointerId) } catch {}
+    activePointers.current.delete(e.pointerId)
+    if (activePointers.current.size === 0) {
+      dragRef.current.active = false
+      initialPinch.current = null
       setIsDragging(false)
-    }else if(e.touches.length===1){
-      pinch.current=null
-      const t=e.touches[0]
-      dragRef.current={ active: true, startX: t.clientX, startY: t.clientY, initialPanX: pan.x, initialPanZ: pan.z }
+    } else if (activePointers.current.size === 1) {
+      initialPinch.current = null
+      const remaining = activePointers.current.values().next().value
+      dragRef.current = { active: true, startX: remaining.x, startY: remaining.y, initialPanX: pan.x, initialPanZ: pan.z }
       setIsDragging(true)
     }
   }
@@ -159,13 +154,10 @@ export default function WorldMap({hud}){
       </div>
       <div
         className={`world-map-canvas-wrap ${isDragging?'dragging':''}`}
-        onMouseDown={onMouseDown}
-        onMouseMove={onMouseMove}
-        onMouseUp={onMouseUp}
-        onMouseLeave={onMouseUp}
-        onTouchStart={touchStart}
-        onTouchMove={touchMove}
-        onTouchEnd={touchEnd}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
         onWheel={wheel}
         style={{ cursor: isDragging ? 'grabbing' : 'grab', touchAction: 'none' }}
       >

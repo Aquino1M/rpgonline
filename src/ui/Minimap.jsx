@@ -102,6 +102,19 @@ export default function MiniMap({hud,onOpenMap}){
       }
     }
 
+    // Living Caravans
+    for (const c of data.caravans || []) {
+      const [x, y] = toMap(c.x, c.z)
+      const inBounds = x >= 10 && x <= w - 10 && y >= 10 && y <= h - 10
+      if (inBounds) {
+        ctx.fillStyle = c.color || '#f59e0b'
+        ctx.font = '900 10px Inter,sans-serif'
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'middle'
+        ctx.fillText(c.icon || '🚚', x, y)
+      }
+    }
+
     // Destination Marker (Marcar Destino)
     if(hud.destinationMarker){
       const [dx,dy]=toMap(hud.destinationMarker.x,hud.destinationMarker.z)

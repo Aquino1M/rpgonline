@@ -82,7 +82,8 @@ export class GateManager {
 
     const zone = this.game.zoneAt ? this.game.zoneAt(p.x, p.z, this.game.ZONES || []) : { name: 'Ermos de Asterra', id: 'wild' }
     const dungeonLevel = Math.round(rank.levelRange[0] + Math.random() * (rank.levelRange[1] - rank.levelRange[0]))
-    const totalFloors = Math.round(rank.floors[0] + Math.random() * (rank.floors[1] - rank.floors[0]))
+    const totalRounds = Math.round((rank.rounds?.[0] || 3) + Math.random() * ((rank.rounds?.[1] || 4) - (rank.rounds?.[0] || 3)))
+    const totalFloors = totalRounds
 
     // Check for rare anomaly (Unstable Gate)
     const isUnstable = Math.random() < 0.12
@@ -107,6 +108,7 @@ export class GateManager {
       theme,
       dungeonLevel,
       totalFloors,
+      totalRounds,
       modifiers,
       isUnstable,
       state: 'ACTIVE',
@@ -123,7 +125,7 @@ export class GateManager {
 
     this.activeGates.push(gate)
 
-    // Global announcement banner
+    // Global announcement banner (lasts strictly 3 seconds)
     const isHighRank = rankKey === 'S' || rankKey === 'A'
     const title = isHighRank ? '🚨 EVENTO MUNDIAL — PRESENÇA PODEROSA DETECTADA' : '⚠ NOVA MASMORRA DETECTADA'
     this.game.toast?.(`${title}: ${gate.name} em ${gate.zoneName}!`)
@@ -137,6 +139,7 @@ export class GateManager {
         levelRange: `${gate.rankConfig.levelRange[0]}–${gate.rankConfig.levelRange[1]}`,
         zoneName: gate.zoneName,
         floors: gate.totalFloors,
+        rounds: gate.totalRounds,
         x: gate.x,
         z: gate.z,
         expiresAt: gate.expiresAt,
@@ -146,7 +149,7 @@ export class GateManager {
         if (this.game.state?.gateAnnouncement?.id === gate.id) {
           this.game.state.gateAnnouncement = null
         }
-      }, 7000)
+      }, 3000)
     }
 
     // Sync to state for Minimap / World Map markers
@@ -363,14 +366,19 @@ export class GateManager {
 
   setDestinationMarker(gate) {
     if (!gate || !this.game.state) return
+    const rank = gate.rank || gate.rankKey || gate.rarity || 'E'
+    const color = gate.color || gate.rankConfig?.color || '#38bdf8'
+    const name = gate.name || `Portal Rank ${rank}`
     this.game.state.destinationMarker = {
+      id: gate.id,
       x: gate.x,
       z: gate.z,
-      label: `Portal Rank ${gate.rankKey}`,
-      rank: gate.rankKey,
-      color: gate.rankConfig?.color || '#38bdf8'
+      name,
+      label: name.includes('Rank') ? name : `Portal Rank ${rank}`,
+      rank,
+      color
     }
-    this.game.toast?.(`📍 Destino marcado para ${gate.name}! Siga o indicador no HUD.`)
+    this.game.toast?.(`📍 Destino marcado para ${name}! Siga o indicador no HUD.`)
   }
 
   clearDestinationMarker() {
@@ -396,14 +404,16 @@ export class GateManager {
       x: g.x,
       z: g.z,
       zoneName: g.zoneName,
-      rank: g.rankKey,
-      color: g.rankConfig.color,
+      rank: g.rankKey || 'E',
+      rankKey: g.rankKey || 'E',
+      color: g.rankConfig?.color || '#38bdf8',
       level: g.dungeonLevel,
       floors: g.totalFloors,
+      rounds: g.totalRounds || g.totalFloors || 4,
       isUnstable: g.isUnstable,
       expiresInMinutes: Math.max(0, Math.ceil((g.expiresAt - now) / 60000)),
-      recommendedMinLevel: g.rankConfig.levelRange[0],
-      recommendedMaxLevel: g.rankConfig.levelRange[1]
+      recommendedMinLevel: g.rankConfig?.levelRange?.[0] || 1,
+      recommendedMaxLevel: g.rankConfig?.levelRange?.[1] || 10
     }))
   }
 
@@ -563,23 +573,28 @@ export class GateManager {
   }
 
   createDungeonInstance(gate, { isSolo = true }) {
-    // Clean up open world entities and initialize instance
+    // Clean up open world entities and clear stale waypoint
+    this.game.state.destinationMarker = null
     this.game.state.mount.active = false
     this.game.mountModel.visible = false
     this.game.dungeonReturnPosition = { x: this.game.player.position.x, z: this.game.player.position.z }
     this.game.clearEnemies()
     this.game.setWorldVisible(false)
 
+    const totalRounds = gate.totalRounds || gate.totalFloors || 4
     const instanceId = `dungeon_inst_${Date.now()}`
     this.activeInstance = {
       id: instanceId,
       gateId: gate.id,
       seed: gate.seed,
-      rank: gate.rankKey,
+      rank: gate.rankKey || gate.rank || 'E',
       level: gate.dungeonLevel,
       themeKey: gate.themeKey,
-      totalFloors: gate.totalFloors,
-      currentFloor: 1,
+      totalRounds,
+      currentRound: 1,
+      roundState: 'ACTIVE',
+      breakTimer: 0,
+      isBossRound: false,
       isSolo,
       startedAt: Date.now(),
       kills: 0,
@@ -589,40 +604,41 @@ export class GateManager {
       floorGroup: null
     }
 
-    // Prepare state
+    // Prepare state for HUD
     this.game.activeWorld = 'dungeon'
     this.game.state.dungeon = {
       instanceId,
       name: gate.name,
-      rank: gate.rankKey,
-      color: gate.rankConfig.color,
+      rank: gate.rankKey || gate.rank || 'E',
+      color: gate.rankConfig?.color || '#38bdf8',
       level: gate.dungeonLevel,
-      floor: 1,
-      floors: gate.totalFloors,
-      theme: gate.theme.name,
-      transition: false,
+      round: 1,
+      totalRounds,
+      enemiesAlive: 0,
+      roundState: 'ACTIVE',
+      breakTimer: 0,
+      theme: gate.theme?.name || 'Masmorra Sombria',
       worldSeed: gate.seed,
       isSolo
     }
 
-    this.loadFloor(1)
+    this.loadDungeonArena()
   }
 
-  loadFloor(floorNumber) {
+  loadDungeonArena() {
     const inst = this.activeInstance
     if (!inst) return
 
-    // Clean old floor mesh
     if (inst.floorGroup) {
       this.game.scene.remove(inst.floorGroup)
     }
     this.game.clearEnemies()
 
-    // Generate floor
+    // Generate grand dungeon arena
     const floorData = this.generator.generateFloor({
       seed: inst.seed,
-      floor: floorNumber,
-      totalFloors: inst.totalFloors,
+      floor: 1,
+      totalFloors: 1,
       rank: inst.rank,
       themeKey: inst.themeKey
     })
@@ -631,92 +647,149 @@ export class GateManager {
     inst.floorGroup = floorData.group
     this.game.scene.add(floorData.group)
 
-    // Teleport player to spawn room
+    // Teleport player to safe spawn
     this.game.player.position.set(floorData.spawnPos.x, 0, floorData.spawnPos.z)
     this.game.verticalVelocity = 0
     this.game.grounded = true
 
-    // Adjust lighting and fog to theme
+    // Set atmosphere
     this.game.scene.background.set(floorData.theme.fogColor)
     this.game.scene.fog.color.set(floorData.theme.fogColor)
     this.game.scene.fog.near = 16
-    this.game.scene.fog.far = 48
+    this.game.scene.fog.far = 52
 
-    // Spawn floor enemies
-    this.spawnFloorEnemies(floorData)
-
-    this.game.toast?.(`Andar ${floorNumber}/${inst.totalFloors} iniciado!`)
+    // Start wave 1
+    this.startRound(1)
   }
 
-  spawnFloorEnemies(floorData) {
+  startRound(roundNumber) {
     const inst = this.activeInstance
-    const theme = floorData.theme
+    if (!inst) return
 
-    if (floorData.isFinalFloor) {
-      // Final Floor: Spawn the Great Dungeon Boss in the boss room!
-      const bossRoom = floorData.rooms.find(r => r.type === 'boss') || floorData.rooms[floorData.rooms.length - 1]
-      const boss = this.bossAI.createBossEntity({
-        x: bossRoom.x,
-        z: bossRoom.z,
-        level: inst.level,
-        themeKey: inst.themeKey,
-        rank: inst.rank
-      })
-      this.game.enemies.push(boss)
-      this.game.toast?.(`⚠️ PRESENÇA PODEROSA DETECTADA: ${boss.name}!`)
-      return
+    inst.roundState = 'ACTIVE'
+    inst.currentRound = roundNumber
+    this.game.clearEnemies()
+
+    if (roundNumber >= inst.totalRounds) {
+      // Final Boss Round!
+      inst.isBossRound = true
+      this.game.toast?.(`⚠️ ROUND FINAL: PRESENÇA PODEROSA DETECTADA!`)
+      this.spawnBossRound()
+    } else {
+      inst.isBossRound = false
+      this.game.toast?.(`⚔️ ROUND ${roundNumber}/${inst.totalRounds} INICIADO! Derrote a horda!`)
+      this.spawnRoundMobs(roundNumber)
     }
 
-    // Normal floor rooms: spawn mobs and elites
-    for (let r = 1; r < floorData.rooms.length; r++) {
-      const room = floorData.rooms[r]
-      if (room.type === 'exit' || room.type === 'spawn') continue
+    const alive = this.game.enemies.filter(e => !e.dead && e.isDungeonMob).length
+    inst.enemiesAlive = alive
+    if (this.game.state?.dungeon) {
+      this.game.state.dungeon.round = roundNumber
+      this.game.state.dungeon.totalRounds = inst.totalRounds
+      this.game.state.dungeon.enemiesAlive = alive
+      this.game.state.dungeon.roundState = 'ACTIVE'
+      this.game.state.dungeon.breakTimer = 0
+    }
+  }
 
-      const count = 3 + Math.floor(Math.random() * 3)
-      for (let i = 0; i < count; i++) {
-        const angle = (i / count) * Math.PI * 2
-        const dist = 2.5 + Math.random() * (room.w / 2 - 2)
-        const mx = room.x + Math.cos(angle) * dist
-        const mz = room.z + Math.sin(angle) * dist
+  spawnRoundMobs(roundNumber) {
+    const inst = this.activeInstance
+    if (!inst || !inst.floorData) return
 
-        const mobName = theme.mobs[Math.floor(Math.random() * theme.mobs.length)]
-        const isElite = Math.random() < 0.25
-        const mob = this.game.makeEnemy(mx, mz, inst.level, isElite ? `[ELITE] ${mobName}` : mobName, isElite, null, null, `dungeon_mob_${room.id}_${i}`)
-        
-        if (isElite) {
-          mob.maxHp = Math.round(mob.maxHp * 2.2)
-          mob.hp = mob.maxHp
-          mob.atk = Math.round(mob.atk * 1.35)
-          mob.isElite = true
-        }
+    const theme = inst.floorData.theme
+    const rooms = inst.floorData.rooms.filter(r => r.type !== 'spawn')
+    const activeRooms = rooms.length > 0 ? rooms : [inst.floorData.rooms[0]]
 
-        this.game.enemies.push(mob)
+    // Total mobs scales with round (e.g. 5, 7, 9...)
+    const totalMobs = 4 + roundNumber * 2
+    for (let i = 0; i < totalMobs; i++) {
+      const room = activeRooms[i % activeRooms.length]
+      const angle = (i / totalMobs) * Math.PI * 2
+      const dist = 2.0 + Math.random() * Math.max(1, (room.w || 10) / 2 - 2)
+      const mx = room.x + Math.cos(angle) * dist
+      const mz = room.z + Math.sin(angle) * dist
+
+      const mobName = theme.mobs[Math.floor(Math.random() * theme.mobs.length)]
+      const isElite = roundNumber >= 2 && Math.random() < (0.15 + roundNumber * 0.08)
+      const mob = this.game.makeEnemy(
+        mx,
+        mz,
+        inst.level + Math.floor(roundNumber * 0.8),
+        isElite ? `[ELITE] ${mobName}` : mobName,
+        isElite,
+        null,
+        null,
+        `dungeon_mob_r${roundNumber}_${i}`
+      )
+      mob.isDungeonMob = true
+
+      if (isElite) {
+        mob.maxHp = Math.round(mob.maxHp * 2.2)
+        mob.hp = mob.maxHp
+        mob.atk = Math.round(mob.atk * 1.35)
+        mob.isElite = true
       }
+
+      this.game.enemies.push(mob)
     }
+  }
+
+  spawnBossRound() {
+    const inst = this.activeInstance
+    if (!inst || !inst.floorData) return
+
+    const rooms = inst.floorData.rooms
+    const bossRoom = rooms.find(r => r.type === 'boss') || rooms[rooms.length - 1]
+    const boss = this.bossAI.createBossEntity({
+      x: bossRoom.x,
+      z: bossRoom.z,
+      level: inst.level + 2,
+      themeKey: inst.themeKey,
+      rank: inst.rank
+    })
+    boss.isDungeonBoss = true
+    boss.isDungeonMob = true
+    this.game.enemies.push(boss)
   }
 
   updateInstance(dt, t) {
     const inst = this.activeInstance
     if (!inst) return
 
-    // Update boss AI if on final floor
-    if (inst.floorData?.isFinalFloor) {
-      const boss = this.game.enemies.find(e => e.isDungeonBoss)
-      if (boss) {
-        this.bossAI.update(boss, dt)
-      } else if (!inst.bossKilled) {
-        // Boss was defeated!
-        inst.bossKilled = true
-        this.onBossDefeated()
-      }
+    const aliveEnemies = this.game.enemies.filter(e => !e.dead && e.isDungeonMob).length
+    inst.enemiesAlive = aliveEnemies
+
+    if (this.game.state?.dungeon) {
+      this.game.state.dungeon.round = inst.currentRound
+      this.game.state.dungeon.totalRounds = inst.totalRounds
+      this.game.state.dungeon.enemiesAlive = aliveEnemies
+      this.game.state.dungeon.roundState = inst.roundState
+      this.game.state.dungeon.breakTimer = Math.max(0, Math.ceil(inst.breakTimer || 0))
     }
 
-    // Check interaction with chest or floor exit
-    const playerPos = this.game.player.position
-    if (inst.floorData?.exitPos && !inst.floorData.isFinalFloor) {
-      const d = Math.hypot(playerPos.x - inst.floorData.exitPos.x, playerPos.z - inst.floorData.exitPos.z)
-      if (d < 3.2) {
-        this.game.state.interactionPrompt = `E — Avançar para o Andar ${inst.currentFloor + 1}`
+    if (inst.roundState === 'ACTIVE') {
+      if (inst.isBossRound) {
+        const boss = this.game.enemies.find(e => e.isDungeonBoss && !e.dead)
+        if (boss) {
+          this.bossAI.update(boss, dt)
+        } else if (!inst.bossKilled) {
+          inst.bossKilled = true
+          this.onBossDefeated()
+        }
+      } else if (aliveEnemies === 0) {
+        // Round cleared!
+        if (inst.currentRound < inst.totalRounds) {
+          inst.roundState = 'BREAK'
+          inst.breakTimer = 4.0
+          this.game.toast?.(`✨ ROUND ${inst.currentRound} CONCLUÍDO! Próximo round em 4s...`)
+          this.game.spawnAbilityRing?.(0x38bdf8, 5, 1.2)
+        }
+      }
+    } else if (inst.roundState === 'BREAK') {
+      inst.breakTimer -= dt
+      if (inst.breakTimer <= 0) {
+        inst.currentRound++
+        this.startRound(inst.currentRound)
       }
     }
   }

@@ -150,26 +150,38 @@ export default function App(){
     <ActiveQuestTrackerHUD hud={hud} onOpenQuests={()=>call('togglePanel','quests')} onClaim={id=>call('claimQuest',id)}/>
     
     {hud.destinationMarker && (
-      <div className="destination-banner glass" style={{position:'absolute',top:'58px',left:'50%',transform:'translateX(-50%)',padding:'6px 16px',borderRadius:'999px',border:`1px solid ${hud.destinationMarker.color || '#38bdf8'}`,zIndex:18,display:'flex',alignItems:'center',gap:'10px',fontSize:'11px',color:'#f1f5f9',boxShadow:'0 4px 20px rgba(0,0,0,0.5)'}}>
-        <span>📍 <b>{hud.destinationMarker.label}</b> ({Math.round(Math.hypot((hud.destinationMarker.x || 0) - (hud.playerPosition?.x || 0), (hud.destinationMarker.z || 0) - (hud.playerPosition?.z || 0)))}m)</span>
-        <button type="button" onClick={() => call('clearDestinationMarker')} style={{background:'none',border:'none',color:'#ef4444',cursor:'pointer',fontSize:'13px',fontWeight:'bold',padding:0}} title="Cancelar Destino">✕</button>
-      </div>
+      <WaypointArrow
+        marker={hud.destinationMarker}
+        playerPos={hud.playerPosition}
+        cameraYaw={hud.cameraYaw || 0}
+        onClear={() => call('clearDestinationMarker')}
+      />
     )}
     {hud.gateAnnouncement && (
       <div className="gate-announcement-banner glass" style={{position:'absolute',top:'90px',left:'50%',transform:'translateX(-50%)',padding:'12px 24px',borderRadius:'16px',border:`2px solid ${hud.gateAnnouncement.rankColor || '#38bdf8'}`,boxShadow:`0 0 28px ${hud.gateAnnouncement.rankColor || '#38bdf8'}40, 0 10px 30px rgba(0,0,0,0.6)`,zIndex:20,display:'flex',flexDirection:'column',alignItems:'center',gap:'4px',animation:'toastin .3s ease-out'}}>
         <b style={{color:'#facc15',fontSize:'12px',letterSpacing:'.1em'}}>{hud.gateAnnouncement.title}</b>
         <strong style={{fontSize:'16px',color:'#f8fafc'}}>{hud.gateAnnouncement.gateName}</strong>
-        <span style={{fontSize:'11px',color:'#cbd5e1'}}>Rank <b style={{color:hud.gateAnnouncement.rankColor}}>{hud.gateAnnouncement.rank}</b> • Nv. {hud.gateAnnouncement.levelRange} • {hud.gateAnnouncement.floors} Andares • {hud.gateAnnouncement.zoneName}</span>
-        <button type="button" onClick={() => call('setDestinationMarker', { x: hud.gateAnnouncement.x, z: hud.gateAnnouncement.z, rank: hud.gateAnnouncement.rank, name: hud.gateAnnouncement.gateName, rankConfig: { color: hud.gateAnnouncement.rankColor } })} style={{marginTop:'6px',padding:'6px 14px',fontSize:'11px',fontWeight:'bold',background:'rgba(56,189,248,0.25)',border:'1px solid #38bdf8',color:'#38bdf8',borderRadius:'8px',cursor:'pointer'}}>🎯 MARCAR DESTINO</button>
+        <span style={{fontSize:'11px',color:'#cbd5e1'}}>Rank <b style={{color:hud.gateAnnouncement.rankColor}}>{hud.gateAnnouncement.rank}</b> • Nv. {hud.gateAnnouncement.levelRange} • {hud.gateAnnouncement.rounds || hud.gateAnnouncement.floors || 4} Rounds • {hud.gateAnnouncement.zoneName}</span>
+        <button type="button" onClick={() => call('setDestinationMarker', { x: hud.gateAnnouncement.x, z: hud.gateAnnouncement.z, rank: hud.gateAnnouncement.rank, name: hud.gateAnnouncement.gateName, color: hud.gateAnnouncement.rankColor, rankConfig: { color: hud.gateAnnouncement.rankColor } })} style={{marginTop:'6px',padding:'6px 14px',fontSize:'11px',fontWeight:'bold',background:'rgba(56,189,248,0.25)',border:'1px solid #38bdf8',color:'#38bdf8',borderRadius:'8px',cursor:'pointer'}}>🎯 MARCAR DESTINO</button>
       </div>
     )}
-    {hud.portal&&!hud.dungeon&&<div className="portal-card glass" style={{'--portal':hud.portal.rarity.color}}><small>FENDA DETECTADA</small><strong>{hud.portal.name}</strong><span>Nv. {hud.portal.level} • <b style={{color:hud.portal.rarity.color}}>{hud.portal.rarity.name}</b> • {hud.portal.floors} andares</span><em>E para entrar</em></div>}
+    {hud.portal&&!hud.dungeon&&<div className="portal-card glass" style={{'--portal':hud.portal.rarity.color}}><small>FENDA DETECTADA</small><strong>{hud.portal.name}</strong><span>Nv. {hud.portal.level} • <b style={{color:hud.portal.rarity.color}}>{hud.portal.rarity.name}</b> • {hud.portal.rounds || hud.portal.floors || 4} rounds</span><em>E para entrar</em></div>}
     {hud.dungeon && (
       <div className="dungeon-card glass" style={{'--portal':hud.dungeon.color || '#b06cff'}}>
         <small>MASMORRA ATIVA</small>
         <strong>{hud.dungeon.name}</strong>
-        <span>Rank <b style={{color:hud.dungeon.color}}>{hud.dungeon.rank || 'C'}</b> • Nv.{hud.dungeon.level}</span>
-        <b>Andar {hud.dungeon.floor}/{hud.dungeon.floors}</b>
+        <span>Rank <b style={{color:hud.dungeon.color}}>{hud.dungeon.rank || 'E'}</b> • Nv.{hud.dungeon.level}</span>
+        <div style={{color:'#f8fafc',fontSize:'13px',fontWeight:'900',letterSpacing:'.08em',marginTop:'3px'}}>
+          ROUND {hud.dungeon.round || 1}/{hud.dungeon.totalRounds || 4}
+        </div>
+        <div style={{fontSize:'11px',color:'#cbd5e1',marginTop:'1px'}}>
+          Inimigos restantes: <b style={{color:'#ef4444'}}>{hud.dungeon.enemiesAlive ?? 0}</b>
+        </div>
+        {hud.dungeon.roundState === 'BREAK' && (
+          <div style={{fontSize:'11px',color:'#38bdf8',fontWeight:'bold',marginTop:'2px',animation:'pulse 1s infinite'}}>
+            Próximo round em {Math.max(1, Math.ceil(hud.dungeon.breakTimer || 4))}s...
+          </div>
+        )}
         <button
           type="button"
           onClick={() => {
@@ -183,15 +195,7 @@ export default function App(){
         </button>
       </div>
     )}
-    {hud.xpNotifications && hud.xpNotifications.length > 0 && (
-      <div className="xp-float-container" style={{position:'absolute',top:'140px',left:'clamp(10px,1.4vw,20px)',zIndex:19,display:'flex',flexDirection:'column',gap:'4px',pointerEvents:'none'}}>
-        {hud.xpNotifications.map(n => (
-          <div key={n.id} style={{fontSize: n.isBig ? '15px' : '12px',fontWeight:'900',color: n.isBig ? '#fde047' : '#4ade80',textShadow:'0 0 10px rgba(0,0,0,0.8), 0 0 14px currentColor',animation:'toastin .25s ease-out'}}>
-            {n.text}
-          </div>
-        ))}
-      </div>
-    )}
+    {hud.caravanModal && <CaravanModal modal={hud.caravanModal} onClose={() => call('closeCaravanModal')} />}
     {hud.levelUpCelebration && (
       <div className="level-up-modal" style={{position:'absolute',top:'35%',left:'50%',transform:'translate(-50%,-50%)',zIndex:30,textAlign:'center',pointerEvents:'none',animation:'toastin .4s cubic-bezier(0.16, 1, 0.3, 1)'}}>
         <div style={{fontSize:'36px',fontWeight:'900',letterSpacing:'.18em',color:'#facc15',textShadow:'0 0 35px #eab308, 0 4px 15px rgba(0,0,0,0.8)'}}>★ LEVEL UP! ★</div>
@@ -267,8 +271,11 @@ function HorizontalRail({children,className=''}){
 
 function Inventory({hud,equip,unequip,call}){
   const gear=hud.equipment||{}
+  const [mobileTab,setMobileTab]=useState('bag') // 'bag' | 'character'
   const [tab,setTab]=useState('all')
   const [rarity,setRarity]=useState('all')
+  const [selectedBagItem,setSelectedBagItem]=useState(null)
+  const [inspectSlot,setInspectSlot]=useState(null)
   const items=hud.inventory||[]
   const categories={
     all:()=>true,
@@ -284,39 +291,163 @@ function Inventory({hud,equip,unequip,call}){
     .sort((a,b)=>itemRarityRank(b)-itemRarityRank(a)||(a.type||'').localeCompare(b.type||'')||(a.name||'').localeCompare(b.name||''))
   const rarityOptions=['all','Mítica','Lendária','Épica','Rara','Incomum','Comum'].filter(r=>r==='all'||items.some(it=>it.rarity===r))
 
-  return <div className="inventory-rpg">
-    <section className="character-hub">
-      <div className="hub-title"><span>PERSONAGEM</span><b>Nível {hud.level}</b></div>
-      <div className="paperdoll">
-        <div className="paperdoll-glow"/><div className="paper-human"><i className="ph-head"/><i className="ph-body"/><i className="ph-arm left"/><i className="ph-arm right"/><i className="ph-leg left"/><i className="ph-leg right"/></div>
-        <EquipNode cls="weapon-node" slot="weapon" item={gear.weapon} unequip={unequip}/><EquipNode cls="armor-node" slot="armor" item={gear.armor} unequip={unequip}/><EquipNode cls="talisman-node" slot="talisman" item={gear.talisman} unequip={unequip}/><EquipNode cls="boots-node" slot="boots" item={gear.boots} unequip={unequip}/>
+  // Find currently equipped item matching slot of selectedBagItem
+  const matchingSlot = selectedBagItem ? (selectedBagItem.type === 'tool' ? 'weapon' : selectedBagItem.type) : null
+  const currentlyEquipped = matchingSlot ? gear[matchingSlot] : null
+
+  return (
+    <div className={`inventory-rpg-container mobile-tab-${mobileTab}`}>
+      {/* Mobile-only top sub-navigation */}
+      <div className="mobile-inv-nav">
+        <button
+          type="button"
+          className={`inv-subtab ${mobileTab==='bag'?'active':''}`}
+          onClick={()=>setMobileTab('bag')}
+        >
+          🎒 Inventário ({items.length}/40)
+        </button>
+        <button
+          type="button"
+          className={`inv-subtab ${mobileTab==='character'?'active':''}`}
+          onClick={()=>setMobileTab('character')}
+        >
+          👤 Personagem (Nv.{hud.level})
+        </button>
       </div>
-      <div className="combat-stats"><div><small>DAMAGE</small><b>{hud.atk}</b></div><div><small>ARMOR</small><b>{hud.def}</b></div><div><small>CRÍTICO</small><b>{(14+(hud.critChance||0)).toFixed(1)}%</b></div><div><small>OURO</small><b>{hud.gold}</b></div></div>
-      <p className="hub-note">🪓 Machado corta árvores. ⛏️ Picareta quebra minérios. Armas e armaduras perdem durabilidade com o uso e podem ser reparadas no ferreiro.</p>
-    </section>
-    <section className="bag-rpg">
-      <div className="section-title"><div><small>INVENTÁRIO ORGANIZADO</small><h3>Mochila do Desperto</h3></div><span>{items.length}/40 slots</span></div>
-      <div className="bag-category-tabs inventory-tabs native-tab-row category-tab-wrap">
-        <button className={tab==='all'?'active':''} onPointerUp={tabPointer(setTab,'all')} onClick={()=>setTab('all')}>Todos ({items.length})</button>
-        <button className={tab==='equipment'?'active':''} onPointerUp={tabPointer(setTab,'equipment')} onClick={()=>setTab('equipment')}>⚔ Equipamentos</button>
-        <button className={tab==='tools'?'active':''} onPointerUp={tabPointer(setTab,'tools')} onClick={()=>setTab('tools')}>🪓 Ferramentas</button>
-        <button className={tab==='consumables'?'active':''} onPointerUp={tabPointer(setTab,'consumables')} onClick={()=>setTab('consumables')}>🧪 Consumíveis</button>
-        <button className={tab==='drops'?'active':''} onPointerUp={tabPointer(setTab,'drops')} onClick={()=>setTab('drops')}>🐟 Drops & Recursos</button>
+
+      <div className="inventory-rpg">
+        {/* CHARACTER SECTION */}
+        <section className={`character-hub ${mobileTab==='bag' ? 'hide-mobile' : ''}`}>
+          <div className="hub-title"><span>PERSONAGEM</span><b>Nível {hud.level}</b></div>
+          <div className="paperdoll">
+            <div className="paperdoll-glow"/>
+            <div className="paper-human"><i className="ph-head"/><i className="ph-body"/><i className="ph-arm left"/><i className="ph-arm right"/><i className="ph-leg left"/><i className="ph-leg right"/></div>
+            <EquipNode cls="weapon-node" slot="weapon" item={gear.weapon} unequip={unequip} onSelect={()=>setInspectSlot('weapon')}/>
+            <EquipNode cls="armor-node" slot="armor" item={gear.armor} unequip={unequip} onSelect={()=>setInspectSlot('armor')}/>
+            <EquipNode cls="talisman-node" slot="talisman" item={gear.talisman} unequip={unequip} onSelect={()=>setInspectSlot('talisman')}/>
+            <EquipNode cls="boots-node" slot="boots" item={gear.boots} unequip={unequip} onSelect={()=>setInspectSlot('boots')}/>
+          </div>
+          <div className="combat-stats">
+            <div><small>DAMAGE</small><b>{hud.atk}</b></div>
+            <div><small>ARMOR</small><b>{hud.def}</b></div>
+            <div><small>CRÍTICO</small><b>{(14+(hud.critChance||0)).toFixed(1)}%</b></div>
+            <div><small>OURO</small><b>{hud.gold}</b></div>
+          </div>
+
+          {/* Inspected equipped slot modal/details */}
+          {inspectSlot && gear[inspectSlot] && (
+            <div className="inspect-gear-card glass" style={{ marginTop: '8px', padding: '10px', borderRadius: '10px', border: `1px solid ${gear[inspectSlot].color || '#94a3b8'}` }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <b style={{ color: gear[inspectSlot].color, fontSize: '13px' }}>{gear[inspectSlot].name}</b>
+                <button type="button" onClick={() => setInspectSlot(null)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>✕</button>
+              </div>
+              <small style={{ color: gear[inspectSlot].color, display: 'block', margin: '2px 0' }}>{gear[inspectSlot].rarity} • Nv.{gear[inspectSlot].level || 1}</small>
+              <div style={{ fontSize: '11px', color: '#cbd5e1' }}>
+                {gear[inspectSlot].stats?.attack ? `+${Math.round(gear[inspectSlot].stats.attack)} Dano ` : ''}
+                {gear[inspectSlot].stats?.defense ? `+${Math.round(gear[inspectSlot].stats.defense)} Armadura ` : ''}
+                {gear[inspectSlot].durability !== undefined ? `Durabilidade: ${Math.round(gear[inspectSlot].durability)}/${gear[inspectSlot].maxDurability}` : ''}
+              </div>
+              <button
+                type="button"
+                className="unequip-btn"
+                onClick={() => { unequip(inspectSlot); setInspectSlot(null) }}
+                style={{ marginTop: '8px', width: '100%', padding: '6px', background: 'rgba(239,68,68,0.2)', border: '1px solid #ef4444', color: '#fca5a5', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}
+              >
+                Desequipar
+              </button>
+            </div>
+          )}
+
+          {/* Item Comparison panel when selecting a bag item */}
+          {selectedBagItem && ['weapon','armor','boots','talisman','tool'].includes(selectedBagItem.type) && (
+            <div className="item-compare-panel glass" style={{ marginTop: '8px', padding: '10px', borderRadius: '10px', border: '1px solid rgba(250,204,21,0.35)', background: 'rgba(15,23,42,0.85)' }}>
+              <div style={{ fontSize: '10px', color: '#facc15', fontWeight: 'bold', letterSpacing: '.06em', marginBottom: '6px' }}>
+                COMPARAÇÃO DE EQUIPAMENTO
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '11px' }}>
+                <div style={{ background: 'rgba(0,0,0,0.3)', padding: '6px', borderRadius: '6px' }}>
+                  <small style={{ color: '#94a3b8', display: 'block' }}>EQUIPADO</small>
+                  {currentlyEquipped ? (
+                    <>
+                      <b style={{ color: currentlyEquipped.color || '#e2e8f0', fontSize: '11px' }}>{currentlyEquipped.name}</b>
+                      <div style={{ color: '#cbd5e1', fontSize: '10px' }}>
+                        {currentlyEquipped.stats?.attack ? `ATK: ${currentlyEquipped.stats.attack} ` : ''}
+                        {currentlyEquipped.stats?.defense ? `DEF: ${currentlyEquipped.stats.defense}` : ''}
+                      </div>
+                    </>
+                  ) : <span style={{ color: '#64748b' }}>Nenhum</span>}
+                </div>
+                <div style={{ background: 'rgba(0,0,0,0.3)', padding: '6px', borderRadius: '6px' }}>
+                  <small style={{ color: '#94a3b8', display: 'block' }}>NOVO ITEM</small>
+                  <b style={{ color: selectedBagItem.color || '#e2e8f0', fontSize: '11px' }}>{selectedBagItem.name}</b>
+                  <div style={{ color: '#cbd5e1', fontSize: '10px' }}>
+                    {selectedBagItem.stats?.attack ? `ATK: ${selectedBagItem.stats.attack} ` : ''}
+                    {selectedBagItem.stats?.defense ? `DEF: ${selectedBagItem.stats.defense}` : ''}
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => { equip(selectedBagItem.id); setSelectedBagItem(null) }}
+                style={{ marginTop: '8px', width: '100%', padding: '7px', background: '#38bdf8', color: '#0f172a', fontWeight: 'bold', borderRadius: '6px', border: 'none', cursor: 'pointer' }}
+              >
+                EQUIPAR
+              </button>
+            </div>
+          )}
+
+          <p className="hub-note">🪓 Machado corta árvores. ⛏️ Picareta quebra minérios. Armas e armaduras perdem durabilidade com o uso e podem ser reparadas no ferreiro.</p>
+        </section>
+
+        {/* BACKPACK SECTION */}
+        <section className={`bag-rpg ${mobileTab==='character' ? 'hide-mobile' : ''}`}>
+          <div className="section-title">
+            <div><small>INVENTÁRIO ORGANIZADO</small><h3>Mochila do Desperto</h3></div>
+            <span>{items.length}/40 slots</span>
+          </div>
+          <div className="bag-category-tabs inventory-tabs native-tab-row category-tab-wrap">
+            <button className={tab==='all'?'active':''} onPointerUp={tabPointer(setTab,'all')} onClick={()=>setTab('all')}>Todos ({items.length})</button>
+            <button className={tab==='equipment'?'active':''} onPointerUp={tabPointer(setTab,'equipment')} onClick={()=>setTab('equipment')}>⚔ Equipamentos</button>
+            <button className={tab==='tools'?'active':''} onPointerUp={tabPointer(setTab,'tools')} onClick={()=>setTab('tools')}>🪓 Ferramentas</button>
+            <button className={tab==='consumables'?'active':''} onPointerUp={tabPointer(setTab,'consumables')} onClick={()=>setTab('consumables')}>🧪 Consumíveis</button>
+            <button className={tab==='drops'?'active':''} onPointerUp={tabPointer(setTab,'drops')} onClick={()=>setTab('drops')}>🐟 Drops & Recursos</button>
+          </div>
+          <div className="rarity-filter-row">
+            <span>Raridade:</span>
+            {rarityOptions.map(r=><button key={r} className={rarity===r?'active':''} onPointerUp={tabPointer(setRarity,r)} onClick={()=>setRarity(r)}>{r==='all'?'Todas':r}</button>)}
+          </div>
+          <div className="bag-grid-scroll">
+            <div className="bag-grid">
+              {filteredItems.map(it=>(
+                <ItemCard
+                  key={it.id}
+                  item={it}
+                  compact
+                  isSelected={selectedBagItem?.id === it.id}
+                  onSelect={()=>setSelectedBagItem(it)}
+                  actions={
+                    ['weapon','armor','boots','talisman','tool'].includes(it.type) ? (
+                      <button onClick={(e)=>{ e.stopPropagation(); equip(it.id); setSelectedBagItem(null) }}>Equipar</button>
+                    ) : it.subtype==='potion' ? (
+                      <button onClick={(e)=>{ e.stopPropagation(); call?.('usePotion') }}>Usar</button>
+                    ) : null
+                  }
+                />
+              ))}
+              {filteredItems.length===0&&<p className="empty-tab-hint">Nenhum item nesta categoria/raridade.</p>}
+              {Array.from({length:Math.max(0,12-filteredItems.length)}).map((_,i)=><div key={`empty-${i}`} className="empty-slot"/>)}
+            </div>
+          </div>
+          <div className="bag-help">Toque em um item para ver detalhes e comparar com o equipamento atual.</div>
+        </section>
       </div>
-      <div className="rarity-filter-row"><span>Raridade:</span>{rarityOptions.map(r=><button key={r} className={rarity===r?'active':''} onPointerUp={tabPointer(setRarity,r)} onClick={()=>setRarity(r)}>{r==='all'?'Todas':r}</button>)}</div>
-      <div className="bag-grid-scroll"><div className="bag-grid">
-        {filteredItems.map(it=><ItemCard key={it.id} item={it} compact actions={['weapon','armor','boots','talisman','tool'].includes(it.type)?<button onClick={()=>equip(it.id)}>Equipar</button>:it.subtype==='potion'?<button onClick={()=>call?.('usePotion')}>Usar</button>:null}/>) }
-        {filteredItems.length===0&&<p className="empty-tab-hint">Nenhum item nesta categoria/raridade.</p>}
-        {Array.from({length:Math.max(0,12-filteredItems.length)}).map((_,i)=><div key={`empty-${i}`} className="empty-slot"/>)}
-      </div></div>
-      <div className="bag-help">Drops iguais acumulam no mesmo slot. O número no canto mostra a quantidade da pilha.</div>
-    </section>
-  </div>
+    </div>
+  )
 }
 
-function EquipNode({slot,item,unequip,cls}){
+function EquipNode({slot,item,unequip,cls,onSelect}){
   const max=Number(item?.maxDurability)||0,cur=Number(item?.durability),pct=max?Math.max(0,Math.min(100,(Number.isFinite(cur)?cur:max)/max*100)):100
-  return <button className={`equip-node ${cls} ${item?'filled':''} ${item?.broken?'broken':''}`} style={{'--rarity':item?.color||'#6d7884'}} onClick={()=>item&&unequip(slot)} title={item?'Clique para remover':slotNames[slot]}>
+  return <button className={`equip-node ${cls} ${item?'filled':''} ${item?.broken?'broken':''}`} style={{'--rarity':item?.color||'#6d7884'}} onClick={()=>onSelect?onSelect():item&&unequip(slot)} title={item?'Clique para inspecionar':slotNames[slot]}>
     <span>{slotIcon(slot, item)}</span><small>{slotNames[slot]}</small>
     {item&&<em>{item.rarity} +{item.upgrade||0}{max?` • ${Math.round(pct)}%`:''}</em>}
     {item&&max>0&&<i className="durability-mini"><u style={{width:`${pct}%`}}/></i>}
@@ -339,11 +470,11 @@ function slotIcon(s, item){
   return s==='armor'?'◈':s==='boots'?'⬒':s==='talisman'?'✦':'◆'
 }
 
-function ItemCard({item,actions,compact=false}){
+function ItemCard({item,actions,compact=false,isSelected=false,onSelect}){
   const stats=item.stats||{}
   const orbIcon=item.icon||(item.type==='tool'?(item.subtype==='pickaxe'?'⛏️':'🪓'):item.type==='weapon'?(item.subtype==='bow'?'🏹':item.subtype==='dagger'?'🗡':item.subtype==='spellbook'?'📖':item.subtype==='axe'?'🪓':item.subtype==='pickaxe'?'⛏️':'⚔'):item.type==='armor'?'◈':item.type==='boots'?'⬒':item.type==='material'||item.type==='resource'?'🪵':item.subtype==='potion'?'🧪':'✦')
   const qty=Math.max(1,Number(item.qty)||1),max=Number(item.maxDurability)||0,cur=Number.isFinite(Number(item.durability))?Number(item.durability):max,durPct=max?Math.max(0,Math.min(100,cur/max*100)):100
-  return <article className={`item-card ${compact?'compact':''} ${item.broken||durPct<=0?'broken':''}`} style={{'--rarity':item.color||'#cbd5e1'}} title={`${item.name} • Nv.${item.level||1}`}>
+  return <article onClick={onSelect} className={`item-card ${compact?'compact':''} ${isSelected?'is-selected':''} ${item.broken||durPct<=0?'broken':''}`} style={{'--rarity':item.color||'#cbd5e1', cursor: onSelect ? 'pointer' : 'default'}} title={`${item.name} • Nv.${item.level||1}`}>
     {qty>1&&<strong className="stack-badge">×{qty}</strong>}
     <div className="item-orb">{orbIcon}</div><b>{item.name}</b>
     <small style={{color:item.color}}>{item.rarity}{qty>1?` • Pilha ${qty}`:''} • Nv.{item.level||1}</small>
@@ -450,15 +581,95 @@ function Attributes({hud,allocate}){
 }
 
 function MobileControls({hud,abilities,call,touch,onHelp}){
-  const stickRef=useRef(null),pointerRef=useRef(null);const [stick,setStick]=useState({x:0,y:0});const [menuOpen,setMenuOpen]=useState(false)
+  const [stickCenter,setStickCenter]=useState(null)
+  const [stickOffset,setStickOffset]=useState({x:0,y:0})
+  const [menuOpen,setMenuOpen]=useState(false)
+
+  const stickPointerRef=useRef(null)
+  const cameraPointerRef=useRef(null)
+  const lastCamPosRef=useRef({x:0,y:0})
+  const stickCenterRef=useRef(null)
+
   const potionQty=hud.inventory?.find(i=>i.subtype==='potion')?.qty||0
-  const update=(e)=>{const el=stickRef.current;if(!el)return;const r=el.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2,dx=e.clientX-cx,dy=e.clientY-cy,max=r.width*.33,len=Math.hypot(dx,dy)||1,k=Math.min(1,max/len),x=dx*k,y=dy*k;setStick({x,y});call('setVirtualMove',x/max,-y/max)}
-  const start=e=>{pointerRef.current=e.pointerId;e.currentTarget.setPointerCapture?.(e.pointerId);update(e)}
-  const move=e=>{if(pointerRef.current===e.pointerId)update(e)}
-  const end=e=>{if(pointerRef.current===e.pointerId){pointerRef.current=null;setStick({x:0,y:0});call('setVirtualMove',0,0)}}
+
+  // Movement Joystick Touch handlers (Dynamic floating joystick on left half)
+  const handleJoystickDown=(e)=>{
+    if(stickPointerRef.current!==null) return
+    const rect=e.currentTarget.getBoundingClientRect()
+    const touchX=e.clientX-rect.left
+    const touchY=e.clientY-rect.top
+    const center={x:touchX,y:touchY}
+    stickPointerRef.current=e.pointerId
+    stickCenterRef.current=center
+    setStickCenter(center)
+    setStickOffset({x:0,y:0})
+    try{ e.currentTarget.setPointerCapture?.(e.pointerId) }catch{}
+  }
+
+  const handleJoystickMove=(e)=>{
+    if(stickPointerRef.current!==e.pointerId||!stickCenterRef.current) return
+    const rect=e.currentTarget.getBoundingClientRect()
+    const touchX=e.clientX-rect.left
+    const touchY=e.clientY-rect.top
+    const dx=touchX-stickCenterRef.current.x
+    const dy=touchY-stickCenterRef.current.y
+    const maxRadius=60
+    const len=Math.hypot(dx,dy)||0.001
+    const clampedDist=Math.min(len,maxRadius)
+    const deadzone=8
+    const offsetX=(dx/len)*clampedDist
+    const offsetY=(dy/len)*clampedDist
+    setStickOffset({x:offsetX,y:offsetY})
+
+    if(len<deadzone){
+      call('setVirtualMove',0,0)
+    }else{
+      const effectiveDist=(clampedDist-deadzone)/(maxRadius-deadzone)
+      const moveX=(dx/len)*effectiveDist
+      const moveZ=-(dy/len)*effectiveDist
+      call('setVirtualMove',moveX,moveZ)
+    }
+  }
+
+  const handleJoystickUp=(e)=>{
+    if(stickPointerRef.current===e.pointerId){
+      stickPointerRef.current=null
+      stickCenterRef.current=null
+      setStickCenter(null)
+      setStickOffset({x:0,y:0})
+      call('setVirtualMove',0,0)
+    }
+  }
+
+  // Camera Touch Drag Zone (Right side touch drag Roblox-style)
+  const handleCamDown=(e)=>{
+    if(cameraPointerRef.current!==null) return
+    cameraPointerRef.current=e.pointerId
+    lastCamPosRef.current={x:e.clientX,y:e.clientY}
+    try{ e.currentTarget.setPointerCapture?.(e.pointerId) }catch{}
+  }
+
+  const handleCamMove=(e)=>{
+    if(cameraPointerRef.current!==e.pointerId) return
+    const dx=e.clientX-lastCamPosRef.current.x
+    const dy=e.clientY-lastCamPosRef.current.y
+    lastCamPosRef.current={x:e.clientX,y:e.clientY}
+    if(Math.abs(dx)>0.1||Math.abs(dy)>0.1){
+      call('rotateCamera',dx,dy)
+    }
+  }
+
+  const handleCamUp=(e)=>{
+    if(cameraPointerRef.current===e.pointerId){
+      cameraPointerRef.current=null
+    }
+  }
+
   const toggleRun=()=>call('setMobileRun',!hud.mobileRunning)
   const closeAnd=(panel)=>{setMenuOpen(false);call('togglePanel',panel)}
+
   if(!touch)return null
+
   return <div className="mobile-ui">
     <button className={`mobile-menu-toggle glass ${menuOpen?'open':''}`} onClick={()=>setMenuOpen(v=>!v)}>
       {menuOpen?'✕':'☰'}
@@ -486,19 +697,50 @@ function MobileControls({hud,abilities,call,touch,onHelp}){
     {!hud.uiPanel&&<>
       {hud.multiplayer?.connected&&<div className={`mobile-network-chip glass ${hud.multiplayer?.quality||''}`}><b>● ONLINE</b><span>{hud.multiplayer.players||0}</span><small>{String(hud.multiplayer?.room||'asterra-01').replace('asterra-','L')}</small>{hud.multiplayer.latencyMs>0&&<small>{Math.round(hud.multiplayer.latencyMs)} ms</small>}</div>}
       {hud.actionButton&&<button disabled={hud.actionButton.blocked} className={`mobile-prominent-action ${hud.actionButton.type||''} ${hud.actionButton.blocked?'blocked':''}`} onClick={()=>call('interact')} aria-label={hud.actionButton.label}><span>{hud.actionButton.icon||'☞'}</span><div><b>{hud.actionButton.label}</b>{hud.actionButton.detail&&<small>{hud.actionButton.detail}</small>}</div><em>{hud.actionButton.blocked?'EQUIPE':'TOCAR'}</em></button>}
-      <div ref={stickRef} className="mobile-stick" onPointerDown={start} onPointerMove={move} onPointerUp={end} onPointerCancel={end}><i style={{transform:`translate(${stick.x}px,${stick.y}px)`}}/></div>
+      
+      {/* Dynamic Left Touch Zone for Movement Joystick */}
+      <div
+        className="mobile-joystick-touch-zone"
+        onPointerDown={handleJoystickDown}
+        onPointerMove={handleJoystickMove}
+        onPointerUp={handleJoystickUp}
+        onPointerCancel={handleJoystickUp}
+      >
+        {stickCenter && (
+          <div
+            className="dynamic-floating-joystick"
+            style={{left:`${stickCenter.x}px`,top:`${stickCenter.y}px`}}
+          >
+            <div className="joystick-base" />
+            <div
+              className="joystick-knob"
+              style={{transform:`translate(calc(-50% + ${stickOffset.x}px), calc(-50% + ${stickOffset.y}px))`}}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Right Touch Zone for Camera Look */}
+      <div
+        className="mobile-camera-touch-zone"
+        onPointerDown={handleCamDown}
+        onPointerMove={handleCamMove}
+        onPointerUp={handleCamUp}
+        onPointerCancel={handleCamUp}
+      />
+
       <div className="mobile-actions">
-        <button className="mobile-attack" onPointerDown={e=>{e.currentTarget.setPointerCapture?.(e.pointerId);call('setAutoAttack',true)}} onPointerUp={e=>{try{e.currentTarget.releasePointerCapture?.(e.pointerId)}catch{};call('setAutoAttack',false)}} onPointerCancel={()=>call('setAutoAttack',false)}>⚔<small>ATACAR</small></button>
-        <button className="mobile-block" onPointerDown={e=>{e.currentTarget.setPointerCapture?.(e.pointerId);call('setMobileBlock',true)}} onPointerUp={e=>{try{e.currentTarget.releasePointerCapture?.(e.pointerId)}catch{};call('setMobileBlock',false)}} onPointerCancel={()=>call('setMobileBlock',false)}>🛡<small>DEFESA</small></button>
-        <button className="mobile-dash" onClick={()=>call('dash')}>↯<small>ESQUIVA</small></button>
-        <button className={`mobile-use ${hud.actionButton?'has-context':''}`} onClick={()=>call('interact')}>{hud.actionButton?.icon||'☞'}<small>USAR</small></button>
-        <button className={`mobile-run ${hud.mobileRunning?'active':''}`} onClick={toggleRun}>🏃<small>{hud.mobileRunning?'CORRENDO':'CORRER'}</small></button>
-        <button className="mobile-jump" onClick={()=>call('setMobileJump')}>↥<small>PULAR</small></button>
+        <button className="mobile-attack" onPointerDown={e=>{e.stopPropagation();e.currentTarget.setPointerCapture?.(e.pointerId);call('setAutoAttack',true)}} onPointerUp={e=>{e.stopPropagation();try{e.currentTarget.releasePointerCapture?.(e.pointerId)}catch{};call('setAutoAttack',false)}} onPointerCancel={e=>{e.stopPropagation();call('setAutoAttack',false)}}>⚔<small>ATACAR</small></button>
+        <button className="mobile-block" onPointerDown={e=>{e.stopPropagation();e.currentTarget.setPointerCapture?.(e.pointerId);call('setMobileBlock',true)}} onPointerUp={e=>{e.stopPropagation();try{e.currentTarget.releasePointerCapture?.(e.pointerId)}catch{};call('setMobileBlock',false)}} onPointerCancel={e=>{e.stopPropagation();call('setMobileBlock',false)}}>🛡<small>DEFESA</small></button>
+        <button className="mobile-dash" onClick={(e)=>{e.stopPropagation();call('dash')}}>↯<small>ESQUIVA</small></button>
+        <button className={`mobile-use ${hud.actionButton?'has-context':''}`} onClick={(e)=>{e.stopPropagation();call('interact')}}>{hud.actionButton?.icon||'☞'}<small>USAR</small></button>
+        <button className={`mobile-run ${hud.mobileRunning?'active':''}`} onClick={(e)=>{e.stopPropagation();toggleRun()}}>🏃<small>{hud.mobileRunning?'CORRENDO':'CORRER'}</small></button>
+        <button className="mobile-jump" onClick={(e)=>{e.stopPropagation();call('setMobileJump')}}>↥<small>PULAR</small></button>
       </div>
       <div className="mobile-powers-bottom">
-        {abilities.map(a=><button key={a.slot} disabled={!a.ready||hud.stamina<a.cost} onClick={()=>call('castAbility',a.slot)} title={`${a.name} • ${a.cost} vigor`}><span>{a.icon}</span><small>{a.short||a.name}</small>{a.remaining>0&&<em>{a.remaining.toFixed(1)}</em>}</button>)}
-        <button className={`mobile-potion-btn ${!potionQty?'empty':''}`} disabled={!potionQty} onClick={()=>call('usePotion')} title="Usar poção de vida (R)"><span>🧪</span><small>Poção</small>{potionQty>0&&<em>{potionQty}</em>}</button>
-        <button className={hud.mount?.active?'active mount-active':''} onClick={()=>call('toggleMount')} title="Montaria (H)"><span>♞</span><small>{hud.mount?.active?'Descer':'Montar'}</small></button>
+        {abilities.map(a=><button key={a.slot} disabled={!a.ready||hud.stamina<a.cost} onClick={(e)=>{e.stopPropagation();call('castAbility',a.slot)}} title={`${a.name} • ${a.cost} vigor`}><span>{a.icon}</span><small>{a.short||a.name}</small>{a.remaining>0&&<em>{a.remaining.toFixed(1)}</em>}</button>)}
+        <button className={`mobile-potion-btn ${!potionQty?'empty':''}`} disabled={!potionQty} onClick={(e)=>{e.stopPropagation();call('usePotion')}} title="Usar poção de vida (R)"><span>🧪</span><small>Poção</small>{potionQty>0&&<em>{potionQty}</em>}</button>
+        <button className={hud.mount?.active?'active mount-active':''} onClick={(e)=>{e.stopPropagation();call('toggleMount')}} title="Montaria (H)"><span>♞</span><small>{hud.mount?.active?'Descer':'Montar'}</small></button>
       </div>
     </>}
   </div>
@@ -1922,6 +2164,206 @@ function DungeonCompletionModal({ completion, onClose }) {
         >
           RETORNAR A ASTERRA
         </button>
+      </div>
+    </div>
+  )
+}
+
+function WaypointArrow({ marker, playerPos, cameraYaw = 0, onClear }) {
+  if (!marker) return null
+
+  const dx = (marker.x ?? 0) - (playerPos?.x ?? 0)
+  const dz = (marker.z ?? 0) - (playerPos?.z ?? 0)
+  const dist = Math.hypot(dx, dz)
+  const targetAngle = Math.atan2(dx, dz)
+  const relAngle = targetAngle - cameraYaw
+  const deg = (relAngle * 180) / Math.PI
+
+  const isArrived = dist < 15
+  const rank = marker.rank || marker.rankKey || 'E'
+  const rankColor = marker.color || '#38bdf8'
+
+  return (
+    <div
+      className="waypoint-hud-indicator glass"
+      style={{
+        position: 'absolute',
+        top: '68px',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        zIndex: 22,
+        padding: '6px 16px',
+        borderRadius: '999px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '10px',
+        border: `1.5px solid ${rankColor}`,
+        boxShadow: `0 0 20px ${rankColor}33, 0 4px 15px rgba(0,0,0,0.5)`,
+        color: '#f8fafc',
+        fontSize: '12px',
+        fontWeight: 'bold',
+        pointerEvents: 'auto'
+      }}
+    >
+      <div
+        style={{
+          width: '22px',
+          height: '22px',
+          display: 'grid',
+          placeItems: 'center',
+          borderRadius: '50%',
+          background: `${rankColor}22`,
+          border: `1px solid ${rankColor}`,
+          transform: `rotate(${deg}deg)`,
+          transition: 'transform 0.1s linear'
+        }}
+      >
+        <span style={{ color: rankColor, fontSize: '13px', lineHeight: 1 }}>▲</span>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.2 }}>
+        <span style={{ fontSize: '11px', color: '#cbd5e1' }}>
+          {isArrived ? (
+            <b style={{ color: '#4ade80' }}>DESTINO ALCANÇADO</b>
+          ) : (
+            <>
+              Portal Rank <b style={{ color: rankColor }}>{rank}</b>
+            </>
+          )}
+        </span>
+        <small style={{ fontSize: '10px', color: '#94a3b8' }}>
+          {marker.name ? `${marker.name} • ` : ''}
+          {isArrived ? 'Pronto para entrar' : `${Math.round(dist)}m`}
+        </small>
+      </div>
+
+      <button
+        type="button"
+        onClick={onClear}
+        title="Cancelar Waypoint"
+        style={{
+          background: 'transparent',
+          border: 'none',
+          color: '#94a3b8',
+          fontSize: '14px',
+          cursor: 'pointer',
+          padding: '2px 6px',
+          borderRadius: '6px',
+          marginLeft: '4px'
+        }}
+      >
+        ✕
+      </button>
+    </div>
+  )
+}
+
+function CaravanModal({ modal, onClose }) {
+  if (!modal) return null
+  const { title, text, goods = [], type = 'info', onLoot, onHelp } = modal
+
+  return (
+    <div className="overlay-shell" style={{ zIndex: 45, background: 'rgba(2,6,15,0.85)', backdropFilter: 'blur(8px)' }}>
+      <div
+        className="window glass"
+        style={{
+          maxWidth: '520px',
+          height: 'auto',
+          borderRadius: '20px',
+          border: '2px solid rgba(250,204,21,0.5)',
+          padding: '24px',
+          textAlign: 'center'
+        }}
+      >
+        <div style={{ fontSize: '28px', marginBottom: '8px' }}>
+          {type === 'loot' ? '📦' : type === 'defense' ? '🛡️' : '🚚'}
+        </div>
+        <h2 style={{ fontSize: '20px', color: '#facc15', margin: '0 0 6px 0', letterSpacing: '.05em' }}>
+          {title || 'Caravana Comercial'}
+        </h2>
+        <p style={{ color: '#cbd5e1', fontSize: '12px', lineHeight: '1.5', margin: '0 0 16px 0' }}>
+          {text}
+        </p>
+
+        {goods.length > 0 && (
+          <div style={{ textAlign: 'left', marginBottom: '18px', background: 'rgba(15,23,42,0.6)', padding: '12px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.08)' }}>
+            <small style={{ display: 'block', color: '#94a3b8', fontSize: '10px', marginBottom: '8px', fontWeight: 'bold' }}>
+              CARGA DA CARAVANA:
+            </small>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              {goods.map((g, idx) => (
+                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#f8fafc' }}>
+                  <span>• {g.name}</span>
+                  <b style={{ color: '#facc15' }}>×{g.qty}</b>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+          {type === 'loot' && (
+            <button
+              type="button"
+              onClick={() => {
+                onLoot?.()
+                onClose()
+              }}
+              style={{
+                flex: 1,
+                padding: '12px',
+                borderRadius: '12px',
+                border: '1px solid #eab308',
+                background: 'linear-gradient(135deg, #eab308, #ca8a04)',
+                color: '#020617',
+                fontWeight: '900',
+                fontSize: '13px',
+                cursor: 'pointer'
+              }}
+            >
+              📦 SAQUEAR CARGA
+            </button>
+          )}
+
+          {type === 'defense' && (
+            <button
+              type="button"
+              onClick={() => {
+                onHelp?.()
+                onClose()
+              }}
+              style={{
+                flex: 1,
+                padding: '12px',
+                borderRadius: '12px',
+                border: '1px solid #38bdf8',
+                background: 'linear-gradient(135deg, #0284c7, #0369a1)',
+                color: '#f8fafc',
+                fontWeight: '900',
+                fontSize: '13px',
+                cursor: 'pointer'
+              }}
+            >
+              🛡️ COLETAR RECOMPENSA DE ESCOLTA
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              padding: '12px 20px',
+              borderRadius: '12px',
+              border: '1px solid rgba(255,255,255,0.1)',
+              background: 'rgba(30,41,59,0.8)',
+              color: '#94a3b8',
+              fontSize: '13px',
+              cursor: 'pointer'
+            }}
+          >
+            Fechar
+          </button>
+        </div>
       </div>
     </div>
   )

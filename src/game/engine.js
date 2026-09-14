@@ -8,6 +8,8 @@ import { CLASSES_LIST, rollDestinyClass, CLASS_RANKS, getClassRankInfo } from '.
 import { TRAVEL_NODES, calculateTravelCost, rollRoadAmbush, defaultTravelState } from './fastTravel.js'
 import { GateManager } from './dungeons/GateManager.js'
 import { XPFeedbackManager } from './dungeons/XPFeedbackManager.js'
+import { CaravanManager } from './caravans/CaravanManager.js'
+import { WorldEnvironment } from './world/WorldEnvironment.js'
 
 const V3=()=>new THREE.Vector3()
 const mat=(color,extra={})=>new THREE.MeshStandardMaterial({color,roughness:.72,...extra})
@@ -67,6 +69,8 @@ export class ShadowGame {
     this.village=this.cityGroups.find(c=>c.city.id==='aurora-city')?.group||new THREE.Group()
     this.makeNPCs(); this.spawnAdventurerBots(); this.spawnCityGuards(); this.seedPortals(); this.createWeatherSystem(); this.bind(); this.createDungeonArena(); this.resize(); refreshGuildBoard(this.state)
     this.gateManager=new GateManager(this); this.xpFeedback=new XPFeedbackManager(this); this.gateManager.init()
+    this.worldEnv=new WorldEnvironment(this); this.worldEnv.init()
+    this.caravanManager=new CaravanManager(this); this.caravanManager.init()
     this.resizeObserver=new ResizeObserver(()=>this.resize()); this.resizeObserver.observe(this.canvas)
     this.autoSave=setInterval(()=>this.saveGame(),10000)
     const autoWs=sameOriginMultiplayerUrl(),autoHttp=!autoWs?sameOriginHttpMultiplayerUrl():'',autoMp=autoWs||autoHttp;this.multiplayer=new MultiplayerClient({url:autoMp||this.settings.multiplayerUrl,room:this.state.multiplayer?.room||savedLobby,name:this.state.playerName||'Aventureiro',onEvent:e=>this.onMultiplayerEvent(e)});this.settings.multiplayerUrl=this.multiplayer.url||this.settings.multiplayerUrl;this.state.settings=this.settings;this.state.multiplayer.url=this.settings.multiplayerUrl;this.state.multiplayer.room=this.multiplayer.room;if(this.multiplayer.url)this.multiplayer.connect()
@@ -1479,6 +1483,7 @@ export class ShadowGame {
   }
 
   damageEnemy(e,amount,{knockback=.35,crit=false,network=true}={}){
+    if(e?.isCaravanGuard||e?.isCaravanCart)return this.caravanManager?.onDamageCaravanEntity(e,amount,{knockback,crit})
     if(e?.adventurer)return this.damageBot(e,amount,{crit})
     if(!e||e.dead)return false;this.enterCombat(8);const dealt=Math.max(1,Math.round(amount));e.hp-=dealt
     this.state.target={name:e.name,level:e.level,hp:Math.max(0,e.hp),maxHp:e.maxHp,boss:e.boss,crit};if(network&&e.netId)this.multiplayer?.send({type:'enemy_damage',netId:e.netId,amount:dealt,hpAfter:Math.max(0,e.hp),maxHp:e.maxHp,world:this.currentWorldId(),respawnAt:Date.now()+5000});this.spawnDamageText(e.g.position,dealt,crit);this.flashEnemy(e,crit)
@@ -1516,7 +1521,8 @@ export class ShadowGame {
 
   getCrosshairTarget(maxRange=18,screenRadius=.17){
     // First use a true ray from the camera center. This keeps attacks aligned with the X crosshair.
-    const visible=[...this.enemies.filter(e=>!e.dead&&e.g.visible),...this.bots.filter(b=>!b.dead&&b.g.visible)]
+    const caravanTargets=this.caravanManager?this.caravanManager.getAttackableTargets():[]
+    const visible=[...this.enemies.filter(e=>!e.dead&&e.g.visible),...this.bots.filter(b=>!b.dead&&b.g.visible),...caravanTargets]
     if(visible.length){
       this.raycaster.setFromCamera({x:this.aimNdcX,y:0},this.camera)
       this.raycaster.far=maxRange+this.cameraDistance+4
@@ -2220,9 +2226,11 @@ export class ShadowGame {
   abandonDungeon(){this.gateManager?.leaveDungeon()}
   setDestinationMarker(gate){this.gateManager?.setDestinationMarker(gate)}
   clearDestinationMarker(){this.gateManager?.clearDestinationMarker()}
+  closeCaravanModal(){this.caravanManager?.closeCaravanModal()}
 
   interact(){
     if(this.state.uiPanel){this.closePanel();return}
+    if(this.caravanManager&&this.caravanManager.onInteract())return
     if(this.gateManager&&this.gateManager.onInteract())return
     const portal=this.portals.find(q=>q.g.visible&&q.g.position.distanceTo(this.player.position)<3.8);if(portal){this.enterDungeon(portal);return}
     let near=null,dist=4.2;for(const n of this.npcs){const d=n.g.position.distanceTo(this.player.position);if(d<dist){near=n;dist=d}}
@@ -2498,7 +2506,14 @@ export class ShadowGame {
 
   updateInteractions(){
     let prompt=null,action=null
-    if(this.gateManager){
+    if(this.caravanManager){
+      const cPrompt=this.caravanManager.getInteractionPrompt()
+      if(cPrompt){
+        prompt=cPrompt.prompt
+        action=cPrompt.action
+      }
+    }
+    if(!prompt&&this.gateManager){
       const gatePrompt=this.gateManager.getInteractionPrompt()
       if(gatePrompt){
         prompt=gatePrompt.prompt
@@ -2806,7 +2821,7 @@ applyEnemyNetworkState(st){
     const portal=this.portals.find(p=>p.g.visible&&p.g.position.distanceTo(this.player.position)<6)
     this.state.portal=portal?{name:portal.name,level:portal.level,floors:portal.floors,rarity:{name:portal.rarity.name,color:portal.rarity.color}}:null
     const aimed=this.combatMode?this.getCrosshairTarget(18,.16):null;this.state.crosshairTarget=aimed?{name:aimed.name,level:aimed.level,boss:aimed.boss}:null;this.state.combatMode=this.combatMode;refreshGuildBoard(this.state);this.state.guildRank=getGuildRank(this.state.guildRankIndex||0).id;this.state.guildNextRequirement=guildRankRequirement((this.state.guildRankIndex||0)+1)
-    this.state.playerPosition={x:this.player.position.x,z:this.player.position.z};this.state.playerHeading=this.player.rotation.y
+    this.state.playerPosition={x:this.player.position.x,z:this.player.position.z};this.state.playerHeading=this.player.rotation.y;this.state.cameraYaw=this.yaw
     if(this.state.uiPanel==='merchant'||this.state.uiPanel==='blacksmith'){const info=shopRefreshInfo();if(!this.state.shopRefresh||this.state.shopRefresh.cycle!==info.cycle)this.refreshShop(this.state.uiPanel);else this.state.shopRefresh=info}else this.state.merchant=[]
 
     const mapRadius=185,px=this.player.position.x,pz=this.player.position.z,near=(x,z,pad=0)=>Math.abs(x-px)<=mapRadius+pad&&Math.abs(z-pz)<=mapRadius+pad
@@ -2822,6 +2837,7 @@ applyEnemyNetworkState(st){
       chunks:[...this.chunks.values()].map(c=>({cx:c.cx,cz:c.cz,zoneId:c.zone.id,hasWater:!!c.hasWater})),
       enemies,adventurers,npcs,portals,landmarks,cities:cityLocal,roads:roadLocal,dungeon:!!this.state.dungeon,activeBosses,
       gates:this.gateManager?this.gateManager.getMapGates():[],
+      caravans:this.caravanManager?this.caravanManager.getMapCaravans():[],
     }
     const bosses=ZONES.map(zone=>{
       const live=activeBosses.find(b=>b.zoneId===zone.id)
@@ -2838,9 +2854,10 @@ applyEnemyNetworkState(st){
       adventurers:this.bots.filter(b=>!b.dead&&this.isMapDiscovered(b.g.position.x,b.g.position.z)).map(b=>({x:b.g.position.x,z:b.g.position.z,name:b.name,level:b.level,rank:b.guildRank,hostile:!!b.hostileToPlayer})),
       bosses,activeBosses,
       gates:this.gateManager?this.gateManager.getMapGates():[],
+      caravans:this.caravanManager?this.caravanManager.getMapCaravans():[],
     }
     this.state.guildRank=getGuildRank(this.state.guildRankIndex||0).id;this.state.onlinePlayers=[...this.remotePlayers.entries()].filter(([,r])=>r.g.visible).map(([id,r])=>({id,name:r.data?.name||'Aventureiro',level:r.data?.level||1,guildRank:r.data?.guildRank||'E',partyId:r.data?.partyId||null}));this.updatePlayerNameplate(this.localPlayerLabel,{name:this.state.playerName||'Aventureiro',level:this.state.level,hp:this.state.hp,maxHp:this.state.maxHp,guildRank:this.state.guildRank},true)
-    this.onHud?.({...this.state,destinationMarker:this.state.destinationMarker||null,xpNotifications:this.state.xpNotifications||[],lastXpGain:this.state.lastXpGain||null,levelUpCelebration:this.state.levelUpCelebration||null,gateAnnouncement:this.state.gateAnnouncement||null,dungeonModal:this.state.dungeonModal||null,dungeonCompletion:this.state.dungeonCompletion||null,minimap,mapSnapshot,horseBreeds:HORSE_BREEDS,inventory:[...this.state.inventory],equipment:{...this.state.equipment},quests:this.state.quests.map(q=>({...q})),classState:{...this.state.classState},travelState:{...this.state.travelState,vipCost:Math.max(5000,this.state.travelState?.vipCost||5000),nodes:{...(this.state.travelState?.nodes||{})}},settings:{...this.settings},mount:{...this.state.mount},stats:{...this.state.stats},attributes:{...this.state.attributes},guildMissions:(this.state.guildMissions||[]).map(m=>({...m,reward:{...m.reward}})),multiplayer:{...this.state.multiplayer},abilities:this.state.abilities?.map(a=>({...a}))||[]})
+    this.onHud?.({...this.state,destinationMarker:this.state.destinationMarker||null,caravanModal:this.state.caravanModal||null,xpNotifications:this.state.xpNotifications||[],lastXpGain:this.state.lastXpGain||null,levelUpCelebration:this.state.levelUpCelebration||null,gateAnnouncement:this.state.gateAnnouncement||null,dungeonModal:this.state.dungeonModal||null,dungeonCompletion:this.state.dungeonCompletion||null,minimap,mapSnapshot,horseBreeds:HORSE_BREEDS,inventory:[...this.state.inventory],equipment:{...this.state.equipment},quests:this.state.quests.map(q=>({...q})),classState:{...this.state.classState},travelState:{...this.state.travelState,vipCost:Math.max(5000,this.state.travelState?.vipCost||5000),nodes:{...(this.state.travelState?.nodes||{})}},settings:{...this.settings},mount:{...this.state.mount},stats:{...this.state.stats},attributes:{...this.state.attributes},guildMissions:(this.state.guildMissions||[]).map(m=>({...m,reward:{...m.reward}})),multiplayer:{...this.state.multiplayer},abilities:this.state.abilities?.map(a=>({...a}))||[]})
   }
 
   loop=()=>{
@@ -2850,6 +2867,6 @@ applyEnemyNetworkState(st){
       this.renderer.render(this.scene,this.camera)
       return
     }
-    if(!this.state.dungeon)this.ensureChunks();this.updateDayNight(dt);this.updateWeather(dt,t);this.updatePlayer(dt,t);if(this.auraRoot)this.auraRoot.position.copy(this.player.position);this.updateEffects(dt);this.updateProjectiles(dt);this.updateCityVisibility();this.updateRespawns();this.updateBots(dt,t);this.updateCityGuards(dt,t);this.updateEnemies(dt,t);this.updatePortals(t);this.gateManager?.update(dt,t);this.updateWater(t);this.updateNPCs(t,dt);this.advanceDungeonIfClear();this.updateInteractions();this.cameraFollow(dt);this.updateMultiplayer(dt);this.emitHud();this.renderer.render(this.scene,this.camera)
+    if(!this.state.dungeon)this.ensureChunks();this.updateDayNight(dt);this.updateWeather(dt,t);this.updatePlayer(dt,t);if(this.auraRoot)this.auraRoot.position.copy(this.player.position);this.updateEffects(dt);this.updateProjectiles(dt);this.updateCityVisibility();this.updateRespawns();this.updateBots(dt,t);this.updateCityGuards(dt,t);this.updateEnemies(dt,t);this.updatePortals(t);this.gateManager?.update(dt,t);this.caravanManager?.update(dt,t);this.updateWater(t);this.updateNPCs(t,dt);this.advanceDungeonIfClear();this.updateInteractions();this.cameraFollow(dt);this.updateMultiplayer(dt);this.emitHud();this.renderer.render(this.scene,this.camera)
   }
 }

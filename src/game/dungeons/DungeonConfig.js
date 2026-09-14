@@ -1,4 +1,14 @@
-// DungeonConfig.js - Complete configuration for the Gate & Dungeon System (Solo Leveling inspired)
+export const DUNGEON_CONFIG = {
+  roundsByRank: {
+    E: [3, 4],
+    D: [4, 5],
+    C: [5, 6],
+    B: [6, 7],
+    A: [7, 8],
+    S: [8, 10]
+  },
+  roundBreakSeconds: 4
+}
 
 export const GATE_RANKS = {
   E: {
@@ -10,6 +20,7 @@ export const GATE_RANKS = {
     glowHex: 0x7dd3fc,
     levelRange: [1, 12],
     floors: [1, 1],
+    rounds: [3, 4],
     baseHpMult: 0.9,
     baseAtkMult: 0.85,
     baseDefMult: 0.8,
@@ -31,6 +42,7 @@ export const GATE_RANKS = {
     glowHex: 0x86efac,
     levelRange: [12, 24],
     floors: [1, 2],
+    rounds: [4, 5],
     baseHpMult: 1.15,
     baseAtkMult: 1.1,
     baseDefMult: 1.05,
@@ -52,6 +64,7 @@ export const GATE_RANKS = {
     glowHex: 0x93c5fd,
     levelRange: [24, 40],
     floors: [2, 3],
+    rounds: [5, 6],
     baseHpMult: 1.45,
     baseAtkMult: 1.35,
     baseDefMult: 1.3,
@@ -73,6 +86,7 @@ export const GATE_RANKS = {
     glowHex: 0xd8b4fe,
     levelRange: [40, 60],
     floors: [3, 4],
+    rounds: [6, 7],
     baseHpMult: 1.85,
     baseAtkMult: 1.65,
     baseDefMult: 1.55,
@@ -94,6 +108,7 @@ export const GATE_RANKS = {
     glowHex: 0xfca5a5,
     levelRange: [60, 85],
     floors: [4, 5],
+    rounds: [7, 8],
     baseHpMult: 2.4,
     baseAtkMult: 2.1,
     baseDefMult: 1.9,
@@ -115,6 +130,7 @@ export const GATE_RANKS = {
     glowHex: 0xfde68a,
     levelRange: [85, 130],
     floors: [5, 5],
+    rounds: [8, 10],
     baseHpMult: 3.2,
     baseAtkMult: 2.75,
     baseDefMult: 2.4,

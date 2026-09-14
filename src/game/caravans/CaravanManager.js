@@ -1,0 +1,738 @@
+// CaravanManager.js - Central Living Caravan Ecosystem, lifecycle, 3D cart, 2-tier LOD, crime and looting
+import * as THREE from 'three'
+import { CITIES } from '../config.js'
+import { CARAVAN_STATES, CARAVAN_CATEGORIES, ROUTE_SECURITY, CITY_CARGO_SPECIALTIES, CARAVAN_SETTINGS } from './CaravanConfig.js'
+import { WorldRoadGraph } from './WorldRoadGraph.js'
+import { CaravanEscortAI } from './CaravanEscortAI.js'
+
+export class CaravanManager {
+  constructor(game) {
+    this.game = game
+    this.roadGraph = new WorldRoadGraph()
+    this.escortAI = new CaravanEscortAI(game)
+    this.caravans = []
+    this.routeRaidStats = new Map() // routeKey -> number of successful raids
+    this.nearDistanceThreshold = 120 // 120m for full 3D simulation LOD
+  }
+
+  init() {
+    this.spawnInitialCaravans()
+  }
+
+  spawnInitialCaravans() {
+    // Each city spawns at least one commercial caravan
+    for (const city of CITIES) {
+      const destinationId = this.roadGraph.getRandomDestination(city.id)
+      this.createCaravan({ originId: city.id, destinationId })
+    }
+  }
+
+  createCaravan({ originId, destinationId, categoryKey = 'COMMERCIAL' }) {
+    const originCity = CITIES.find(c => c.id === originId)
+    const destCity = CITIES.find(c => c.id === destinationId)
+    if (!originCity || !destCity) return null
+
+    const category = CARAVAN_CATEGORIES[categoryKey] || CARAVAN_CATEGORIES.COMMERCIAL
+    const cityPath = this.roadGraph.findCityPath(originId, destinationId)
+    const waypoints = this.roadGraph.buildWaypointsForRoute(cityPath)
+    if (waypoints.length === 0) return null
+
+    const routeKey = this.roadGraph.getRouteKey(originId, destinationId)
+    const raidCount = this.routeRaidStats.get(routeKey) || 0
+    const security = raidCount >= 3 ? ROUTE_SECURITY.CRITICAL : raidCount >= 1 ? ROUTE_SECURITY.DANGEROUS : ROUTE_SECURITY.SAFE
+
+    const specialty = CITY_CARGO_SPECIALTIES[originId] || CITY_CARGO_SPECIALTIES['aurora-city']
+    const cargo = specialty.goods.map(g => ({
+      ...g,
+      qty: Math.round(g.qtyRange[0] + Math.random() * (g.qtyRange[1] - g.qtyRange[0]))
+    }))
+    const gold = Math.round(specialty.goldRange[0] + Math.random() * (specialty.goldRange[1] - specialty.goldRange[0]))
+
+    const caravanId = `caravan_${originId}_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`
+    const spawnPos = { x: waypoints[0].x, z: waypoints[0].z }
+
+    // Calculate escort count and level based on city and route security
+    const guardCount = Math.min(8, category.guardCount + security.guardBonus)
+    const baseLevel = Math.max(1, (originCity.zoneId === 'aurora' ? 10 : originCity.zoneId === 'meadow' ? 20 : 35) + security.levelBonus)
+    const isElite = Math.random() < security.eliteChance
+
+    const caravan = {
+      id: caravanId,
+      name: `Caravana de ${originCity.name}`,
+      originCityId: originId,
+      destinationCityId: destinationId,
+      originCityName: originCity.name,
+      destCityName: destCity.name,
+      category,
+      security,
+      routeKey,
+      state: CARAVAN_STATES.TRAVELING,
+      waypoints,
+      currentWaypointIdx: 0,
+      position: new THREE.Vector3(spawnPos.x, 0, spawnPos.z),
+      heading: 0,
+      speed: CARAVAN_SETTINGS.travelSpeed,
+      hp: CARAVAN_SETTINGS.cartMaxHp,
+      maxHp: CARAVAN_SETTINGS.cartMaxHp,
+      cargo,
+      cargoGold: gold,
+      attackedByPlayer: false,
+      stuckTimer: 0,
+      stateTimer: 0,
+      meshGroup: null,
+      wheels: [],
+      guards: [],
+      lootAvailable: false
+    }
+
+    // Build 3D mesh (cart, horse, merchant)
+    this.buildCaravanMesh(caravan)
+    caravan.guards = this.escortAI.createEscortGuards(caravan, guardCount, baseLevel, isElite)
+
+    this.caravans.push(caravan)
+    return caravan
+  }
+
+  buildCaravanMesh(caravan) {
+    const g = new THREE.Group()
+    g.name = `CaravanMesh_${caravan.id}`
+
+    // 1. Wooden Wagon Body
+    const woodMat = new THREE.MeshStandardMaterial({ color: 0x5c4033, roughness: 0.85, metalness: 0.1 })
+    const cartBody = new THREE.Mesh(new THREE.BoxGeometry(2.4, 1.1, 4.2), woodMat)
+    cartBody.position.y = 1.2
+    cartBody.castShadow = true
+    g.add(cartBody)
+
+    // 2. Cloth Canopy (white/tan fabric)
+    const clothMat = new THREE.MeshStandardMaterial({ color: 0xe2d8c3, roughness: 0.9, side: THREE.DoubleSide })
+    const canopy = new THREE.Mesh(new THREE.CylinderGeometry(1.25, 1.25, 4.0, 16, 1, false, 0, Math.PI), clothMat)
+    canopy.position.set(0, 1.75, 0)
+    canopy.rotation.z = Math.PI / 2
+    canopy.rotation.y = Math.PI / 2
+    g.add(canopy)
+
+    // 3. Cargo crates and barrels in back
+    const crateMat = new THREE.MeshStandardMaterial({ color: 0x785338, roughness: 0.9 })
+    const crate1 = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.7, 0.7), crateMat)
+    crate1.position.set(0.5, 1.4, -0.8)
+    const crate2 = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.6, 0.6), crateMat)
+    crate2.position.set(-0.5, 1.35, -0.6)
+    const barrelMat = new THREE.MeshStandardMaterial({ color: 0x3e2723, roughness: 0.7 })
+    const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 0.7, 10), barrelMat)
+    barrel.position.set(0, 1.4, -1.2)
+    g.add(crate1, crate2, barrel)
+
+    // 4. Rotating Wooden Wheels
+    const wheelMat = new THREE.MeshStandardMaterial({ color: 0x332211, metalness: 0.2, roughness: 0.8 })
+    const wheelGeo = new THREE.CylinderGeometry(0.55, 0.55, 0.18, 12)
+    wheelGeo.rotateZ(Math.PI / 2)
+
+    const wheelOffsets = [
+      [-1.25, 0.55, 1.2],
+      [1.25, 0.55, 1.2],
+      [-1.25, 0.55, -1.2],
+      [1.25, 0.55, -1.2]
+    ]
+
+    const wheels = []
+    for (const [wx, wy, wz] of wheelOffsets) {
+      const w = new THREE.Mesh(wheelGeo, wheelMat)
+      w.position.set(wx, wy, wz)
+      w.castShadow = true
+      g.add(w)
+      wheels.push(w)
+    }
+    caravan.wheels = wheels
+
+    // 5. Draft Horse in front
+    const horseGroup = new THREE.Group()
+    horseGroup.position.set(0, 0, 3.2)
+    const horseMat = new THREE.MeshStandardMaterial({ color: 0x4a2e18, roughness: 0.7 })
+    const horseBody = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.0, 1.8), horseMat)
+    horseBody.position.y = 1.0
+    const horseHead = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.8, 0.8), horseMat)
+    horseHead.position.set(0, 1.7, 0.7)
+    horseHead.rotation.x = 0.35
+    horseGroup.add(horseBody, horseHead)
+
+    // Harness poles connecting to cart
+    const poleMat = new THREE.MeshStandardMaterial({ color: 0x222222 })
+    const pole1 = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 1.6), poleMat)
+    pole1.position.set(-0.6, 0.8, -0.9)
+    const pole2 = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 1.6), poleMat)
+    pole2.position.set(0.6, 0.8, -0.9)
+    horseGroup.add(pole1, pole2)
+    g.add(horseGroup)
+
+    // 6. Merchant NPC seated in front
+    const merchantMat = new THREE.MeshStandardMaterial({ color: 0x1d4ed8 })
+    const merchantBody = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.6, 0.4), merchantMat)
+    merchantBody.position.set(0, 1.8, 1.5)
+    const merchantHead = new THREE.Mesh(new THREE.SphereGeometry(0.18, 8, 8), new THREE.MeshStandardMaterial({ color: 0xe0a980 }))
+    merchantHead.position.set(0, 2.2, 1.5)
+    g.add(merchantBody, merchantHead)
+
+    // 7. Overhead Nameplate
+    const nameplate = this.buildCaravanNameplate(caravan)
+    nameplate.position.y = 3.2
+    g.add(nameplate)
+    caravan.nameplate = nameplate
+
+    g.position.copy(caravan.position)
+    this.game.worldRoot.add(g)
+    caravan.meshGroup = g
+  }
+
+  buildCaravanNameplate(caravan) {
+    const canvas = document.createElement('canvas')
+    canvas.width = 440
+    canvas.height = 90
+    const ctx = canvas.getContext('2d')
+
+    ctx.fillStyle = 'rgba(7, 15, 27, 0.9)'
+    ctx.strokeStyle = caravan.category.color
+    ctx.lineWidth = 4
+    ctx.beginPath()
+    ctx.roundRect?.(4, 4, 432, 82, 16)
+    if (!ctx.roundRect) ctx.rect(4, 4, 432, 82)
+    ctx.fill()
+    ctx.stroke()
+
+    ctx.font = 'bold 22px Inter, Arial'
+    ctx.fillStyle = caravan.category.color
+    ctx.textAlign = 'center'
+    ctx.fillText(`${caravan.category.icon} ${caravan.name}`, 220, 32)
+
+    ctx.font = '14px Inter, Arial'
+    ctx.fillStyle = '#cbd5e1'
+    ctx.fillText(`Destino: ${caravan.destCityName} • [${caravan.security.label}]`, 220, 56)
+
+    // HP Bar
+    ctx.fillStyle = '#1e293b'
+    ctx.fillRect(20, 66, 400, 12)
+    ctx.fillStyle = '#22c55e'
+    ctx.fillRect(20, 66, 400, 12)
+
+    const texture = new THREE.CanvasTexture(canvas)
+    texture.minFilter = THREE.LinearFilter
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false }))
+    sprite.scale.set(4.4, 0.9, 1)
+    sprite.renderOrder = 30
+    return sprite
+  }
+
+  updateCaravanHPBar(caravan) {
+    if (!caravan.nameplate || !caravan.nameplate.material?.map?.image) return
+    const canvas = caravan.nameplate.material.map.image
+    const ctx = canvas.getContext('2d')
+    const pct = Math.max(0, Math.min(1, caravan.hp / caravan.maxHp))
+
+    ctx.fillStyle = 'rgba(7, 15, 27, 0.9)'
+    ctx.strokeStyle = caravan.category.color
+    ctx.lineWidth = 4
+    ctx.beginPath()
+    ctx.roundRect?.(4, 4, 432, 82, 16)
+    if (!ctx.roundRect) ctx.rect(4, 4, 432, 82)
+    ctx.fill()
+    ctx.stroke()
+
+    ctx.font = 'bold 22px Inter, Arial'
+    ctx.fillStyle = caravan.category.color
+    ctx.textAlign = 'center'
+    ctx.fillText(`${caravan.category.icon} ${caravan.name}`, 220, 32)
+
+    ctx.font = '14px Inter, Arial'
+    ctx.fillStyle = '#cbd5e1'
+    ctx.fillText(`Destino: ${caravan.destCityName} • [${caravan.security.label}]`, 220, 56)
+
+    ctx.fillStyle = '#1e293b'
+    ctx.fillRect(20, 66, 400, 12)
+    ctx.fillStyle = pct > 0.5 ? '#22c55e' : pct > 0.25 ? '#f59e0b' : '#ef4444'
+    ctx.fillRect(20, 66, 400 * pct, 12)
+
+    caravan.nameplate.material.map.needsUpdate = true
+  }
+
+  update(dt, t) {
+    const playerPos = this.game.player ? this.game.player.position : new THREE.Vector3()
+
+    for (let i = this.caravans.length - 1; i >= 0; i--) {
+      const c = this.caravans[i]
+      const distToPlayer = c.position.distanceTo(playerPos)
+      const isNear = distToPlayer < this.nearDistanceThreshold
+
+      // LOD Simulation
+      if (c.meshGroup) {
+        c.meshGroup.visible = isNear && !this.game.state?.dungeon
+      }
+      for (const g of c.guards) {
+        if (g.mesh) g.mesh.visible = isNear && !g.dead && !this.game.state?.dungeon
+      }
+
+      // Check state machine
+      switch (c.state) {
+        case CARAVAN_STATES.TRAVELING:
+          this.updateTraveling(c, dt, isNear)
+          break
+        case CARAVAN_STATES.UNDER_ATTACK:
+          this.updateUnderAttack(c, dt, isNear)
+          break
+        case CARAVAN_STATES.BROKEN_DOWN:
+          this.updateBrokenDown(c, dt)
+          break
+        case CARAVAN_STATES.ARRIVED:
+        case CARAVAN_STATES.UNLOADING:
+        case CARAVAN_STATES.RESTOCKING:
+          this.updateCityCycle(c, dt)
+          break
+        case CARAVAN_STATES.ROBBED:
+        case CARAVAN_STATES.RETREATING:
+          this.updateRetreating(c, dt, isNear)
+          break
+        case CARAVAN_STATES.DESTROYED:
+          this.cleanupCaravan(c, i)
+          break
+      }
+
+      // Update escort AI if near
+      if (isNear && c.guards.length > 0) {
+        this.escortAI.updateGuards(c, dt)
+      }
+    }
+  }
+
+  updateTraveling(c, dt, isNear) {
+    const targetWp = c.waypoints[c.currentWaypointIdx]
+    if (!targetWp) {
+      // Arrived at destination
+      c.state = CARAVAN_STATES.ARRIVED
+      c.stateTimer = 0
+      this.game.toast?.(`🚚 ${c.name} chegou a salvo em ${c.destCityName}!`)
+      return
+    }
+
+    const dx = targetWp.x - c.position.x
+    const dz = targetWp.z - c.position.z
+    const dist = Math.hypot(dx, dz)
+
+    if (dist < 2.0) {
+      c.currentWaypointIdx++
+      c.stuckTimer = 0
+
+      // Rare Breakdown event on road
+      if (Math.random() < CARAVAN_SETTINGS.breakdownChance * 0.05) {
+        c.state = CARAVAN_STATES.BROKEN_DOWN
+        c.stateTimer = 18 // 18s repair time
+        this.game.toast?.(`⚙️ A ${c.name} parou para reparar o eixo da carroça.`)
+      }
+      return
+    }
+
+    // Advance along route
+    const step = Math.min(dist, c.speed * dt)
+    c.position.x += (dx / dist) * step
+    c.position.z += (dz / dist) * step
+    c.heading = Math.atan2(dx, dz)
+
+    if (isNear && c.meshGroup) {
+      c.meshGroup.position.copy(c.position)
+      c.meshGroup.rotation.y = c.heading
+
+      // Spin wheels
+      for (const w of c.wheels) {
+        w.rotation.x += step * 1.8
+      }
+    }
+
+    // Check wandering monsters or player threats
+    this.checkCaravanAmbush(c, isNear)
+  }
+
+  updateUnderAttack(c, dt, isNear) {
+    c.stateTimer += dt
+
+    // Check if guards survived or if all dead
+    const aliveGuards = c.guards.filter(g => !g.dead).length
+
+    if (aliveGuards === 0 && c.hp > 0) {
+      // Escort neutralized! Caravan can now be looted
+      c.state = CARAVAN_STATES.ROBBED
+      c.lootAvailable = true
+      this.game.toast?.(`💰 A escolta da ${c.name} foi derrotada! A carga está desprotegida!`)
+      return
+    }
+
+    if (c.hp <= 0) {
+      c.state = CARAVAN_STATES.ROBBED
+      c.lootAvailable = true
+      return
+    }
+
+    // If threats cleared, return to traveling after 8s
+    const threatsNearby = c.guards.some(g => g.target && !g.target.dead)
+    if (!threatsNearby && c.stateTimer > 8) {
+      c.state = CARAVAN_STATES.TRAVELING
+      c.attackedByPlayer = false
+    }
+  }
+
+  updateBrokenDown(c, dt) {
+    c.stateTimer -= dt
+    if (c.stateTimer <= 0) {
+      c.state = CARAVAN_STATES.TRAVELING
+      this.game.toast?.(`🔧 Reparos concluídos! A ${c.name} retomou a viagem para ${c.destCityName}.`)
+    }
+  }
+
+  updateCityCycle(c, dt) {
+    c.stateTimer += dt
+
+    if (c.state === CARAVAN_STATES.ARRIVED && c.stateTimer > 6) {
+      c.state = CARAVAN_STATES.UNLOADING
+      c.stateTimer = 0
+    } else if (c.state === CARAVAN_STATES.UNLOADING && c.stateTimer > 12) {
+      c.state = CARAVAN_STATES.RESTOCKING
+      c.stateTimer = 0
+    } else if (c.state === CARAVAN_STATES.RESTOCKING && c.stateTimer > CARAVAN_SETTINGS.restTimeSeconds) {
+      // Start next journey: origin is now current city, pick next destination
+      const newOrigin = c.destinationCityId
+      const newDest = this.roadGraph.getRandomDestination(newOrigin)
+      const newPath = this.roadGraph.findCityPath(newOrigin, newDest)
+      const newWaypoints = this.roadGraph.buildWaypointsForRoute(newPath)
+
+      c.originCityId = newOrigin
+      c.destinationCityId = newDest
+      const destCity = CITIES.find(ci => ci.id === newDest)
+      c.destCityName = destCity ? destCity.name : 'Asterra'
+      c.waypoints = newWaypoints
+      c.currentWaypointIdx = 0
+      c.hp = c.maxHp
+      c.state = CARAVAN_STATES.TRAVELING
+      c.stateTimer = 0
+      c.lootAvailable = false
+      c.attackedByPlayer = false
+
+      // Refresh cargo and respawn fallen guards
+      const specialty = CITY_CARGO_SPECIALTIES[newOrigin] || CITY_CARGO_SPECIALTIES['aurora-city']
+      c.cargo = specialty.goods.map(g => ({
+        ...g,
+        qty: Math.round(g.qtyRange[0] + Math.random() * (g.qtyRange[1] - g.qtyRange[0]))
+      }))
+      c.cargoGold = Math.round(specialty.goldRange[0] + Math.random() * (specialty.goldRange[1] - specialty.goldRange[0]))
+
+      for (const g of c.guards) {
+        g.dead = false
+        g.hp = g.maxHp
+        if (g.mesh) g.mesh.visible = true
+      }
+
+      this.updateCaravanHPBar(c)
+      this.game.toast?.(`📦 ${c.name} partiu de ${c.originCityName} rumo a ${c.destCityName}!`)
+    }
+  }
+
+  updateRetreating(c, dt, isNear) {
+    c.stateTimer += dt
+    // Survivors march back to origin city or dissipate after 25s
+    if (c.stateTimer > 35) {
+      c.state = CARAVAN_STATES.DESTROYED
+    }
+  }
+
+  checkCaravanAmbush(c, isNear) {
+    if (!this.game.enemies) return
+
+    for (const mob of this.game.enemies) {
+      if (mob.dead || !mob.g.visible) continue
+      const d = c.position.distanceTo(mob.g.position)
+      if (d < 16) {
+        c.state = CARAVAN_STATES.UNDER_ATTACK
+        c.stateTimer = 0
+        if (isNear) {
+          this.game.toast?.(`⚠️ A ${c.name} está sendo atacada por feras na estrada!`)
+        }
+        break
+      }
+    }
+  }
+
+  onPlayerAttackCaravan(caravan, damage = 40) {
+    if (!caravan) return
+
+    if (!caravan.attackedByPlayer) {
+      caravan.attackedByPlayer = true
+      caravan.state = CARAVAN_STATES.UNDER_ATTACK
+      caravan.stateTimer = 0
+
+      // Route raid count increases (escalating route danger!)
+      const currentRaids = this.routeRaidStats.get(caravan.routeKey) || 0
+      this.routeRaidStats.set(caravan.routeKey, currentRaids + 1)
+
+      // Crime alert toast
+      this.game.toast?.(`🚨 CRIME! Você atacou a ${caravan.name}! Os guardas retaliarão!`)
+      this.game.haptic?.(50)
+    }
+
+    caravan.hp = Math.max(0, caravan.hp - damage)
+    this.updateCaravanHPBar(caravan)
+
+    if (caravan.hp <= 0 && !caravan.lootAvailable) {
+      caravan.state = CARAVAN_STATES.ROBBED
+      caravan.lootAvailable = true
+      this.game.toast?.(`💥 A carroça da ${caravan.name} quebrou! Saqueie a carga com [E]!`)
+    }
+  }
+
+  getInteractionPrompt() {
+    const playerPos = this.game.player ? this.game.player.position : new THREE.Vector3()
+
+    for (const c of this.caravans) {
+      const d = c.position.distanceTo(playerPos)
+      if (d < 5.0) {
+        if (c.lootAvailable) {
+          return {
+            prompt: `E — Saquear Carga da ${c.name}`,
+            action: { type: 'caravan_loot', label: 'Saquear Caravana', icon: '💰', caravan: c }
+          }
+        }
+        if (c.state === CARAVAN_STATES.UNDER_ATTACK) {
+          return {
+            prompt: `⚔ Defenda a ${c.name} dos atacantes! (+XP e Ouro)`,
+            action: { type: 'caravan_defend', label: 'Defender Caravana', icon: '🛡', caravan: c }
+          }
+        }
+        return {
+          prompt: `E — Inspecionar ${c.name} [→ ${c.destCityName}]`,
+          action: { type: 'caravan_info', label: c.name, icon: '🚚', caravan: c }
+        }
+      }
+    }
+    return null
+  }
+
+  onInteract() {
+    const playerPos = this.game.player ? this.game.player.position : new THREE.Vector3()
+
+    for (const c of this.caravans) {
+      const d = c.position.distanceTo(playerPos)
+      if (d < 5.0) {
+        if (c.lootAvailable) {
+          this.lootCaravan(c)
+          return true
+        }
+        // Info inspection
+        this.openCaravanInfoModal(c)
+        return true
+      }
+    }
+    return false
+  }
+
+  lootCaravan(caravan) {
+    if (!caravan.lootAvailable) return
+
+    caravan.lootAvailable = false
+    const goldGained = caravan.cargoGold || 450
+    this.game.state.gold = (this.game.state.gold || 0) + goldGained
+
+    let itemsGained = 0
+    for (const item of caravan.cargo) {
+      if (this.game.addInventoryItem?.({
+        id: `cargo_${Date.now()}_${Math.random()}`,
+        name: item.name,
+        type: item.type,
+        subtype: item.type === 'potion' ? 'potion' : 'material',
+        value: item.value,
+        qty: item.qty || 5,
+        rarity: 'Comum'
+      })) {
+        itemsGained++
+      }
+    }
+
+    this.game.toast?.(`💰 Carga saqueada: +${goldGained}◈ Ouro e ${itemsGained} tipos de mercadorias!`)
+    this.game.spawnAbilityRing?.(0xf59e0b, 3.5, 0.8)
+    caravan.state = CARAVAN_STATES.RETREATING
+    caravan.stateTimer = 0
+  }
+
+  openCaravanInfoModal(caravan) {
+    if (!this.game.state) return
+    this.game.state.caravanModal = {
+      caravan,
+      origin: caravan.originCityName,
+      destination: caravan.destCityName,
+      category: caravan.category.name,
+      security: caravan.security.label,
+      guardsAlive: caravan.guards.filter(g => !g.dead).length,
+      totalGuards: caravan.guards.length,
+      hp: caravan.hp,
+      maxHp: caravan.maxHp,
+      cargoCount: caravan.cargo.reduce((acc, it) => acc + (it.qty || 1), 0),
+      cargoGold: caravan.cargoGold
+    }
+    this.game.suspendCombatForUI?.()
+  }
+
+  closeCaravanModal() {
+    if (this.game.state) {
+      this.game.state.caravanModal = null
+    }
+  }
+
+  onMonsterKilledNearCaravan(monster) {
+    // Reward player if they help defend a caravan under attack
+    const playerPos = this.game.player ? this.game.player.position : new THREE.Vector3()
+    for (const c of this.caravans) {
+      if (c.state === CARAVAN_STATES.UNDER_ATTACK && c.position.distanceTo(playerPos) < 28) {
+        this.game.gainXp?.(CARAVAN_SETTINGS.defenseRewardXP)
+        this.game.state.gold = (this.game.state.gold || 0) + CARAVAN_SETTINGS.defenseRewardGold
+        this.game.toast?.(`🛡 DEFESA DE CARAVANA: Inimigo eliminado! +${CARAVAN_SETTINGS.defenseRewardXP} XP e +${CARAVAN_SETTINGS.defenseRewardGold}◈ Ouro!`)
+        break
+      }
+    }
+  }
+
+  cleanupCaravan(c, index) {
+    if (c.meshGroup) {
+      this.game.worldRoot.remove(c.meshGroup)
+    }
+    for (const g of c.guards) {
+      if (g.mesh) this.game.worldRoot.remove(g.mesh)
+    }
+    this.caravans.splice(index, 1)
+
+    // Respawn new caravan from origin city after delay
+    setTimeout(() => {
+      this.createCaravan({ originId: c.originCityId, destinationId: this.roadGraph.getRandomDestination(c.originCityId) })
+    }, 25000)
+  }
+
+  getMapCaravans() {
+    return this.caravans.map(c => ({
+      id: c.id,
+      name: c.name,
+      x: c.position.x,
+      z: c.position.z,
+      origin: c.originCityName,
+      destination: c.destCityName,
+      state: c.state,
+      category: c.category.name,
+      icon: c.category.icon,
+      color: c.category.color,
+      security: c.security.label,
+      guardsAlive: c.guards.filter(g => !g.dead).length,
+      totalGuards: c.guards.length
+    }))
+  }
+
+  getAttackableTargets() {
+    const targets = []
+    for (const c of this.caravans) {
+      if (c.meshGroup && c.meshGroup.visible && c.hp > 0) {
+        targets.push({
+          g: c.meshGroup,
+          hp: c.hp,
+          maxHp: c.maxHp,
+          name: c.name,
+          level: 25,
+          boss: false,
+          isCaravanCart: true,
+          caravan: c
+        })
+      }
+      for (const g of c.guards) {
+        if (g.mesh && g.mesh.visible && !g.dead) {
+          targets.push({
+            g: g.mesh,
+            hp: g.hp,
+            maxHp: g.maxHp,
+            name: `${g.name} [Guarda]`,
+            level: g.level,
+            boss: g.isElite,
+            isCaravanGuard: true,
+            guard: g,
+            caravan: c
+          })
+        }
+      }
+    }
+    return targets
+  }
+
+  onDamageCaravanEntity(e, amount, { crit = false, knockback = 0.35 } = {}) {
+    const dealt = Math.max(1, Math.round(amount))
+    this.game.enterCombat?.(8)
+
+    if (e.isCaravanCart) {
+      const caravan = e.caravan
+      this.onPlayerAttackCaravan(caravan, dealt)
+      this.game.spawnDamageText?.(caravan.position, dealt, crit)
+      this.game.state.target = {
+        name: caravan.name,
+        level: 25,
+        hp: Math.max(0, caravan.hp),
+        maxHp: caravan.maxHp,
+        boss: false,
+        crit
+      }
+      return true
+    }
+
+    if (e.isCaravanGuard) {
+      const guard = e.guard
+      const caravan = e.caravan
+      if (!guard || guard.dead) return false
+
+      if (!caravan.attackedByPlayer) {
+        caravan.attackedByPlayer = true
+        caravan.state = CARAVAN_STATES.UNDER_ATTACK
+        caravan.stateTimer = 0
+        const currentRaids = this.routeRaidStats.get(caravan.routeKey) || 0
+        this.routeRaidStats.set(caravan.routeKey, currentRaids + 1)
+        this.game.toast?.(`🚨 CRIME! Você atacou a escolta de ${caravan.name}!`)
+        this.game.haptic?.(40)
+      }
+
+      guard.hp -= dealt
+      guard.target = this.game.player
+      this.game.spawnDamageText?.(guard.mesh.position, dealt, crit)
+      this.escortAI.updateGuardNameplate(guard)
+
+      this.game.state.target = {
+        name: `${guard.name} [Guarda]`,
+        level: guard.level,
+        hp: Math.max(0, guard.hp),
+        maxHp: guard.maxHp,
+        boss: guard.isElite,
+        crit
+      }
+
+      if (knockback && guard.mesh && this.game.player) {
+        guard.mesh.position.addScaledVector(
+          guard.mesh.position.clone().sub(this.game.player.position).normalize(),
+          knockback
+        )
+      }
+
+      if (guard.hp <= 0) {
+        guard.dead = true
+        if (guard.mesh) guard.mesh.visible = false
+        const xp = Math.round(25 + guard.level * 6)
+        this.game.gainXp?.(xp)
+        this.game.toast?.(`Guarda ${guard.name} derrotado! +${xp} XP`)
+        
+        const anyAlive = caravan.guards.some(g => !g.dead)
+        if (!anyAlive && caravan.state !== CARAVAN_STATES.ROBBED) {
+          caravan.state = CARAVAN_STATES.ROBBED
+          caravan.lootAvailable = true
+          this.game.toast?.(`🏆 Todos os guardas foram derrotados! Caravana indefesa! Saqueie com [E]!`)
+        }
+      }
+      return true
+    }
+    return false
+  }
+}
+
