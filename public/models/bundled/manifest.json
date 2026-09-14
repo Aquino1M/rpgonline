@@ -1,0 +1,29 @@
+{
+  "version": "0.9.3",
+  "generatedAt": "2026-09-13T17:30:00Z",
+  "sources": [
+    "PACK2(2).zip",
+    "4(1).zip"
+  ],
+  "playerPolicy": "LOCKED - bundled PACK/PACK2 assets are never used for the playable character",
+  "mobs": [],
+  "scenery": [],
+  "ignoredCharacters": [],
+  "ignored": [
+    {
+      "source": "PACK",
+      "path": "NaturePack_COLLADA.rar",
+      "reason": "arquivo RAR não é servido no navegador; Castle Kit + MarketPack já cobrem cenário nesta build"
+    },
+    {
+      "source": "PACK",
+      "path": "weapons/unitypackages",
+      "reason": "armas não foram importadas porque esta atualização foi limitada a mobs e cenário, conforme solicitado"
+    },
+    {
+      "source": "V0.9.3",
+      "path": "PACK/PACK2 mob assets",
+      "reason": "modelos importados de mobs removidos da build limpa; mobs procedurais estaveis sao usados para evitar bugs de escala/origem"
+    }
+  ]
+}

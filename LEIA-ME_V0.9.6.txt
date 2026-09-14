@@ -1,0 +1,29 @@
+SHADOW ASCENSION — V0.9.6 MOBILE COMPLETE + MULTIPLAYER
+
+PRINCIPAIS AJUSTES
+- HUD mobile limpo: menu recolhível e poderes na parte inferior.
+- Botão contextual no mobile para lojas, NPCs, pesca, portais e coleta.
+- Loja com abas COMPRAR/VENDER e lista horizontal arrastável por dedo ou mouse.
+- Inventário organizado por categoria e raridade; itens iguais empilham e exibem quantidade.
+- Durabilidade em armas, ferramentas, armaduras e botas; ferreiro pode reparar.
+- Machado é obrigatório para madeira; picareta é obrigatória para minério.
+- Ataque segurado no mobile é automático e pode acionar habilidades prontas.
+- Câmera terceira pessoa centralizada, com movimento vertical não invertido.
+- Montaria ajustada para mobile/online.
+- Multiplayer com reconexão, ping, descarte de estados antigos, proteção contra fila de rede e troca real de itens/ouro.
+- Pesca, peixes, venda de peixes, streaming incremental de chunks e otimizações gráficas permanecem ativos.
+
+COMO RODAR NO WINDOWS
+1. Extraia o ZIP em uma pasta nova.
+2. Execute JOGAR_LOCAL.bat.
+3. Se necessário, deixe o script instalar as dependências.
+4. Abra o endereço mostrado pelo Vite no navegador.
+
+MULTIPLAYER LAN
+- Execute INICIAR_SERVIDOR_LAN.bat no PC que será o servidor.
+- Nos outros aparelhos, abra o endereço de rede exibido e use o mesmo servidor multiplayer.
+
+VALIDAÇÃO
+- Os arquivos JS críticos passaram por `node --check`.
+- O ZIP foi testado com `unzip -t` sem erros.
+- O build Vite não pôde ser executado neste ambiente porque a instalação npm excedeu o limite de tempo; rode `npm install` e `npm run build` localmente para uma checagem completa.

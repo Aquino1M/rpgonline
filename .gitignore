@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.vercel/
+*.log
+.DS_Store
+temp_v080/
+temp_v084/
+ShadowAscension_Web3D_V0.8.4/
+*.zip
+*.rar
+/PACK/
+/PACK2/

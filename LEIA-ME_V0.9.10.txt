@@ -1,0 +1,13 @@
+SHADOW ASCENSION V0.9.10
+
+Correções principais:
+- Mercado no PC ficou mais compacto e proporcional.
+- Escala dos menus de desktop suavizada.
+- Direção padrão da câmera corrigida nos dois eixos.
+- Configurações > Inverter câmera alterna horizontal e vertical ao mesmo tempo.
+- A preferência de câmera é salva junto com o perfil.
+
+Teste local:
+1. Extraia em uma pasta nova.
+2. Execute JOGAR_LOCAL.bat.
+3. No jogo, abra Opções para alternar Inverter câmera.

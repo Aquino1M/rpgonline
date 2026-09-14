@@ -1,0 +1,12 @@
+PUBLICAR NO GITHUB - V0.9.9
+============================
+
+1. Extraia este ZIP em uma pasta nova.
+2. Execute PUBLICAR_RPGONLINE.bat.
+3. Se o Git Credential Manager abrir o Brave, faca login normalmente na conta Aquino1M e autorize.
+4. O script agora executa `git fetch origin main` antes do `git push --force-with-lease`.
+
+O erro anterior "rejected (stale info)" nao era problema do Brave. A referencia local do branch remoto estava desatualizada. O novo script corrige isso antes de publicar.
+
+Repositorio:
+https://github.com/Aquino1M/rpgonline

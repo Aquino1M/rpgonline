@@ -1,0 +1,18 @@
+SHADOW ASCENSION — V0.9.9 MOBILE + LOBBIES + VIAGEM RÁPIDA
+
+1. Extraia este ZIP em uma pasta nova.
+2. Rode JOGAR_LOCAL.bat para testar localmente.
+3. Para LAN/multiplayer local, use INICIAR_SERVIDOR_LAN.bat.
+4. No Vercel, configure Upstash Redis conforme VERCEL_MULTIPLAYER.md.
+
+Principais correções:
+- HUD mobile e escala dos menus;
+- botões touch sem sobreposição;
+- loja com scroll vertical e filtros;
+- inventário por categoria/raridade;
+- câmera terceira pessoa corrigida;
+- lobbies persistentes;
+- Moço Viajante em todas as cidades;
+- fast travel pago com custos e requisito de nível;
+- placas de serviços;
+- mapa com zonas e níveis maiores.

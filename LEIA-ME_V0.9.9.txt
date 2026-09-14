@@ -1,0 +1,7 @@
+SHADOW ASCENSION V0.9.9
+
+- Extraia em uma pasta nova.
+- Execute JOGAR_LOCAL.bat para teste local.
+- Mobile: use MENU para abrir os painéis, botão contextual para NPC/loja/pesca e controles inferiores para combate.
+- Multiplayer: o jogo usa lobbies Asterra 01–06 e lembra o último lobby no perfil.
+- Viagem: fale com o Moço Viajante em qualquer cidade para ver destinos, níveis e custos.

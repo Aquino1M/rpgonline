@@ -1,0 +1,10 @@
+{
+  "functions": {
+    "api/multiplayer.js": { "maxDuration": 10 }
+  },
+  "routes": [
+    { "handle": "filesystem" },
+    { "src": "/.*", "dest": "/index.html" }
+  ]
+}
+
