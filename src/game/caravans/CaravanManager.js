@@ -20,8 +20,8 @@ export class CaravanManager {
   }
 
   spawnInitialCaravans() {
-    // Each city spawns at least one commercial caravan
-    for (const city of CITIES) {
+    if (this.caravans.length) return
+    for (const city of CITIES.slice(0, CARAVAN_SETTINGS.maxActiveCaravans)) {
       const destinationId = this.roadGraph.getRandomDestination(city.id)
       this.createCaravan({ originId: city.id, destinationId })
     }
@@ -30,7 +30,8 @@ export class CaravanManager {
   createCaravan({ originId, destinationId, categoryKey = 'COMMERCIAL' }) {
     const originCity = CITIES.find(c => c.id === originId)
     const destCity = CITIES.find(c => c.id === destinationId)
-    if (!originCity || !destCity) return null
+    if (!originCity || !destCity || this.caravans.length >= CARAVAN_SETTINGS.maxActiveCaravans) return null
+    if (this.caravans.some(c => c.originCityId === originId && c.destinationCityId === destinationId && c.state !== CARAVAN_STATES.DESTROYED)) return null
 
     const category = CARAVAN_CATEGORIES[categoryKey] || CARAVAN_CATEGORIES.COMMERCIAL
     const cityPath = this.roadGraph.findCityPath(originId, destinationId)
@@ -308,7 +309,6 @@ export class CaravanManager {
       // Arrived at destination
       c.state = CARAVAN_STATES.ARRIVED
       c.stateTimer = 0
-      this.game.toast?.(`🚚 ${c.name} chegou a salvo em ${c.destCityName}!`)
       return
     }
 
@@ -324,7 +324,6 @@ export class CaravanManager {
       if (Math.random() < CARAVAN_SETTINGS.breakdownChance * 0.05) {
         c.state = CARAVAN_STATES.BROKEN_DOWN
         c.stateTimer = 18 // 18s repair time
-        this.game.toast?.(`⚙️ A ${c.name} parou para reparar o eixo da carroça.`)
       }
       return
     }
@@ -381,7 +380,6 @@ export class CaravanManager {
     c.stateTimer -= dt
     if (c.stateTimer <= 0) {
       c.state = CARAVAN_STATES.TRAVELING
-      this.game.toast?.(`🔧 Reparos concluídos! A ${c.name} retomou a viagem para ${c.destCityName}.`)
     }
   }
 
@@ -397,14 +395,20 @@ export class CaravanManager {
     } else if (c.state === CARAVAN_STATES.RESTOCKING && c.stateTimer > CARAVAN_SETTINGS.restTimeSeconds) {
       // Start next journey: origin is now current city, pick next destination
       const newOrigin = c.destinationCityId
+      if (this.caravans.some(other => other !== c && other.originCityId === newOrigin && other.state === CARAVAN_STATES.TRAVELING)) return
       const newDest = this.roadGraph.getRandomDestination(newOrigin)
       const newPath = this.roadGraph.findCityPath(newOrigin, newDest)
       const newWaypoints = this.roadGraph.buildWaypointsForRoute(newPath)
 
       c.originCityId = newOrigin
       c.destinationCityId = newDest
+      const originCity = CITIES.find(ci => ci.id === newOrigin)
       const destCity = CITIES.find(ci => ci.id === newDest)
+      c.originCityName = originCity ? originCity.name : 'Asterra'
       c.destCityName = destCity ? destCity.name : 'Asterra'
+      c.routeKey = this.roadGraph.getRouteKey(newOrigin, newDest)
+      const raids = this.routeRaidStats.get(c.routeKey) || 0
+      c.security = raids >= 3 ? ROUTE_SECURITY.CRITICAL : raids >= 1 ? ROUTE_SECURITY.DANGEROUS : ROUTE_SECURITY.SAFE
       c.waypoints = newWaypoints
       c.currentWaypointIdx = 0
       c.hp = c.maxHp
@@ -428,7 +432,6 @@ export class CaravanManager {
       }
 
       this.updateCaravanHPBar(c)
-      this.game.toast?.(`📦 ${c.name} partiu de ${c.originCityName} rumo a ${c.destCityName}!`)
     }
   }
 
@@ -735,4 +738,3 @@ export class CaravanManager {
     return false
   }
 }
-

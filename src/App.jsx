@@ -138,7 +138,8 @@ export default function App(){
       <div className="identity-line"><strong>{hud.playerName||'Aventureiro'}</strong><span>RANK {hud.guildRank||'E'}</span></div><div className="zone-line"><strong>{hud.currentCity||hud.zone}</strong><span>⚔ {hud.atk} &nbsp; 🛡 {hud.def}</span></div>
       <div className="position-line">COORD. {Math.round(hud.playerPosition?.x||0)}, {Math.round(hud.playerPosition?.z||0)}</div>
       <Bar label={`HP ${Math.floor(hud.hp)}/${hud.maxHp}${hud.inCombat ? ` [⚔ Em Combate ${hud.combatTimer||8}s]` : (hud.hp < hud.maxHp && hud.stamina >= hud.maxStamina - 0.5) ? ' [💚 Regen]' : ''}`} value={hp} cls="hp"/><Bar label={`Vigor ${Math.floor(hud.stamina)}/${hud.maxStamina}`} value={st} cls="stamina"/><Bar label={`XP ${Math.floor(hud.xp)}/${hud.nextXp}`} value={xp} cls="xp"/>
-      <div className="currency-row"><span>◈ {hud.gold} ouro</span><span>◆ {hud.ores||0} minério</span><span>📖 {grimoireQty} grimório{grimoireQty!==1?'s':''}</span></div>
+      <div className="gold-wallet-hud">◈ <b>{hud.gold}</b> ouro</div>
+      <div className="currency-row"><span>◆ {hud.ores||0} minério</span><span>📖 {grimoireQty} grimório{grimoireQty!==1?'s':''}</span></div>
     </section>
 
     <div className="world-status glass">
@@ -242,7 +243,7 @@ export default function App(){
     {viewport.isDesktop&&<div className="quickbar glass">
       <QuickButton hotkey="R" icon="🧪" label="Poção" badge={potionQty} onClick={()=>call('usePotion')} disabled={!potionQty}/>
       {abilities.map(a=><QuickButton key={a.slot} hotkey={String(a.slot)} icon={a.icon} label={a.name} badge={a.remaining>0?`${a.remaining.toFixed(1)}s`:''} cooldown={a.remaining} maxCooldown={a.cooldown} disabled={!a.ready} onClick={()=>call('castAbility',a.slot)} title={`${a.name} • ${a.cost} vigor • CD ${a.cooldown}s`}/>) }
-      <QuickButton hotkey="Space" icon="↥" label="Pular" onClick={()=>call('jump')}/><QuickButton hotkey="Shift" icon="↯" label="Esquiva" onClick={()=>call('dash')}/><QuickButton hotkey="E" icon="☞" label="Interagir" onClick={()=>call('interact')}/><QuickButton hotkey="H" icon="♞" label="Montaria" onClick={()=>call('toggleMount')}/>
+      <QuickButton hotkey="H" icon="♞" label="Montaria" onClick={()=>call('toggleMount')}/>
     </div>}
 
     {viewport.isDesktop&&<><button className="help-button" onClick={()=>setHelp(v=>!v)}>?</button>
@@ -321,7 +322,7 @@ function Inventory({hud,equip,unequip,call}){
   const activeClassId=hud.classState?.activeClassId||'mercenary_swordsman'
   const activeClass=CLASSES_LIST.find(c=>c.id===activeClassId)||CLASSES_LIST[0]||{name:'Mercenário',icon:'⚔️',tier:'COMMON'}
   const activeTier=CLASS_TIERS[activeClass.tier]||CLASS_TIERS.COMMON||{color:'#38bdf8'}
-  const [mobileTab,setMobileTab]=useState('character') // 'bag' | 'character'
+  const [mobileTab,setMobileTab]=useState('bag') // 'bag' | 'character'
   const [tab,setTab]=useState('all')
   const [rarity,setRarity]=useState('all')
   const [selectedBagItem,setSelectedBagItem]=useState(null)
@@ -347,7 +348,6 @@ function Inventory({hud,equip,unequip,call}){
 
   return (
     <div className={`inventory-rpg-container mobile-tab-${mobileTab}`}>
-      {/* Mobile-only top sub-navigation */}
       <div className="mobile-inv-nav">
         <button
           type="button"
@@ -367,7 +367,7 @@ function Inventory({hud,equip,unequip,call}){
 
       <div className="inventory-rpg">
         {/* CHARACTER SECTION */}
-        <section className={`character-hub ${mobileTab==='bag' ? 'hide-mobile' : ''}`}>
+        <section className={`character-hub ${mobileTab!=='character' ? 'inventory-tab-hidden' : ''}`}>
           <div className="hub-title"><span>PERSONAGEM</span><b>Nível {hud.level}</b></div>
           <div className="character-display-stage">
             <div className="hero-avatar-center">
@@ -465,7 +465,7 @@ function Inventory({hud,equip,unequip,call}){
         </section>
 
         {/* BACKPACK SECTION */}
-        <section className={`bag-rpg ${mobileTab==='character' ? 'hide-mobile' : ''}`}>
+        <section className={`bag-rpg ${mobileTab!=='bag' ? 'inventory-tab-hidden' : ''}`}>
           <div className="section-title">
             <div><small>INVENTÁRIO ORGANIZADO</small><h3>Mochila do Desperto</h3></div>
             <span>{items.length}/40 slots</span>
@@ -550,7 +550,7 @@ function ItemCard({item,actions,compact=false,isSelected=false,onSelect}){
   </article>
 }
 
-function Quests({hud,accept,claim}){const groups={active:hud.quests?.filter(q=>q.status==='active'||q.status==='ready')||[],available:hud.quests?.filter(q=>q.status==='available')||[],done:hud.quests?.filter(q=>q.status==='done')||[]};return <div className="quest-layout"><QuestList title="Em andamento" list={groups.active} hud={hud} accept={accept} claim={claim}/><QuestList title="Disponíveis" list={groups.available} hud={hud} accept={accept} claim={claim}/><QuestList title="Concluídas" list={groups.done} hud={hud} accept={accept} claim={claim}/></div>}
+function Quests({hud,accept,claim}){const groups={active:hud.quests?.filter(q=>q.status==='active'||q.status==='ready')||[],available:hud.quests?.filter(q=>q.status==='available')||[],done:hud.quests?.filter(q=>q.status==='done')||[]},titles={active:'Em andamento',available:'Disponíveis',done:'Concluídas'},[tab,setTab]=useState(groups.active.length?'active':'available');return <div className="quest-board"><nav className="quest-tabs" aria-label="Categorias de missões">{Object.keys(groups).map(key=><button key={key} className={tab===key?'active':''} onClick={()=>setTab(key)}>{titles[key]} <b>{groups[key].length}</b></button>)}</nav><div className="quest-layout"><QuestList title={titles[tab]} list={groups[tab]} hud={hud} accept={accept} claim={claim}/></div></div>}
 function QuestList({title,list,hud,accept,claim}){return <section className="quest-group"><h3>{title}</h3>{!list.length&&<p className="empty">Nenhuma missão.</p>}{list.map(q=><article className={`quest ${q.status}`} key={q.id}><div><b>{q.title}</b><small>{q.giver} • Nv.{q.minLevel}+</small></div><p>{q.text}</p>{q.status!=='available'&&q.status!=='done'&&<Bar value={Math.min(100,(q.progress||0)/q.goal*100)} cls="questbar"/>}<footer><span>{q.status==='active'||q.status==='ready'?`${q.progress||0}/${q.goal}`:`XP ${q.reward.xp} • ◈ ${q.reward.gold}`}</span>{q.status==='available'&&<button disabled={hud.level<q.minLevel} onClick={()=>accept(q.id)}>Aceitar</button>}{q.status==='ready'&&<button onClick={()=>claim(q.id)}>Receber</button>}</footer></article>)}</section>}
 
 
@@ -750,7 +750,6 @@ function MobileControls({hud,abilities,call,touch}){
       <button onClick={()=>closeAnd('grimoire')}>📖<small>Classes</small></button>
       <button onClick={()=>closeAnd('quests')}>📜<small>Missões</small></button>
       <button onClick={()=>closeAnd('guild')}>🏛<small>Guilda</small></button>
-      <button onClick={()=>closeAnd('travel')}>🚐<small>Viajante</small></button>
       <button onClick={()=>closeAnd('trade')}>🤝<small>Troca</small></button>
       <button onClick={()=>closeAnd('attributes')}>
         ✚<small>Atributos</small>
@@ -758,9 +757,6 @@ function MobileControls({hud,abilities,call,touch}){
       </button>
       <button onClick={()=>closeAnd('map')}>🗺<small>Mapa</small></button>
       <button onClick={()=>closeAnd('settings')}>⚙<small>Opções</small></button>
-      <button onClick={()=>{setMenuOpen(false);call('toggleCombatMode')}}>
-        {hud.combatMode?'🎯':'👁'}<small>{hud.combatMode?'Mira Fixa':'Câm. Livre'}</small>
-      </button>
     </div>}
     {!hud.uiPanel&&<>
       {hud.multiplayer?.connected&&<div className={`mobile-network-chip glass ${hud.multiplayer?.quality||''}`}><b>● ONLINE</b><span>{hud.multiplayer.players||0}</span><small>{String(hud.multiplayer?.room||'asterra-global').replace('asterra-','L')}</small>{hud.multiplayer.latencyMs>0&&<small>{Math.round(hud.multiplayer.latencyMs)} ms</small>}</div>}
@@ -1770,6 +1766,7 @@ function AuthGate({ onLogin }) {
 function Grimoire({ hud, onAwaken, onSwitch, onUpgradeRank, onAcceptQuest, onClaimQuest }) {
   const activeId = hud.classState?.activeClassId || 'mercenary_swordsman'
   const unlockedIds = hud.classState?.unlockedClassIds || ['mercenary_swordsman']
+  const unlockedClasses = CLASSES_LIST.filter(cls => unlockedIds.includes(cls.id))
   const awakeningCount = hud.classState?.awakeningCount || 0
   const activeCls = CLASSES_LIST.find(c => c.id === activeId) || CLASSES_LIST[0]
   const grimoireQty = hud.inventory?.find(i => i.subtype === 'grimoire')?.qty || 0
@@ -1919,25 +1916,18 @@ function Grimoire({ hud, onAwaken, onSwitch, onUpgradeRank, onAcceptQuest, onCla
       </div>
 
       <div className="classes-collection">
-        <h3 style={{ margin: '0 0 6px', fontSize: '13px' }}>Coleção de Almas ({unlockedIds.length}/{CLASSES_LIST.length})</h3>
-        {CLASSES_LIST.map(cls => {
-          const unlocked = unlockedIds.includes(cls.id)
+        <h3 style={{ margin: '0 0 6px', fontSize: '13px' }}>Classes Despertas</h3>
+        {unlockedClasses.map(cls => {
           const isActive = cls.id === activeId
           const tier = CLASS_TIERS[cls.tier]
           const clsRank = classRanks[cls.id] || 1
           return (
-            <div key={cls.id} className={`class-card-item ${isActive ? 'active' : ''} ${!unlocked ? 'locked' : ''}`}>
+            <div key={cls.id} className={`class-card-item ${isActive ? 'active' : ''}`}>
               <div>
-                <b>{tier.icon} {cls.name} {unlocked && <span style={{fontSize:'9px',color:'#fbbf24',marginLeft:'4px'}}>G.{clsRank}</span>}</b>
+                <b>{tier.icon} {cls.name} <span style={{fontSize:'9px',color:'#fbbf24',marginLeft:'4px'}}>G.{clsRank}</span></b>
                 <small style={{ color: tier.color }}>{tier.name} • {cls.skill.name}</small>
               </div>
-              {unlocked ? (
-                <button disabled={isActive} onClick={() => onSwitch(cls.id)}>
-                  {isActive ? 'Ativa' : 'Equipar'}
-                </button>
-              ) : (
-                <small style={{ color: '#64748b' }}>Bloqueada</small>
-              )}
+              <button disabled={isActive} onClick={() => onSwitch(cls.id)}>{isActive ? 'Ativa' : 'Equipar'}</button>
             </div>
           )
         })}

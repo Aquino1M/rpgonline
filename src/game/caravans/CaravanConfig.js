@@ -147,6 +147,7 @@ export const CITY_CARGO_SPECIALTIES = {
 }
 
 export const CARAVAN_SETTINGS = {
+  maxActiveCaravans: 5,        // keeps city hubs readable and prevents route stacking
   travelSpeed: 4.8,            // Units per second along the road
   restTimeSeconds: 45,         // Time spent in destination before starting next route
   recruitTimeSeconds: 15,      // Time spent gathering escort

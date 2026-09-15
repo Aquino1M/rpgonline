@@ -7,12 +7,13 @@ const clamp=(v,a,b)=>Math.max(a,Math.min(b,v))
 export default function WorldMap({hud}){
   const ref=useRef(null)
   const pinch=useRef(null)
-  const dragRef=useRef({ active: false, startX: 0, startY: 0, initialPanX: 0, initialPanZ: 0 })
+  const dragRef=useRef({ active: false, moved: false, startX: 0, startY: 0, initialPanX: 0, initialPanZ: 0 })
   const [showMobs,setShowMobs]=useState(true)
   const [fog,setFog]=useState(true)
   const [zoom,setZoom]=useState(1.35)
   const [pan,setPan]=useState({ x: 0, z: 0 })
   const [isDragging,setIsDragging]=useState(false)
+  const [markMode,setMarkMode]=useState(false)
 
   const data=hud.mapSnapshot
   const setMapZoom=v=>setZoom(clamp(Math.round(v*4)/4,1,4))
@@ -144,7 +145,7 @@ export default function WorldMap({hud}){
     e.currentTarget.setPointerCapture?.(e.pointerId)
     activePointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
     if (activePointers.current.size === 1) {
-      dragRef.current = { active: true, startX: e.clientX, startY: e.clientY, initialPanX: pan.x, initialPanZ: pan.z }
+      dragRef.current = { active: true, moved: false, startX: e.clientX, startY: e.clientY, initialPanX: pan.x, initialPanZ: pan.z }
       setIsDragging(true)
     } else if (activePointers.current.size === 2) {
       dragRef.current.active = false
@@ -165,6 +166,7 @@ export default function WorldMap({hud}){
       const viewWorld = limit * 2 / zoom
       const dx = e.clientX - dragRef.current.startX
       const dy = e.clientY - dragRef.current.startY
+      if (Math.hypot(dx, dy) > 5) dragRef.current.moved = true
       const worldDx = (dx / rect.width) * viewWorld
       const worldDz = (dy / rect.height) * viewWorld
       setPan({ x: dragRef.current.initialPanX - worldDx, z: dragRef.current.initialPanZ - worldDz })
@@ -176,6 +178,19 @@ export default function WorldMap({hud}){
   }
 
   const onPointerUp = e => {
+    const shouldMark = markMode && activePointers.current.size === 1 && !dragRef.current.moved && ref.current && data
+    if (shouldMark) {
+      const rect = ref.current.getBoundingClientRect()
+      const limit = data.limit || WORLD.worldLimit
+      const viewWorld = limit * 2 / zoom, half = viewWorld / 2
+      const player = data.player || hud.playerPosition || { x: 0, z: 0 }
+      const cx = clamp((player.x || 0) + pan.x, -limit + half, limit - half)
+      const cz = clamp((player.z || 0) + pan.z, -limit + half, limit - half)
+      const x = clamp(cx - half + ((e.clientX - rect.left) / rect.width) * viewWorld, -limit, limit)
+      const z = clamp(cz - half + ((e.clientY - rect.top) / rect.height) * viewWorld, -limit, limit)
+      window.game?.setDestinationMarker({ x, z, name: 'Destino marcado', color: '#38bdf8' })
+      setMarkMode(false)
+    }
     try { e.currentTarget.releasePointerCapture?.(e.pointerId) } catch {}
     activePointers.current.delete(e.pointerId)
     if (activePointers.current.size === 0) {
@@ -185,7 +200,7 @@ export default function WorldMap({hud}){
     } else if (activePointers.current.size === 1) {
       initialPinch.current = null
       const remaining = activePointers.current.values().next().value
-      dragRef.current = { active: true, startX: remaining.x, startY: remaining.y, initialPanX: pan.x, initialPanZ: pan.z }
+      dragRef.current = { active: true, moved: false, startX: remaining.x, startY: remaining.y, initialPanX: pan.x, initialPanZ: pan.z }
       setIsDragging(true)
     }
   }
@@ -214,7 +229,7 @@ export default function WorldMap({hud}){
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
         onWheel={wheel}
-        style={{ cursor: isDragging ? 'grabbing' : 'grab', touchAction: 'none' }}
+        style={{ cursor: markMode ? 'crosshair' : isDragging ? 'grabbing' : 'grab', touchAction: 'none' }}
       >
         <canvas ref={ref} className="world-map-canvas"/>
         <div className="map-compass"><b>N</b><span>W</span><span>E</span><small>S</small></div>
@@ -229,6 +244,8 @@ export default function WorldMap({hud}){
         <button className={fog?'active':''} onClick={()=>setFog(v=>!v)}>◐ Exploração</button>
         <button className={showMobs?'active':''} onClick={()=>setShowMobs(v=>!v)}>★ Bosses</button>
         <button onClick={recenter} className="recenter-btn">📍 Centralizar Jogador</button>
+        <button className={markMode?'active':''} onClick={()=>setMarkMode(v=>!v)}>🎯 {markMode?'Toque no mapa':'Marcar local'}</button>
+        {hud.destinationMarker&&<button onClick={()=>window.game?.clearDestinationMarker()}>✕ Limpar destino</button>}
         <span className="map-hint">PC: arraste e use a roda. Mobile/Tablet: arraste 1 dedo e pinça com 2 dedos.</span>
       </div>
     </section>
@@ -247,42 +264,6 @@ export default function WorldMap({hud}){
         <span><i className="legend-res">🪵</i>Recursos</span>
       </div>
 
-      {data.gates && data.gates.length > 0 && (
-        <>
-          <h4>🌀 Portais e Masmorras</h4>
-          <div className="city-index gates-index" style={{display:'flex',flexDirection:'column',gap:'8px',marginBottom:'12px'}}>
-            {data.gates.map(g => (
-              <div key={g.id} style={{padding:'8px 10px',borderRadius:'10px',background:'rgba(11,25,40,0.7)',border:`1px solid ${g.color || '#38bdf8'}`}}>
-                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                  <b style={{color:g.color,fontSize:'12px'}}>Portal Rank {g.rank} {g.isUnstable ? '🔥 [INSTÁVEL]' : ''}</b>
-                  <span style={{fontSize:'10px',color:'#94a3b8'}}>Expira em: {g.expiresInMinutes}m</span>
-                </div>
-                <div style={{fontSize:'10px',color:'#cbd5e1',marginTop:'3px'}}>
-                  {g.zoneName} • Nv. recomendado: {g.recommendedMinLevel}–{g.recommendedMaxLevel} • {g.floors} andares
-                </div>
-                <div style={{marginTop:'6px',display:'flex',gap:'6px'}}>
-                  <button
-                    type="button"
-                    onClick={() => window.game?.setDestinationMarker(g)}
-                    style={{padding:'4px 10px',fontSize:'10px',background:'rgba(56,189,248,0.25)',border:'1px solid #38bdf8',color:'#38bdf8',borderRadius:'6px',cursor:'pointer',fontWeight:'bold'}}
-                  >
-                    🎯 Marcar Destino
-                  </button>
-                  {hud.destinationMarker?.label?.includes(g.rank) && (
-                    <button
-                      type="button"
-                      onClick={() => window.game?.clearDestinationMarker()}
-                      style={{padding:'4px 8px',fontSize:'10px',background:'rgba(239,68,68,0.2)',border:'1px solid #ef4444',color:'#ef4444',borderRadius:'6px',cursor:'pointer'}}
-                    >
-                      ✕
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
       <h4>Cidades</h4>
       <div className="city-index">
         {[...(data.cities||[])].sort((a,b)=>(ZONES.find(z=>z.id===a.zoneId)?.min||0)-(ZONES.find(z=>z.id===b.zoneId)?.min||0)).map(c=>{
@@ -299,7 +280,7 @@ export default function WorldMap({hud}){
       </div>
       <div className="map-tip">
         <kbd>M</kbd>
-        <span>fecha/abre o mapa. Arraste com dedo ou mouse para navegar livremente.</span>
+        <span>fecha/abre o mapa. Use “Marcar local” e toque no mapa para guiar-se até qualquer ponto.</span>
       </div>
     </aside>
   </div>
