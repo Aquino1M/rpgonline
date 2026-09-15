@@ -3,7 +3,7 @@ import { WORLD, ZONES, RARITIES, CITIES, ROADS, LANDMARKS, NPC_DEFS, PORTAL_NAME
 import { hash2, clamp, damp, zoneAt, weightedPick, fmtTime } from './utils.js'
 import { AssetLibrary } from './assetLoader.js'
 import { defaultClassState, starterInventory, defaultQuestState, merchantStock, shopRefreshInfo, makeItem, makeMaterialDrop, makeResourceDrop, makeTool, rollLootRarity, normalizeSaveState, totalEquipmentStats, progressQuest, activateQuest, claimQuest, refreshGuildBoard, activateGuildMission, progressGuildMissions, claimGuildMission, getGuildRank, guildRankRequirement, updateGuildRank, calculateKillXP, resolveEntityProgression, attributeBonuses, calculateGrimoireCost, getNextGrimoireLevel } from './rpgSystems.js'
-import { MultiplayerClient, sameOriginMultiplayerUrl, sameOriginHttpMultiplayerUrl } from './supabaseMultiplayerV3.js'
+import { MultiplayerClient } from './supabaseMultiplayerV3.js'
 import { CLASSES_LIST, rollDestinyClass, CLASS_RANKS, getClassRankInfo } from './classesData.js'
 import { TRAVEL_NODES, calculateTravelCost, rollRoadAmbush, defaultTravelState } from './fastTravel.js'
 import { GateManager } from './dungeons/GateManager.js'
@@ -76,7 +76,7 @@ export class ShadowGame {
     this.caravanManager=new CaravanManager(this); this.caravanManager.init()
     this.resizeObserver=new ResizeObserver(()=>this.resize()); this.resizeObserver.observe(this.canvas)
     this.autoSave=setInterval(()=>this.saveGame(),10000)
-    const autoWs=sameOriginMultiplayerUrl(),autoHttp=!autoWs?sameOriginHttpMultiplayerUrl():'',autoMp=autoWs||autoHttp;this.multiplayer=new MultiplayerClient({url:autoMp||this.settings.multiplayerUrl,room:this.state.multiplayer?.room||savedLobby,name:this.state.playerName||'Aventureiro',onEvent:e=>this.onMultiplayerEvent(e)});this.settings.multiplayerUrl=this.multiplayer.url||this.settings.multiplayerUrl;this.state.settings=this.settings;this.state.multiplayer.url=this.settings.multiplayerUrl;this.state.multiplayer.room=this.multiplayer.room;if(this.multiplayer.url)this.multiplayer.connect()
+    this.multiplayer=new MultiplayerClient({room:'asterra-global',name:this.state.playerName||'Aventureiro',onEvent:e=>this.onMultiplayerEvent(e)});this.settings.multiplayerUrl=this.multiplayer.url||this.settings.multiplayerUrl;this.state.settings=this.settings;this.state.multiplayer.url=this.settings.multiplayerUrl;this.state.multiplayer.room=this.multiplayer.room;if(this.multiplayer.url)this.multiplayer.connect()
     if(this.isTouchDevice)this.setTouchDeviceMode(true)
     if(typeof window!=='undefined')window.game=this
     this.loadExternalVisuals(); this.loop()
