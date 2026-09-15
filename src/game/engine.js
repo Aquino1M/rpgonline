@@ -51,13 +51,15 @@ export class ShadowGame {
   }
 
   init(){
-    this.renderer=new THREE.WebGLRenderer({canvas:this.canvas,antialias:true,powerPreference:'high-performance',alpha:false})
-    this.renderer.setPixelRatio(this.settings.pixelRatio); this.renderer.shadowMap.enabled=this.settings.shadows; this.renderer.shadowMap.type=THREE.PCFSoftShadowMap
+    const maxPr = this.isTouchDevice ? 1.15 : 1.5
+    this.renderer=new THREE.WebGLRenderer({canvas:this.canvas,antialias:!this.isTouchDevice,powerPreference:'high-performance',alpha:false})
+    this.renderer.setPixelRatio(Math.min(this.settings.pixelRatio, maxPr)); this.renderer.shadowMap.enabled=this.settings.shadows; this.renderer.shadowMap.type=THREE.PCFSoftShadowMap
     this.renderer.outputColorSpace=THREE.SRGBColorSpace; this.renderer.toneMapping=THREE.ACESFilmicToneMapping; this.renderer.toneMappingExposure=1.05
     this.scene=new THREE.Scene(); this.scene.background=new THREE.Color(0x8bc8ee); this.scene.fog=new THREE.Fog(0x8bc8ee,65,155)
     this.camera=new THREE.PerspectiveCamera(60,1,.1,650)
     this.hemi=new THREE.HemisphereLight(0xeaf6ff,0x29412a,1.3); this.scene.add(this.hemi)
-    this.sun=new THREE.DirectionalLight(0xffefc9,2.45); this.sun.position.set(50,82,25); this.sun.castShadow=true; this.sun.shadow.mapSize.set(1536,1536); this.sun.shadow.camera.left=-48;this.sun.shadow.camera.right=48;this.sun.shadow.camera.top=48;this.sun.shadow.camera.bottom=-48;this.sun.shadow.camera.far=180; this.scene.add(this.sun); this.scene.add(this.sun.target)
+    const shadowRes = this.isTouchDevice ? 1024 : 1536
+    this.sun=new THREE.DirectionalLight(0xffefc9,2.45); this.sun.position.set(50,82,25); this.sun.castShadow=true; this.sun.shadow.mapSize.set(shadowRes,shadowRes); this.sun.shadow.camera.left=-48;this.sun.shadow.camera.right=48;this.sun.shadow.camera.top=48;this.sun.shadow.camera.bottom=-48;this.sun.shadow.camera.far=180; this.scene.add(this.sun); this.scene.add(this.sun.target)
     this.moon=new THREE.DirectionalLight(0x8db4ff,.15); this.moon.position.set(-40,50,-30); this.scene.add(this.moon)
 
     this.worldRoot=new THREE.Group(); this.scene.add(this.worldRoot); this.externalModels={wolf:null,dragon:null,mount:null,packMobs:[],packMobEntries:[]}; this.externalScenery=[]; this.externalSceneryEntries=[]; this.externalCitySceneryEntries=[]; this.packCityDecor=[]; this.packsManifest=null; this.pack2Manifest=null
@@ -2623,8 +2625,9 @@ applyEnemyNetworkState(st){
   }
 
   onMultiplayerEvent(e){
-    if(e.type==='connection'){this.state.multiplayer={...this.state.multiplayer,connected:!!e.connected,url:e.url||this.state.multiplayer.url,room:e.room||this.multiplayer?.room||this.state.multiplayer.room,transport:e.transport||this.state.multiplayer.transport||'offline',reason:e.reason||'',serverSave:e.connected?this.state.multiplayer.serverSave:false};if(e.connected)this.toast(e.transport==='supabase'?'Multiplayer Supabase Realtime conectado':e.transport==='http'?'Multiplayer Vercel conectado':'Multiplayer LAN conectado');else{this.state.party={id:null,leaderId:null,members:[],totalXP:0};for(const r of this.remotePlayers.values()){this.scene.remove(r.g);r.marker?.material?.map?.dispose?.();r.marker?.material?.dispose?.()}this.remotePlayers.clear();this.state.multiplayer.players=0}return}
-    if(e.type==='welcome'){if(e.room){this.state.multiplayer.room=e.room;localStorage.setItem('shadow-ascension-last-lobby',e.room)}for(const p of e.players||[])this.onMultiplayerEvent({type:'state',player:p});this.state.multiplayer.players=this.remotePlayers.size;return}
+    if(e.type==='connection'){this.state.multiplayer={...this.state.multiplayer,connected:!!e.connected,url:e.url||this.state.multiplayer.url,room:e.room||this.multiplayer?.room||this.state.multiplayer.room,transport:e.transport||this.state.multiplayer.transport||'offline',reason:e.reason||'',serverSave:e.connected?this.state.multiplayer.serverSave:false};if(e.connected)this.toast(e.transport==='supabase'?'Multiplayer Supabase Realtime conectado':e.transport==='http'?'Multiplayer Vercel conectado':'Multiplayer LAN conectado');else{this.state.party={id:null,leaderId:null,members:[],totalXP:0};for(const r of this.remotePlayers.values()){this.scene.remove(r.g);r.marker?.material?.map?.dispose?.();r.marker?.material?.dispose?.()}this.remotePlayers.clear();this.state.multiplayer.players=0;this.state.multiplayer.totalOnline=0}return}
+    if(e.type==='presence_count'){this.state.multiplayer.totalOnline=Math.max(1,Number(e.count)||1);this.state.multiplayer.players=this.remotePlayers.size;return}
+    if(e.type==='welcome'){if(e.room){this.state.multiplayer.room=e.room;localStorage.setItem('shadow-ascension-last-lobby',e.room)}for(const p of e.players||[])this.onMultiplayerEvent({type:'state',player:p});this.state.multiplayer.players=this.remotePlayers.size;this.state.multiplayer.totalOnline=Math.max(1,this.remotePlayers.size+1);return}
     if(e.type==='lobby'){if(e.room){this.state.multiplayer.room=e.room;localStorage.setItem('shadow-ascension-last-lobby',e.room)}return}
     if(e.type==='profile'){
       const profile=e.profile||{};this.serverProfileTimestamp=profile.updatedAt||0
@@ -2717,12 +2720,25 @@ applyEnemyNetworkState(st){
     return true
   }
   logoutAccount(){
-    localStorage.removeItem('shadow_rpg_account_session')
-    localStorage.removeItem('shadow-ascension-nick')
+    try {
+      localStorage.removeItem('shadow_rpg_account_session')
+      localStorage.removeItem('shadow-ascension-nick')
+      localStorage.removeItem('shadow-ascension-player-id')
+      sessionStorage.removeItem('shadow-ascension-player-id')
+      sessionStorage.removeItem('shadow-ascension-tab-client-id')
+      localStorage.removeItem('rpg_player_nick')
+    } catch {}
     this.state.playerName = ''
     this.state.needsNickname = true
+    this.state.uiPanel = null
     this.multiplayer?.disconnect()
     this.toast('Você saiu da sua conta.')
+    this.onHud?.({
+      ...this.state,
+      playerName: '',
+      needsNickname: true,
+      uiPanel: null
+    })
   }
   connectMultiplayer(url){const value=String(url||'').trim();this.settings.multiplayerUrl=value;this.state.multiplayer.url=value;localStorage.setItem('shadow-ascension-mp-url',value);if(value)this.multiplayer.connect(value);else this.multiplayer.disconnect();this.saveGame()}
   setMultiplayerLobby(room){const next=this.multiplayer?.setRoom?.(room)||String(room||'asterra-global');this.state.multiplayer.room=next;localStorage.setItem('shadow-ascension-last-lobby',next);this.toast(`Entrando no ${next.replace('asterra-','Lobby ')}...`);this.saveGame();return next}

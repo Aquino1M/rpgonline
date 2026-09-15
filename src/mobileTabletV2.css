@@ -5,9 +5,9 @@
 
 :root{
   --touch-k:1;
-  --t-gutter:9px;--t-hud-w:214px;--t-mini-w:118px;--t-stick:108px;
-  --t-stick-knob:44px;--t-action:51px;--t-attack:66px;--t-action-gap:7px;
-  --t-power:49px;--t-menu:50px;--t-menu-cell:58px;--t-hit:44px;
+  --t-gutter:10px;--t-hud-w:214px;--t-mini-w:205px;--t-stick:112px;
+  --t-stick-knob:46px;--t-action:64px;--t-attack:64px;--t-action-gap:12px;
+  --t-power:52px;--t-menu:52px;--t-menu-cell:58px;--t-hit:44px;
   --t-font:13px;--t-small:11px;--t-title:18px;--t-window-pad:12px;
 }
 
@@ -83,19 +83,23 @@
 .app.touch-ui .mini-field{height:calc(var(--t-mini-w) * .60)!important;margin:4px 0!important;border-radius:10px!important}
 .app.touch-ui .minimap>small,.app.touch-ui .mini-legend{font-size:var(--t-small)!important}
 
-/* Menu opens beside minimap. */
+/* Menu opens beside minimap without overlapping. */
+.app.touch-ui.is-tablet .mobile-menu-toggle,
+.app.touch-ui.is-mobile .mobile-menu-toggle,
 .app.touch-ui .mobile-menu-toggle{
-  display:flex!important;position:absolute!important;z-index:22!important;
-  right:calc(var(--t-mini-w) + var(--t-gutter) + 8px)!important;
+  display:flex!important;position:absolute!important;z-index:25!important;
+  right:calc(var(--t-mini-w) + max(var(--t-gutter),env(safe-area-inset-right)) + 14px)!important;
   top:max(var(--t-gutter),env(safe-area-inset-top))!important;
   width:var(--t-menu)!important;height:var(--t-menu)!important;min-width:var(--t-menu)!important;min-height:var(--t-menu)!important;
   align-items:center!important;justify-content:center!important;flex-direction:column!important;gap:1px!important;
   font-size:calc(var(--t-title) + 3px)!important;
 }
 .app.touch-ui .mobile-menu-toggle small{font-size:var(--t-small)!important}
+.app.touch-ui.is-tablet .mobile-menu-drawer,
+.app.touch-ui.is-mobile .mobile-menu-drawer,
 .app.touch-ui .mobile-menu-drawer{
-  display:grid!important;position:absolute!important;z-index:21!important;
-  right:calc(var(--t-mini-w) + var(--t-gutter) + 8px)!important;
+  display:grid!important;position:absolute!important;z-index:26!important;
+  right:calc(var(--t-mini-w) + max(var(--t-gutter),env(safe-area-inset-right)) + 14px)!important;
   top:calc(max(var(--t-gutter),env(safe-area-inset-top)) + var(--t-menu) + 7px)!important;
   grid-template-columns:repeat(3,var(--t-menu-cell))!important;gap:var(--t-action-gap)!important;
   padding:var(--t-gutter)!important;width:auto!important;max-width:none!important;
@@ -126,27 +130,50 @@
   box-shadow:0 7px 18px rgba(0,0,0,.4)!important;pointer-events:none!important;
 }
 
-/* A55-style 3x2 action block, also used by iPad/tablet. */
+/* A55-style 3x2 action block, non-overlapping grid for phones and tablets. */
+.app.touch-ui.is-tablet .mobile-actions,
+.app.touch-ui.is-mobile .mobile-actions,
 .app.touch-ui .mobile-actions{
-  display:grid!important;position:absolute!important;z-index:15!important;
-  right:max(var(--t-gutter),env(safe-area-inset-right))!important;
-  bottom:max(var(--t-gutter),env(safe-area-inset-bottom))!important;
+  display:grid!important;position:absolute!important;z-index:20!important;
+  right:max(16px,env(safe-area-inset-right))!important;
+  bottom:max(16px,env(safe-area-inset-bottom))!important;
   grid-template-columns:repeat(3,var(--t-action))!important;grid-template-rows:repeat(2,var(--t-action))!important;
   gap:var(--t-action-gap)!important;width:auto!important;height:auto!important;transform:none!important;pointer-events:none!important;
 }
+.app.touch-ui.is-tablet .mobile-actions button,
+.app.touch-ui.is-mobile .mobile-actions button,
 .app.touch-ui .mobile-actions button,
+.app.touch-ui.is-tablet .mobile-actions .mobile-attack,
+.app.touch-ui.is-mobile .mobile-actions .mobile-attack,
 .app.touch-ui .mobile-actions .mobile-attack,
+.app.touch-ui.is-tablet .mobile-actions .mobile-block,
+.app.touch-ui.is-mobile .mobile-actions .mobile-block,
 .app.touch-ui .mobile-actions .mobile-block,
+.app.touch-ui.is-tablet .mobile-actions .mobile-dash,
+.app.touch-ui.is-mobile .mobile-actions .mobile-dash,
 .app.touch-ui .mobile-actions .mobile-dash,
+.app.touch-ui.is-tablet .mobile-actions .mobile-use,
+.app.touch-ui.is-mobile .mobile-actions .mobile-use,
 .app.touch-ui .mobile-actions .mobile-use,
+.app.touch-ui.is-tablet .mobile-actions .mobile-run,
+.app.touch-ui.is-mobile .mobile-actions .mobile-run,
 .app.touch-ui .mobile-actions .mobile-run,
+.app.touch-ui.is-tablet .mobile-actions .mobile-jump,
+.app.touch-ui.is-mobile .mobile-actions .mobile-jump,
 .app.touch-ui .mobile-actions .mobile-jump{
-  position:static!important;inset:auto!important;right:auto!important;bottom:auto!important;
+  position:static!important;inset:auto!important;right:auto!important;bottom:auto!important;left:auto!important;top:auto!important;
   width:var(--t-action)!important;height:var(--t-action)!important;min-width:var(--t-action)!important;min-height:var(--t-action)!important;
-  border-radius:50%!important;font-size:calc(var(--t-title) + 4px)!important;padding:2px!important;
-  display:flex!important;align-items:center!important;justify-content:center!important;flex-direction:column!important;gap:0!important;pointer-events:auto!important;
+  max-width:var(--t-action)!important;max-height:var(--t-action)!important;
+  border-radius:50%!important;font-size:20px!important;padding:0!important;margin:0!important;
+  display:flex!important;align-items:center!important;justify-content:center!important;flex-direction:column!important;gap:1px!important;
+  pointer-events:auto!important;overflow:hidden!important;box-sizing:border-box!important;
 }
-.app.touch-ui .mobile-actions button small{font-size:var(--t-small)!important;line-height:1!important;margin-top:1px!important}
+.app.touch-ui.is-tablet .mobile-actions button small,
+.app.touch-ui.is-mobile .mobile-actions button small,
+.app.touch-ui .mobile-actions button small{
+  font-size:8px!important;line-height:1!important;letter-spacing:.02em!important;white-space:nowrap!important;
+  max-width:90%!important;overflow:hidden!important;text-overflow:ellipsis!important;padding:0 2px!important;
+}
 .app.touch-ui .mobile-actions .mobile-attack{background:linear-gradient(180deg,#a8313c,#59151d)!important;border-color:rgba(255,128,139,.55)!important;box-shadow:0 0 19px rgba(239,68,68,.24),0 7px 20px rgba(0,0,0,.32)!important}
 .app.touch-ui .mobile-actions .mobile-block{background:linear-gradient(180deg,#245474,#102d45)!important}
 .app.touch-ui .mobile-actions .mobile-dash{background:linear-gradient(180deg,#294f6f,#112b42)!important}

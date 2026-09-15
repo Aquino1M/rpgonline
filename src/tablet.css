@@ -196,41 +196,68 @@
 
   .app.touch-ui.is-tablet .mobile-actions,
   .app.touch-ui.is-mobile .mobile-actions {
-    display: block !important;
-    right: max(20px, env(safe-area-inset-right)) !important;
-    bottom: max(20px, env(safe-area-inset-bottom)) !important;
-    width: 250px !important;
-    height: 215px !important;
+    display: grid !important;
+    position: absolute !important;
+    z-index: 20 !important;
+    right: max(16px, env(safe-area-inset-right)) !important;
+    bottom: max(16px, env(safe-area-inset-bottom)) !important;
+    grid-template-columns: repeat(3, var(--t-action, 64px)) !important;
+    grid-template-rows: repeat(2, var(--t-action, 64px)) !important;
+    gap: var(--t-action-gap, 12px) !important;
+    width: auto !important;
+    height: auto !important;
     transform: none !important;
     pointer-events: none !important;
   }
   .app.touch-ui.is-tablet .mobile-actions button,
-  .app.touch-ui.is-mobile .mobile-actions button {
-    width: 62px !important;
-    height: 62px !important;
-    font-size: 23px !important;
+  .app.touch-ui.is-mobile .mobile-actions button,
+  .app.touch-ui.is-tablet .mobile-actions .mobile-attack,
+  .app.touch-ui.is-mobile .mobile-actions .mobile-attack,
+  .app.touch-ui.is-tablet .mobile-actions .mobile-block,
+  .app.touch-ui.is-mobile .mobile-actions .mobile-block,
+  .app.touch-ui.is-tablet .mobile-actions .mobile-run,
+  .app.touch-ui.is-mobile .mobile-actions .mobile-run,
+  .app.touch-ui.is-tablet .mobile-actions .mobile-dash,
+  .app.touch-ui.is-mobile .mobile-actions .mobile-dash,
+  .app.touch-ui.is-tablet .mobile-actions .mobile-use,
+  .app.touch-ui.is-mobile .mobile-actions .mobile-use,
+  .app.touch-ui.is-tablet .mobile-actions .mobile-jump,
+  .app.touch-ui.is-mobile .mobile-actions .mobile-jump {
+    position: static !important;
+    inset: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+    left: auto !important;
+    top: auto !important;
+    width: var(--t-action, 64px) !important;
+    height: var(--t-action, 64px) !important;
+    min-width: var(--t-action, 64px) !important;
+    min-height: var(--t-action, 64px) !important;
+    max-width: var(--t-action, 64px) !important;
+    max-height: var(--t-action, 64px) !important;
+    border-radius: 50% !important;
+    font-size: 20px !important;
     pointer-events: auto !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex-direction: column !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: hidden !important;
+    box-sizing: border-box !important;
   }
   .app.touch-ui.is-tablet .mobile-actions button small,
-  .app.touch-ui.is-mobile .mobile-actions button small { font-size: 7px !important; }
-  .app.touch-ui.is-tablet .mobile-actions .mobile-attack,
-  .app.touch-ui.is-mobile .mobile-actions .mobile-attack {
-    right: 0 !important;
-    bottom: 0 !important;
-    width: 86px !important;
-    height: 86px !important;
-    font-size: 31px !important;
+  .app.touch-ui.is-mobile .mobile-actions button small {
+    font-size: 8px !important;
+    line-height: 1 !important;
+    letter-spacing: .02em !important;
+    white-space: nowrap !important;
+    max-width: 90% !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    padding: 0 2px !important;
   }
-  .app.touch-ui.is-tablet .mobile-actions .mobile-block,
-  .app.touch-ui.is-mobile .mobile-actions .mobile-block { right: 94px !important; bottom: 0 !important; }
-  .app.touch-ui.is-tablet .mobile-actions .mobile-run,
-  .app.touch-ui.is-mobile .mobile-actions .mobile-run { right: 168px !important; bottom: 2px !important; }
-  .app.touch-ui.is-tablet .mobile-actions .mobile-dash,
-  .app.touch-ui.is-mobile .mobile-actions .mobile-dash { right: 0 !important; bottom: 102px !important; }
-  .app.touch-ui.is-tablet .mobile-actions .mobile-use,
-  .app.touch-ui.is-mobile .mobile-actions .mobile-use { right: 76px !important; bottom: 110px !important; }
-  .app.touch-ui.is-tablet .mobile-actions .mobile-jump,
-  .app.touch-ui.is-mobile .mobile-actions .mobile-jump { right: 150px !important; bottom: 114px !important; }
 
   .app.touch-ui.is-tablet .mobile-powers-bottom,
   .app.touch-ui.is-mobile .mobile-powers-bottom {

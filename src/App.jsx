@@ -141,7 +141,7 @@ export default function App(){
           💚 REGEN
         </b>
       ) : null}
-      {hud.multiplayer?.connected&&<b className="online-status">● ONLINE {hud.multiplayer.players||0} {hud.multiplayer.transport==='supabase'?'(SUPABASE)':hud.multiplayer.transport==='http'?'(VERCEL)':'(LAN)'}</b>}
+      {hud.multiplayer?.connected&&<b className="online-status">● ONLINE {hud.multiplayer.totalOnline || (hud.multiplayer.players ? hud.multiplayer.players + 1 : 1)} {hud.multiplayer.transport==='supabase'?'(SUPABASE)':hud.multiplayer.transport==='http'?'(VERCEL)':'(LAN)'}</b>}
       {hud.mount?.active&&<b>♞ Montado</b>}
       <button type="button" className="hud-mini-btn" onClick={toggleFullScreen} title="Alternar Modo Tela Cheia">⛶ Tela Cheia</button>
       {!pwaState.isInstalled && (
@@ -1496,7 +1496,7 @@ function Settings({hud,apply,connect,setName,call}){
             <b>Conta: {getSavedAccountSession().username}</b>
             <small>Servidor Atual: {multiplayerLobbies.find(x => x.id === currentLobby)?.name || currentLobby}</small>
           </div>
-          <button className="save-btn" style={{ background: '#7f1d1d', borderColor: '#ef4444', color: '#fee2e2' }} onClick={() => call('logoutAccount')}>
+          <button className="save-btn" style={{ background: '#7f1d1d', borderColor: '#ef4444', color: '#fee2e2' }} onClick={() => { call('logoutAccount'); call('closePanel') }}>
             🚪 Sair da Conta (Trocar)
           </button>
         </div>
@@ -1597,7 +1597,6 @@ function AuthGate({ initialServer = 'asterra-global', onLogin }) {
   })
   const [loading, setLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
-  const [savedNick, setSavedNick] = useState('')
   const [pwaState, setPwaState] = useState(getPWAState)
 
   useEffect(() => {
@@ -1606,10 +1605,8 @@ function AuthGate({ initialServer = 'asterra-global', onLogin }) {
 
   useEffect(() => {
     const saved = getSavedAccountSession()
-    const lastNick = (saved?.username || localStorage.getItem('shadow-ascension-nick') || localStorage.getItem('rpg_player_nick') || '').trim()
-    if (lastNick) {
-      setUsername(lastNick)
-      setSavedNick(lastNick)
+    if (saved?.username) {
+      setUsername(saved.username)
     }
     if (saved?.server) {
       setSelectedServer(saved.server)
@@ -1682,13 +1679,6 @@ function AuthGate({ initialServer = 'asterra-global', onLogin }) {
           <h1>{mode === 'login' ? 'Portal de Acesso' : 'Criar Nova Conta'}</h1>
           <p>{mode === 'login' ? 'Seu portal permanece aberto para escolher seu servidor e entrar.' : 'Crie sua conta para jogar e salvar seu progresso na nuvem.'}</p>
         </div>
-
-        {savedNick && mode === 'login' && (
-          <div className="auth-saved-badge">
-            <span>👤 Aventureiro memorizado: <b>{savedNick}</b></span>
-            <small>Clique em <b>⚔ Entrar no Mundo</b> para continuar sua aventura!</small>
-          </div>
-        )}
 
         <div className="auth-tabs">
           <button

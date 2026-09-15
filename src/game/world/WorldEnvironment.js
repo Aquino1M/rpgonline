@@ -21,51 +21,7 @@ export class WorldEnvironment {
   }
 
   buildHorizonMountainSilhouettes() {
-    // Majestic low-poly mountain ring encircling the world horizon (radius 520m to 680m)
-    const mountainGroup = new THREE.Group()
-    mountainGroup.name = 'HorizonMountains'
-
-    const mountainMat = new THREE.MeshStandardMaterial({
-      color: 0x334155,
-      roughness: 0.95,
-      metalness: 0.1,
-      flatShading: true
-    })
-    const snowMat = new THREE.MeshStandardMaterial({
-      color: 0xf1f5f9,
-      roughness: 0.7,
-      metalness: 0.05,
-      flatShading: true
-    })
-
-    const count = 32
-    for (let i = 0; i < count; i++) {
-      const angle = (i / count) * Math.PI * 2
-      const radius = 540 + ((i * 37) % 70)
-      const x = Math.cos(angle) * radius
-      const z = Math.sin(angle) * radius
-      const height = 110 + ((i * 53) % 95)
-      const baseWidth = 85 + ((i * 29) % 65)
-
-      // Main mountain peak cone
-      const peakGeo = new THREE.ConeGeometry(baseWidth, height, 5, 2)
-      const peak = new THREE.Mesh(peakGeo, mountainMat)
-      peak.position.set(x, height / 2 - 8, z)
-      peak.rotation.y = i * 0.4
-      mountainGroup.add(peak)
-
-      // Snowcap for highest mountains
-      if (height > 140) {
-        const capHeight = height * 0.28
-        const capGeo = new THREE.ConeGeometry(baseWidth * 0.32, capHeight, 5)
-        const cap = new THREE.Mesh(capGeo, snowMat)
-        cap.position.set(x, height - capHeight / 2 - 8, z)
-        cap.rotation.y = peak.rotation.y
-        mountainGroup.add(cap)
-      }
-    }
-
-    this.envGroup.add(mountainGroup)
+    // Montanhas do horizonte removidas a pedido do usuario para horizonte limpo e melhor desempenho
   }
 
   buildRoadSignposts() {
@@ -254,9 +210,10 @@ export class WorldEnvironment {
     const bushGeo = new THREE.DodecahedronGeometry(1.1, 1)
     const bushMat = new THREE.MeshStandardMaterial({ color: 0x2f855a, roughness: 0.9, flatShading: true })
 
-    const totalInstances = 140
+    const isTouch = this.game?.isTouchDevice || (typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0))
+    const totalInstances = isTouch ? 60 : 120
     this.instancedTrees = new THREE.InstancedMesh(treeGeo, treeMat, totalInstances)
-    this.instancedTrees.castShadow = true
+    this.instancedTrees.castShadow = !isTouch
     this.instancedBushes = new THREE.InstancedMesh(bushGeo, bushMat, totalInstances)
 
     const dummy = new THREE.Object3D()

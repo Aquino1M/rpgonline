@@ -18,34 +18,28 @@ import {
 export const GLOBAL_MULTIPLAYER_ROOM = 'asterra-global'
 
 const storage = typeof window !== 'undefined' ? window.localStorage : null
-const SUPABASE_URL = String(import.meta.env.VITE_SUPABASE_URL || '').trim()
+export const DEFAULT_SUPABASE_PROJECT_URL = 'https://kfnlcrsnvckexzmhbyoy.supabase.co'
+export const DEFAULT_SUPABASE_PUBLIC_KEY = 'sb_publishable_zB3YmZc3TNkKCHzHWQ-X5g_kKRvlkRI'
+
+const SUPABASE_URL = String(import.meta.env.VITE_SUPABASE_URL || DEFAULT_SUPABASE_PROJECT_URL).trim()
 const SUPABASE_KEY = String(
   import.meta.env.VITE_SUPABASE_ANON_KEY ||
   import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
-  ''
+  DEFAULT_SUPABASE_PUBLIC_KEY
 ).trim()
 
 const hasSupabase = () => /^https:\/\/.+\.supabase\.co\/?$/i.test(SUPABASE_URL) && SUPABASE_KEY.length > 20
 const makeId = () => {
   if (typeof window !== 'undefined') {
-    try {
-      const rawSession = window.localStorage?.getItem('shadow_rpg_account_session')
-      if (rawSession) {
-        const sess = JSON.parse(rawSession)
-        if (sess?.accountId) return String(sess.accountId)
-      }
-    } catch {}
-    const tabId = window.sessionStorage?.getItem('shadow-ascension-player-id')
-    if (tabId) return tabId
-    const existing = window.localStorage?.getItem('shadow-ascension-player-id')
-    const id = (globalThis.crypto?.randomUUID?.() || `player-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,10)}`)
-    try { window.sessionStorage?.setItem('shadow-ascension-player-id', id) } catch {}
-    if (!existing) {
-      try { window.localStorage?.setItem('shadow-ascension-player-id', id) } catch {}
+    let tabId = null
+    try { tabId = window.sessionStorage?.getItem('shadow-ascension-tab-client-id') } catch {}
+    if (!tabId) {
+      tabId = `player-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`
+      try { window.sessionStorage?.setItem('shadow-ascension-tab-client-id', tabId) } catch {}
     }
-    return id
+    return tabId
   }
-  return `player-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,10)}`
+  return `player-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`
 }
 const uid = () => globalThis.crypto?.randomUUID?.() || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2,10)}`
 const cleanName = v => String(v || 'Aventureiro')
@@ -302,7 +296,7 @@ export const multiplayerLobbies = () => [GLOBAL_MULTIPLAYER_ROOM]
 export const sameOriginMultiplayerUrl = () => legacyWsUrl()
 export function sameOriginHttpMultiplayerUrl() {
   if (typeof window === 'undefined') return ''
-  if (!isLocalGameHost() && hasSupabase()) return 'supabase://realtime'
+  if (hasSupabase()) return 'supabase://realtime'
   return legacyHttpUrl()
 }
 
@@ -313,7 +307,7 @@ export class MultiplayerClient {
     this.room = GLOBAL_MULTIPLAYER_ROOM
     this.name = cleanName(name)
     this.onEvent = onEvent
-    this.url = url || (hasSupabase() && !isLocalGameHost() ? 'supabase://realtime' : legacyWsUrl() || legacyHttpUrl())
+    this.url = url || (hasSupabase() ? 'supabase://realtime' : legacyWsUrl() || legacyHttpUrl())
     this.connected = false
     this.wanted = false
     this.transport = 'offline'
@@ -425,6 +419,7 @@ export class MultiplayerClient {
         this._trackPresence(true)
         this._emitConnection(true)
         this.onEvent({type:'welcome', id:this.playerId, room:GLOBAL_MULTIPLAYER_ROOM, players:[...this.remoteState.values()]})
+        this.onEvent({type:'presence_count', count:this.presenceIds.size + 1, players:[...this.remoteState.values()]})
         this._emitNetwork(true)
       },
       onClosed:reason => {
@@ -497,6 +492,7 @@ export class MultiplayerClient {
     }
     this.presenceIds = next
     this.lastPacketAt = now()
+    this.onEvent({type:'presence_count', count:this.presenceIds.size + 1, players:[...this.remoteState.values()]})
     this._emitNetwork()
   }
 

@@ -10,7 +10,7 @@ export default function WorldMap({hud}){
   const dragRef=useRef({ active: false, startX: 0, startY: 0, initialPanX: 0, initialPanZ: 0 })
   const [showMobs,setShowMobs]=useState(true)
   const [fog,setFog]=useState(true)
-  const [zoom,setZoom]=useState(1)
+  const [zoom,setZoom]=useState(1.35)
   const [pan,setPan]=useState({ x: 0, z: 0 })
   const [isDragging,setIsDragging]=useState(false)
 
@@ -30,13 +30,46 @@ export default function WorldMap({hud}){
 
     ctx.lineCap='round';for(const r of data.roads||[]){const a=toMap(r.ax,r.az),b=toMap(r.bx,r.bz);ctx.strokeStyle='rgba(201,181,129,.88)';ctx.lineWidth=3.2;ctx.beginPath();ctx.moveTo(...a);ctx.lineTo(...b);ctx.stroke();ctx.strokeStyle='rgba(85,68,45,.45)';ctx.lineWidth=1;ctx.stroke()}
 
-    ctx.textAlign='center';ctx.textBaseline='middle';for(const z of ZONES){const zx=(z.x0+z.x1)/2,zz=(z.z0+z.z1)/2,[x,y]=toMap(zx,zz);if(!inside(x,y,60))continue;ctx.font='900 22px Inter,sans-serif';ctx.lineWidth=3;ctx.strokeStyle='rgba(0,0,0,.6)';ctx.strokeText(z.name,x,y);ctx.fillStyle='rgba(239,247,235,.82)';ctx.fillText(z.name,x,y);ctx.font='900 14px Inter,sans-serif';ctx.fillStyle='rgba(245,250,242,.78)';ctx.fillText(`Nv.${z.min}–${z.max}`,x,y+19)}
+    ctx.textAlign='center';ctx.textBaseline='middle';for(const z of ZONES){
+      const zx=(z.x0+z.x1)/2,zz=(z.z0+z.z1)/2,[x,y]=toMap(zx,zz);if(!inside(x,y,60))continue;
+      const zoneFontSize = Math.round(10 + Math.min(zoom, 2.5) * 2.5);
+      ctx.font=`900 ${zoneFontSize}px Inter,sans-serif`;ctx.lineWidth=2.5;ctx.strokeStyle='rgba(0,0,0,.7)';
+      ctx.strokeText(z.name,x,y);ctx.fillStyle='rgba(239,247,235,.82)';ctx.fillText(z.name,x,y);
+      if(zoom>=1.3){
+        ctx.font=`700 ${Math.max(9,zoneFontSize-3)}px Inter,sans-serif`;ctx.fillStyle='rgba(245,250,242,.75)';
+        ctx.fillText(`Nv.${z.min}–${z.max}`,x,y+zoneFontSize+2);
+      }
+    }
 
-    for(const c of data.cities||[]){const [x,y]=toMap(c.x,c.z);if(!inside(x,y,90))continue;const rr=c.wallRadius/viewWorld*w;ctx.fillStyle='rgba(230,214,169,.38)';ctx.beginPath();ctx.arc(x,y,Math.max(5,rr),0,Math.PI*2);ctx.fill();ctx.strokeStyle=c.accent||'#ffe6a1';ctx.lineWidth=1.5;ctx.setLineDash([4,2]);ctx.beginPath();ctx.arc(x,y,Math.max(6,rr),0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);ctx.font='900 13px Inter,sans-serif';ctx.strokeStyle='rgba(0,0,0,.7)';ctx.lineWidth=3;ctx.strokeText(c.name,x,y-rr-8);ctx.fillStyle='#fff0c5';ctx.fillText(c.name,x,y-rr-8)}
+    for(const c of data.cities||[]){
+      const [x,y]=toMap(c.x,c.z);if(!inside(x,y,90))continue;
+      const rr=c.wallRadius/viewWorld*w;
+      ctx.fillStyle='rgba(230,214,169,.38)';ctx.beginPath();ctx.arc(x,y,Math.max(5,rr),0,Math.PI*2);ctx.fill();
+      ctx.strokeStyle=c.accent||'#ffe6a1';ctx.lineWidth=1.5;ctx.setLineDash([4,2]);ctx.beginPath();ctx.arc(x,y,Math.max(6,rr),0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);
+      const cityFontSize = Math.round(10 + Math.min(zoom, 2) * 1.5);
+      ctx.font=`900 ${cityFontSize}px Inter,sans-serif`;ctx.strokeStyle='rgba(0,0,0,.75)';ctx.lineWidth=2.5;
+      ctx.strokeText(c.name,x,y-rr-6);ctx.fillStyle='#fff0c5';ctx.fillText(c.name,x,y-rr-6);
+    }
 
-    for(const s of data.services||[]){const [x,y]=toMap(s.x,s.z);if(!inside(x,y))continue;const col=s.role==='merchant'?'#67e8a7':s.role==='blacksmith'?'#ff805e':s.role==='stable'?'#76d3ff':s.role==='traveler'?'#38bdf8':'#ffd85e',label=s.role==='merchant'?'Loja':s.role==='blacksmith'?'Ferreiro':s.role==='stable'?'Estábulo':s.role==='traveler'?'Viagem':'Guilda';ctx.fillStyle='rgba(4,10,14,.88)';ctx.strokeStyle=col;ctx.lineWidth=1.3;ctx.beginPath();ctx.arc(x,y,5.1,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.fillStyle=col;ctx.font='900 7px Inter,sans-serif';ctx.fillText(s.role==='merchant'?'$':s.role==='blacksmith'?'⚒':s.role==='stable'?'♞':s.role==='traveler'?'⇄':'!',x,y+.4);ctx.font='700 6px Inter,sans-serif';ctx.strokeStyle='rgba(0,0,0,.72)';ctx.lineWidth=2;ctx.strokeText(label,x,y+10);ctx.fillStyle='rgba(244,248,239,.9)';ctx.fillText(label,x,y+10)}
+    for(const s of data.services||[]){
+      const [x,y]=toMap(s.x,s.z);if(!inside(x,y))continue;
+      const col=s.role==='merchant'?'#67e8a7':s.role==='blacksmith'?'#ff805e':s.role==='stable'?'#76d3ff':s.role==='traveler'?'#38bdf8':'#ffd85e',label=s.role==='merchant'?'Loja':s.role==='blacksmith'?'Ferreiro':s.role==='stable'?'Estábulo':s.role==='traveler'?'Viagem':'Guilda';
+      ctx.fillStyle='rgba(4,10,14,.88)';ctx.strokeStyle=col;ctx.lineWidth=1.3;ctx.beginPath();ctx.arc(x,y,5.1,0,Math.PI*2);ctx.fill();ctx.stroke();
+      ctx.fillStyle=col;ctx.font='900 7px Inter,sans-serif';ctx.fillText(s.role==='merchant'?'$':s.role==='blacksmith'?'⚒':s.role==='stable'?'♞':s.role==='traveler'?'⇄':'!',x,y+.4);
+      if(zoom>=1.5){
+        ctx.font='700 6.5px Inter,sans-serif';ctx.strokeStyle='rgba(0,0,0,.72)';ctx.lineWidth=2;ctx.strokeText(label,x,y+10);ctx.fillStyle='rgba(244,248,239,.9)';ctx.fillText(label,x,y+10);
+      }
+    }
 
-    for(const l of data.landmarks||[]){const [x,y]=toMap(l.x,l.z);if(!inside(x,y))continue;ctx.fillStyle='#e6ca72';ctx.strokeStyle='#4e3c1f';ctx.lineWidth=1;ctx.beginPath();for(let i=0;i<8;i++){const a=-Math.PI/2+i*Math.PI/4,r=i%2?3:6,px=x+Math.cos(a)*r,py=y+Math.sin(a)*r;i?ctx.lineTo(px,py):ctx.moveTo(px,py)}ctx.closePath();ctx.fill();ctx.stroke();ctx.font='700 6px Inter,sans-serif';ctx.strokeStyle='rgba(0,0,0,.7)';ctx.lineWidth=2;ctx.strokeText(l.name,x,y+11);ctx.fillStyle='#f5e9bd';ctx.fillText(l.name,x,y+11)}
+    for(const l of data.landmarks||[]){
+      const [x,y]=toMap(l.x,l.z);if(!inside(x,y))continue;
+      ctx.fillStyle='#e6ca72';ctx.strokeStyle='#4e3c1f';ctx.lineWidth=1;ctx.beginPath();
+      for(let i=0;i<8;i++){const a=-Math.PI/2+i*Math.PI/4,r=i%2?3:6,px=x+Math.cos(a)*r,py=y+Math.sin(a)*r;i?ctx.lineTo(px,py):ctx.moveTo(px,py)}
+      ctx.closePath();ctx.fill();ctx.stroke();
+      if(zoom>=1.4){
+        ctx.font='700 6.5px Inter,sans-serif';ctx.strokeStyle='rgba(0,0,0,.7)';ctx.lineWidth=2;ctx.strokeText(l.name,x,y+11);ctx.fillStyle='#f5e9bd';ctx.fillText(l.name,x,y+11);
+      }
+    }
 
     for(const p of data.portals||[]){const [x,y]=toMap(p.x,p.z);if(!inside(x,y))continue;ctx.strokeStyle=p.color||'#c084fc';ctx.shadowColor=p.color||'#c084fc';ctx.shadowBlur=6;ctx.lineWidth=2;ctx.beginPath();ctx.arc(x,y,6,0,Math.PI*2);ctx.stroke();ctx.shadowBlur=0}
     
@@ -72,8 +105,10 @@ export default function WorldMap({hud}){
       ctx.fillStyle=c.color||'#f59e0b'
       ctx.font='900 11px Inter,sans-serif'
       ctx.fillText(c.icon||'🚚',x,y)
-      ctx.font='700 7px Inter,sans-serif';ctx.strokeStyle='rgba(0,0,0,.85)';ctx.lineWidth=2
-      ctx.strokeText(c.name,x,y+10);ctx.fillStyle='#ffffff';ctx.fillText(c.name,x,y+10)
+      if(zoom>=1.35){
+        ctx.font='700 7px Inter,sans-serif';ctx.strokeStyle='rgba(0,0,0,.85)';ctx.lineWidth=2
+        ctx.strokeText(c.name,x,y+10);ctx.fillStyle='#ffffff';ctx.fillText(c.name,x,y+10)
+      }
     }
 
     if(showMobs)for(const b of data.bosses||[]){const [x,y]=toMap(b.x,b.z);if(!inside(x,y))continue;ctx.fillStyle='#e43e56';ctx.strokeStyle='#ffe4e8';ctx.lineWidth=1;ctx.save();ctx.translate(x,y);ctx.rotate(Math.PI/4);ctx.fillRect(-4,-4,8,8);ctx.strokeRect(-4,-4,8,8);ctx.restore()}
