@@ -51,7 +51,9 @@ export class AssetLibrary {
       try{
         const clean=url.split('?')[0].toLowerCase()
         let root=null,animations=[]
-        if(clean.endsWith('.fbx')){
+        if(clean.endsWith('.json')){
+          return null
+        }else if(clean.endsWith('.fbx')){
           root=await this.fbx.loadAsync(url)
           animations=root.animations||[]
         }else if(clean.endsWith('.dae')){
