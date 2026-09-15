@@ -105,7 +105,7 @@ export default function App(){
   const menuScale=getMenuScale(viewport,requestedScale)
   const layoutClass=viewport.isDesktop?'is-desktop':viewport.isMobile?'is-mobile':'is-tablet'
   const orientationClass=viewport.isLandscape?'is-landscape':'is-portrait'
-  const touchClass=viewport.isDesktop?'mouse-ui':viewport.isTouch?'touch-ui':'mouse-ui'
+  const touchClass=viewport.isTouch?'touch-ui':'mouse-ui'
   const cssVars={
     '--ui-scale':hudScale,'--menu-scale':menuScale,'--viewport-h':`${viewport.h}px`,'--viewport-w':`${viewport.w}px`,
     '--safe-top':'max(10px, env(safe-area-inset-top))','--safe-right':'max(10px, env(safe-area-inset-right))','--safe-bottom':'max(10px, env(safe-area-inset-bottom))','--safe-left':'max(10px, env(safe-area-inset-left))',
@@ -122,13 +122,14 @@ export default function App(){
 
     <section className="hud-card player-card glass">
       <div className="brand-row">
-        <div><b>SHADOW ASCENSION</b><small>☀ {hud.time} • {weatherIcon(hud.weather)} {hud.weather}</small></div>
+        <div><b>SHADOW ASCENSION</b><small>WEB 3D • V0.9.11 ONLINE • ☀ {hud.time}</small></div>
         <div style={{display:'flex',gap:'6px',alignItems:'center'}}>
           <button className="class-chip" onClick={()=>call('togglePanel','grimoire')} style={{'--tier-color':uiActiveTier.color}} title="Clique para abrir o Grimório do Despertar">{uiActiveTier.icon} {uiActiveClass.name}</button>
           <span className="level-chip">NV. {hud.level}</span>
         </div>
       </div>
       <div className="identity-line"><strong>{hud.playerName||'Aventureiro'}</strong><span>RANK {hud.guildRank||'E'}</span></div><div className="zone-line"><strong>{hud.currentCity||hud.zone}</strong><span>⚔ {hud.atk} &nbsp; 🛡 {hud.def}</span></div>
+      <div className="position-line">COORD. {Math.round(hud.playerPosition?.x||0)}, {Math.round(hud.playerPosition?.z||0)}</div>
       <Bar label={`HP ${Math.floor(hud.hp)}/${hud.maxHp}${hud.inCombat ? ` [⚔ Em Combate ${hud.combatTimer||8}s]` : (hud.hp < hud.maxHp && hud.stamina >= hud.maxStamina - 0.5) ? ' [💚 Regen]' : ''}`} value={hp} cls="hp"/><Bar label={`Vigor ${Math.floor(hud.stamina)}/${hud.maxStamina}`} value={st} cls="stamina"/><Bar label={`XP ${Math.floor(hud.xp)}/${hud.nextXp}`} value={xp} cls="xp"/>
       <div className="currency-row"><span>◈ {hud.gold} ouro</span><span>◆ {hud.ores||0} minério</span><span>📖 {grimoireQty} grimório{grimoireQty!==1?'s':''}</span></div>
     </section>
@@ -228,19 +229,19 @@ export default function App(){
     )}
     {hud.interactionPrompt&&!panel&&<div className="interaction">{hud.interactionPrompt}</div>}{hud.toast&&<div key={hud.toast.id} className="toast">{hud.toast.msg}</div>}
 
-    {!panel&&hud.combatMode&&<div className={`combat-crosshair ${hud.crosshairTarget?'locked':''}`} aria-label="Mira"><i/><i/><b/></div>}
-    {!panel&&<button className={`combat-mode-chip glass ${hud.combatMode?'active':''}`} onClick={()=>call('toggleCombatMode')}><kbd>Q</kbd><span>{hud.combatMode?'MODO COMBATE':'CURSOR LIVRE'}</span><small>{hud.combatMode?'Q libera o mouse':'Q trava a mira'}</small></button>}
+    {viewport.isDesktop&&!panel&&hud.combatMode&&<div className={`combat-crosshair ${hud.crosshairTarget?'locked':''}`} aria-label="Mira"><i/><i/><b/></div>}
+    {viewport.isDesktop&&!panel&&<button className={`combat-mode-chip glass ${hud.combatMode?'active':''}`} onClick={()=>call('toggleCombatMode')}><kbd>Q</kbd><span>{hud.combatMode?'MODO COMBATE':'CURSOR LIVRE'}</span><small>{hud.combatMode?'Q libera o mouse':'Q trava a mira'}</small></button>}
 
-    <div className="quickbar glass">
+    {viewport.isDesktop&&<div className="quickbar glass">
       <QuickButton hotkey="R" icon="🧪" label="Poção" badge={potionQty} onClick={()=>call('usePotion')} disabled={!potionQty}/>
       {abilities.map(a=><QuickButton key={a.slot} hotkey={String(a.slot)} icon={a.icon} label={a.name} badge={a.remaining>0?`${a.remaining.toFixed(1)}s`:''} cooldown={a.remaining} maxCooldown={a.cooldown} disabled={!a.ready} onClick={()=>call('castAbility',a.slot)} title={`${a.name} • ${a.cost} vigor • CD ${a.cooldown}s`}/>) }
       <QuickButton hotkey="Space" icon="↥" label="Pular" onClick={()=>call('jump')}/><QuickButton hotkey="Shift" icon="↯" label="Esquiva" onClick={()=>call('dash')}/><QuickButton hotkey="E" icon="☞" label="Interagir" onClick={()=>call('interact')}/><QuickButton hotkey="H" icon="♞" label="Montaria" onClick={()=>call('toggleMount')}/>
-    </div>
+    </div>}
 
-    <button className="help-button" onClick={()=>setHelp(v=>!v)}>?</button>
-    {help&&<div className="help glass"><b>CONTROLES</b><span>WASD — mover • Espaço — pular • Ctrl — correr</span><span>Fora do combate: segure o botão direito para girar a câmera</span><span><b>Q</b> — alterna Modo Combate / Cursor Livre</span><span>No combate: mouse move a câmera • mira centralizada</span><span>Mira + clique esquerdo — atacar/coletar</span><span>1 / 2 / 3 ou clique — poderes</span><span>Direito — bloquear • Shift — esquiva</span><span>E — interagir • R — poção • H — montaria</span><span>I/G/T/J/U/K/P/M/O — inventário, grimório, viajante, missões, guilda, atributos, troca, mapa, opções</span></div>}
+    {viewport.isDesktop&&<><button className="help-button" onClick={()=>setHelp(v=>!v)}>?</button>
+    {help&&<div className="help glass"><b>CONTROLES</b><span>WASD — mover • Espaço — pular • Ctrl — correr</span><span>Fora do combate: segure o botão direito para girar a câmera</span><span><b>Q</b> — alterna Modo Combate / Cursor Livre</span><span>No combate: mouse move a câmera • mira centralizada</span><span>Mira + clique esquerdo — atacar/coletar</span><span>1 / 2 / 3 ou clique — poderes</span><span>Direito — bloquear • Shift — esquiva</span><span>E — interagir • R — poção • H — montaria</span><span>I/G/T/J/U/K/P/M/O — inventário, grimório, viajante, missões, guilda, atributos, troca, mapa, opções</span></div>}</>}
 
-    <MobileControls hud={hud} abilities={abilities} call={call} touch={!viewport.isDesktop && viewport.isTouch} onHelp={()=>setHelp(v=>!v)}/>
+    <MobileControls hud={hud} abilities={abilities} call={call} touch={viewport.isTouch}/>
 
     {panel&&<Overlay panelKey={panel} title={roleTitle[panel]||'Interação'} dialogue={hud.dialogue} mapMode={panel==='map'} onClose={()=>call('closePanel')}>
       {panel==='inventory'&&<InventoryErrorBoundary><Inventory hud={hud} equip={id=>call('equipItem',id)} unequip={s=>call('unequip',s)} call={call}/></InventoryErrorBoundary>} 
@@ -634,7 +635,7 @@ function Attributes({hud,allocate}){
   </div>
 }
 
-function MobileControls({hud,abilities,call,touch,onHelp}){
+function MobileControls({hud,abilities,call,touch}){
   const [stickCenter,setStickCenter]=useState(null)
   const [stickOffset,setStickOffset]=useState({x:0,y:0})
   const [menuOpen,setMenuOpen]=useState(false)
@@ -719,8 +720,12 @@ function MobileControls({hud,abilities,call,touch,onHelp}){
     }
   }
 
-  const toggleRun=()=>call('setMobileRun',!hud.mobileRunning)
   const closeAnd=(panel)=>{setMenuOpen(false);call('togglePanel',panel)}
+  const supportsPointerEvents=typeof window!=='undefined'&&'PointerEvent' in window
+  const press=method=>e=>{e.preventDefault();e.stopPropagation();call(method)}
+  const startHold=method=>e=>{e.preventDefault();e.stopPropagation();try{e.currentTarget.setPointerCapture?.(e.pointerId)}catch{};call(method,true)}
+  const stopHold=method=>e=>{e.stopPropagation();try{e.currentTarget.releasePointerCapture?.(e.pointerId)}catch{};call(method,false)}
+  const touchFallback=handler=>e=>{if(!supportsPointerEvents)handler(e)}
 
   if(!touch)return null
 
@@ -746,7 +751,6 @@ function MobileControls({hud,abilities,call,touch,onHelp}){
       <button onClick={()=>{setMenuOpen(false);call('toggleCombatMode')}}>
         {hud.combatMode?'🎯':'👁'}<small>{hud.combatMode?'Mira Fixa':'Câm. Livre'}</small>
       </button>
-      <button onClick={()=>{setMenuOpen(false);onHelp()}}>❔<small>Ajuda</small></button>
     </div>}
     {!hud.uiPanel&&<>
       {hud.multiplayer?.connected&&<div className={`mobile-network-chip glass ${hud.multiplayer?.quality||''}`}><b>● ONLINE</b><span>{hud.multiplayer.players||0}</span><small>{String(hud.multiplayer?.room||'asterra-global').replace('asterra-','L')}</small>{hud.multiplayer.latencyMs>0&&<small>{Math.round(hud.multiplayer.latencyMs)} ms</small>}</div>}
@@ -784,12 +788,12 @@ function MobileControls({hud,abilities,call,touch,onHelp}){
       />
 
       <div className="mobile-actions">
-        <button className="mobile-attack" onPointerDown={e=>{e.stopPropagation();e.currentTarget.setPointerCapture?.(e.pointerId);call('setAutoAttack',true)}} onPointerUp={e=>{e.stopPropagation();try{e.currentTarget.releasePointerCapture?.(e.pointerId)}catch{};call('setAutoAttack',false)}} onPointerCancel={e=>{e.stopPropagation();call('setAutoAttack',false)}}>⚔<small>ATACAR</small></button>
-        <button className="mobile-block" onPointerDown={e=>{e.stopPropagation();e.currentTarget.setPointerCapture?.(e.pointerId);call('setMobileBlock',true)}} onPointerUp={e=>{e.stopPropagation();try{e.currentTarget.releasePointerCapture?.(e.pointerId)}catch{};call('setMobileBlock',false)}} onPointerCancel={e=>{e.stopPropagation();call('setMobileBlock',false)}}>🛡<small>DEFESA</small></button>
-        <button className="mobile-dash" onClick={(e)=>{e.stopPropagation();call('dash')}}>↯<small>ESQUIVA</small></button>
+        <button className="mobile-attack" onPointerDown={startHold('setAutoAttack')} onPointerUp={stopHold('setAutoAttack')} onPointerCancel={stopHold('setAutoAttack')} onTouchStart={touchFallback(startHold('setAutoAttack'))} onTouchEnd={touchFallback(stopHold('setAutoAttack'))}>⚔<small>ATACAR</small></button>
+        <button className="mobile-block" onPointerDown={startHold('setMobileBlock')} onPointerUp={stopHold('setMobileBlock')} onPointerCancel={stopHold('setMobileBlock')} onTouchStart={touchFallback(startHold('setMobileBlock'))} onTouchEnd={touchFallback(stopHold('setMobileBlock'))}>🛡<small>DEFESA</small></button>
+        <button className="mobile-dash" onPointerDown={press('dash')} onTouchStart={touchFallback(press('dash'))}>↯<small>ESQUIVA</small></button>
         <button className={`mobile-use ${hud.actionButton?'has-context':''}`} onClick={(e)=>{e.stopPropagation();call('interact')}}>{hud.actionButton?.icon||'☞'}<small>USAR</small></button>
-        <button className={`mobile-run ${hud.mobileRunning?'active':''}`} onClick={(e)=>{e.stopPropagation();toggleRun()}}>🏃<small>{hud.mobileRunning?'CORRENDO':'CORRER'}</small></button>
-        <button className="mobile-jump" onClick={(e)=>{e.stopPropagation();call('setMobileJump')}}>↥<small>PULAR</small></button>
+        <button className={`mobile-run ${hud.mobileRunning?'active':''}`} onPointerDown={startHold('setMobileRun')} onPointerUp={stopHold('setMobileRun')} onPointerCancel={stopHold('setMobileRun')} onLostPointerCapture={stopHold('setMobileRun')} onTouchStart={touchFallback(startHold('setMobileRun'))} onTouchEnd={touchFallback(stopHold('setMobileRun'))}>🏃<small>{hud.mobileRunning?'CORRENDO':'CORRER'}</small></button>
+        <button className="mobile-jump" onPointerDown={press('setMobileJump')} onTouchStart={touchFallback(press('setMobileJump'))}>↥<small>PULAR</small></button>
       </div>
       <div className="mobile-powers-bottom">
         {abilities.map(a=><button key={a.slot} disabled={!a.ready||hud.stamina<a.cost} onClick={(e)=>{e.stopPropagation();call('castAbility',a.slot)}} title={`${a.name} • ${a.cost} vigor`}><span>{a.icon}</span><small>{a.short||a.name}</small>{a.remaining>0&&<em>{a.remaining.toFixed(1)}</em>}</button>)}

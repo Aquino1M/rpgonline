@@ -702,10 +702,6 @@ if (!ShadowGame.prototype[PATCH_FLAG]) {
       this.camera.updateProjectionMatrix?.()
     }
     this.resize?.()
-    setTimeout(() => {
-      const version = document.querySelector?.('.brand-row small')
-      if (version) version.textContent = 'WEB 3D • V0.9.3 ONLINE'
-    }, 80)
     return result
   }
 
