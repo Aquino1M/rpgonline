@@ -4,7 +4,7 @@ import { EQUIPMENT_SLOTS, GUILD_RANKS, ATTRIBUTE_DEFS, HORSE_BREEDS } from './ga
 import { CLASSES_LIST, CLASS_TIERS, CLASS_RANKS, getClassRankInfo } from './game/classesData.js'
 import { TRAVEL_NODES, calculateTravelCost } from './game/fastTravel.js'
 import { calculateGrimoireCost, getNextGrimoireLevel } from './game/rpgSystems.js'
-import { getSupabaseConfig, saveSupabaseConfig, getSavedAccountSession, registerAccount, loginAccount, clearAccountSession } from './game/supabaseService.js'
+import { getSupabaseConfig, saveSupabaseConfig, getSavedAccountSession, registerAccount, loginAccount, restoreAccountSession } from './game/supabaseService.js'
 import { promptInstallApp, toggleFullScreen, subscribePWA, getPWAState } from './game/pwaService.js'
 import MiniMap from './ui/Minimap.jsx'
 import WorldMap from './ui/WorldMap.jsx'
@@ -69,6 +69,13 @@ export default function App(){
 
   useEffect(()=>subscribePWA(setPwaState),[])
   useEffect(()=>{game.current=new ShadowGame(canvas.current,setHud);return()=>game.current?.destroy?.()},[])
+  useEffect(()=>{
+    let active=true
+    restoreAccountSession().then(result=>{
+      if(active&&result.ok) game.current?.setPlayerAccount(result.session,result.profile)
+    })
+    return()=>{active=false}
+  },[])
   useEffect(()=>{
     const sync=()=>setViewport(getViewportState())
     sync()
@@ -1612,6 +1619,7 @@ function formatRefresh(ms){if(ms==null)return '--:--';const s=Math.max(0,Math.ce
 
 function AuthGate({ initialServer = 'asterra-global', onLogin }) {
   const [mode, setMode] = useState('login')
+  const [email, setEmail] = useState('')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -1621,6 +1629,7 @@ function AuthGate({ initialServer = 'asterra-global', onLogin }) {
   })
   const [loading, setLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
+  const [successMsg, setSuccessMsg] = useState('')
   const [pwaState, setPwaState] = useState(getPWAState)
 
   useEffect(() => {
@@ -1632,6 +1641,7 @@ function AuthGate({ initialServer = 'asterra-global', onLogin }) {
     if (saved?.username) {
       setUsername(saved.username)
     }
+    if (saved?.email) setEmail(saved.email)
     if (saved?.server) {
       setSelectedServer(saved.server)
     }
@@ -1640,9 +1650,10 @@ function AuthGate({ initialServer = 'asterra-global', onLogin }) {
   const handleSubmit = async (e) => {
     e?.preventDefault?.()
     setErrorMsg('')
+    setSuccessMsg('')
     const clean = username.trim()
-    if (!clean) {
-      setErrorMsg('Informe o nome ou nickname do aventureiro.')
+    if (!email.trim()) {
+      setErrorMsg('Informe o e-mail da conta.')
       return
     }
     if (mode === 'register') {
@@ -1650,8 +1661,8 @@ function AuthGate({ initialServer = 'asterra-global', onLogin }) {
         setErrorMsg('O nome de usuário deve ter pelo menos 3 caracteres.')
         return
       }
-      if (password && password.length < 4) {
-        setErrorMsg('A senha deve ter pelo menos 4 caracteres.')
+      if (!password || password.length < 8) {
+        setErrorMsg('A senha deve ter pelo menos 8 caracteres.')
         return
       }
       if (password !== confirmPassword) {
@@ -1663,15 +1674,19 @@ function AuthGate({ initialServer = 'asterra-global', onLogin }) {
     setLoading(true)
     try {
       if (mode === 'register') {
-        const res = await registerAccount({ username: clean, password: password || '1234', server: selectedServer })
+        const res = await registerAccount({ email, username: clean, password, server: selectedServer })
         if (!res.ok) {
           setErrorMsg(res.error || 'Erro ao criar conta.')
           setLoading(false)
           return
         }
-        onLogin(res.session, null)
+        if (res.requiresEmailConfirmation) {
+          setSuccessMsg(res.message)
+          return
+        }
+        onLogin(res.session, res.profile)
       } else {
-        const res = await loginAccount({ username: clean, password: password || '', server: selectedServer })
+        const res = await loginAccount({ email, password, server: selectedServer })
         if (!res.ok) {
           setErrorMsg(res.error || 'Erro ao entrar na conta.')
           setLoading(false)
@@ -1723,30 +1738,36 @@ function AuthGate({ initialServer = 'asterra-global', onLogin }) {
 
         <form className="auth-form" onSubmit={handleSubmit}>
           {errorMsg && <div className="auth-error">⚠ {errorMsg}</div>}
+          {successMsg && <div className="auth-success">✓ {successMsg}</div>}
 
           <div className="auth-field">
-            <label>Nome do Aventureiro (Nickname)</label>
+            <label>E-mail da Conta</label>
             <input
               autoFocus
-              type="text"
-              maxLength={24}
-              value={username}
-              onChange={e => setUsername(e.target.value)}
-              placeholder="Ex.: Aquino"
+              type="email"
+              autoComplete="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder="voce@email.com"
               disabled={loading}
             />
           </div>
 
+          {mode === 'register' && <div className="auth-field">
+            <label>Nome do Aventureiro (Nickname)</label>
+            <input type="text" maxLength={20} value={username} onChange={e => setUsername(e.target.value)} placeholder="Ex.: Aquino" disabled={loading}/>
+          </div>}
+
           <div className="auth-field">
             <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span>Senha</span>
-              {mode === 'login' && <span style={{ fontSize: '10px', color: '#94a3b8' }}>(opcional se joga com Nick)</span>}
             </label>
             <input
               type="password"
               value={password}
               onChange={e => setPassword(e.target.value)}
-              placeholder={mode === 'login' ? 'Sua senha secreta (ou deixe em branco)' : 'Sua senha (mínimo 4 caracteres)'}
+              autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+              placeholder={mode === 'login' ? 'Sua senha' : 'Sua senha (mínimo 8 caracteres)'}
               disabled={loading}
             />
           </div>

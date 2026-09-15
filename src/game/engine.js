@@ -10,6 +10,7 @@ import { GateManager } from './dungeons/GateManager.js'
 import { XPFeedbackManager } from './dungeons/XPFeedbackManager.js'
 import { CaravanManager } from './caravans/CaravanManager.js'
 import { WorldEnvironment } from './world/WorldEnvironment.js'
+import { signOutAccount } from './supabaseService.js'
 
 const V3=()=>new THREE.Vector3()
 const mat=(color,extra={})=>new THREE.MeshStandardMaterial({color,roughness:.72,...extra})
@@ -2720,6 +2721,7 @@ applyEnemyNetworkState(st){
     return true
   }
   logoutAccount(){
+    signOutAccount().catch(()=>{})
     try {
       localStorage.removeItem('shadow_rpg_account_session')
       localStorage.removeItem('shadow-ascension-nick')

@@ -3,7 +3,7 @@ SHADOW ASCENSION — V0.9.9 MOBILE + LOBBIES + VIAGEM RÁPIDA
 1. Extraia este ZIP em uma pasta nova.
 2. Rode JOGAR_LOCAL.bat para testar localmente.
 3. Para LAN/multiplayer local, use INICIAR_SERVIDOR_LAN.bat.
-4. No Vercel, configure Upstash Redis conforme VERCEL_MULTIPLAYER.md.
+4. Para o deploy atual, configure as variáveis VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY conforme SUPABASE_INTEGRACAO.md.
 
 Principais correções:
 - HUD mobile e escala dos menus;

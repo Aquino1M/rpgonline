@@ -52,8 +52,8 @@ export function getSupabaseClient() {
         }
       },
       auth: {
-        persistSession: false,
-        autoRefreshToken: false
+        persistSession: true,
+        autoRefreshToken: true
       }
     })
     currentClientUrl = url
@@ -102,28 +102,19 @@ export async function loadCloudProfile(playerId) {
   }
 }
 
-export async function saveCloudProfile({ id, name, game, lastLobby = 'asterra-01', level = 1, guildRank = 'E', updatedAt = Date.now() }) {
+export async function saveCloudProfile({ id, name, game, lastLobby = 'asterra-global', level = 1, guildRank = 'E', updatedAt = Date.now() }) {
   const client = getSupabaseClient()
   if (!client || !id) return { ok: false, error: 'not_configured' }
 
   try {
-    let existingAuth = null
-    try {
-      const { data: current } = await client.from('player_profiles').select('game_data').eq('id', id).maybeSingle()
-      if (current?.game_data?.auth) {
-        existingAuth = current.game_data.auth
-      }
-    } catch {}
-
-    const gameDataPayload = existingAuth ? { auth: existingAuth, ...(game || {}) } : (game || null)
-
     const payload = {
       id,
+      user_id: id,
       name: String(name || 'Aventureiro').slice(0, 32),
       level: Number(level) || 1,
       guild_rank: String(guildRank || 'E').slice(0, 8),
-      last_lobby: String(lastLobby || 'asterra-01'),
-      game_data: gameDataPayload,
+      last_lobby: String(lastLobby || 'asterra-global'),
+      game_data: game || null,
       updated_at: new Date(updatedAt || Date.now()).toISOString()
     }
 
@@ -184,196 +175,78 @@ export function clearAccountSession() {
   } catch {}
 }
 
-export async function hashPassword(password, salt = 'shadow_rpg_salt_2026') {
-  const text = `${salt}:${password}:${salt}`
-  if (typeof crypto !== 'undefined' && crypto.subtle) {
-    const msgBuffer = new TextEncoder().encode(text)
-    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer)
-    const hashArray = Array.from(new Uint8Array(hashBuffer))
-    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
-  }
-  let h = 0x811c9dc5
-  for (let i = 0; i < text.length; i++) {
-    h ^= text.charCodeAt(i)
-    h = Math.imul(h, 0x01000193)
-  }
-  return ('00000000' + (h >>> 0).toString(16)).slice(-8)
+const cleanUsername = value => String(value || '').trim().replace(/[^\p{L}\p{N} _.\-]/gu, '').replace(/\s+/g, ' ')
+const cleanEmail = value => String(value || '').trim().toLowerCase()
+const isEmail = value => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
+const profileFromRow = row => row ? { id:row.id, name:row.name, level:row.level, guildRank:row.guild_rank, lastLobby:row.last_lobby, updatedAt:row.updated_at ? new Date(row.updated_at).getTime() : 0, game:row.game_data || null } : null
+
+async function loadOrCreateOwnProfile(client, user, server = 'asterra-global') {
+  const { data, error } = await client.from('player_profiles').select('*').eq('id', user.id).maybeSingle()
+  if (error) return { ok:false, error:error.message }
+  if (data) return { ok:true, profile:profileFromRow(data) }
+  const username = cleanUsername(user.user_metadata?.username) || cleanEmail(user.email).split('@')[0] || 'Aventureiro'
+  const { data:created, error:insertError } = await client.from('player_profiles').insert({ id:user.id, user_id:user.id, name:username.slice(0,32), level:1, guild_rank:'E', last_lobby:server || 'asterra-global', game_data:null }).select('*').single()
+  if (insertError) return { ok:false, error:insertError.message }
+  return { ok:true, profile:profileFromRow(created) }
 }
 
-export async function registerAccount({ username, password, server = 'asterra-01' }) {
-  const client = getSupabaseClient()
-  if (!client) return { ok: false, error: 'Servidor Supabase não conectado. Verifique sua conexão.' }
-
-  const cleanUser = String(username || '').trim().replace(/[^\p{L}\p{N} _.\-]/gu, '')
-  if (cleanUser.length < 3) return { ok: false, error: 'O nome de usuário deve ter pelo menos 3 caracteres.' }
-  if (cleanUser.length > 20) return { ok: false, error: 'O nome de usuário pode ter no máximo 20 caracteres.' }
-
-  if (!password || password.length < 4) return { ok: false, error: 'A senha deve ter pelo menos 4 caracteres.' }
-
-  const accountId = `acc_${cleanUser.toLowerCase()}`
-
-  try {
-    const { data: existing, error: checkError } = await client
-      .from('player_profiles')
-      .select('id')
-      .eq('id', accountId)
-      .maybeSingle()
-
-    if (existing) {
-      return { ok: false, error: 'Este nome de aventureiro já existe. Entre com sua senha ou escolha outro.' }
-    }
-
-    const passwordHash = await hashPassword(password)
-    const now = new Date().toISOString()
-
-    const newProfile = {
-      id: accountId,
-      name: cleanUser,
-      level: 1,
-      guild_rank: 'E',
-      last_lobby: server || 'asterra-01',
-      game_data: {
-        auth: {
-          username: cleanUser,
-          passwordHash,
-          createdAt: Date.now()
-        }
-      },
-      updated_at: now
-    }
-
-    const { error: insertError } = await client
-      .from('player_profiles')
-      .insert(newProfile)
-
-    if (insertError) {
-      return { ok: false, error: `Erro ao cadastrar: ${insertError.message}` }
-    }
-
-    const session = {
-      accountId,
-      username: cleanUser,
-      server: server || 'asterra-01',
-      loginTime: Date.now()
-    }
-    saveAccountSession(session)
-
-    return { ok: true, session, isNew: true }
-  } catch (err) {
-    return { ok: false, error: String(err?.message || err) }
-  }
+function makeSession(user, profile, server) {
+  return { accountId:user.id, username:profile?.name || cleanUsername(user.user_metadata?.username) || 'Aventureiro', email:user.email || '', server:server || profile?.lastLobby || 'asterra-global', loginTime:Date.now() }
 }
 
-export async function loginAccount({ username, password = '', server = null }) {
+export async function registerAccount({ email, username, password, server = 'asterra-global' }) {
   const client = getSupabaseClient()
-  if (!client) return { ok: false, error: 'Servidor Supabase não conectado. Verifique sua conexão.' }
-
-  const cleanUser = String(username || '').trim().replace(/[^\p{L}\p{N} _.\-]/gu, '')
-  if (!cleanUser) return { ok: false, error: 'Informe o nome de usuário ou nickname.' }
-
-  const accountId = `acc_${cleanUser.toLowerCase()}`
-
+  if (!client) return { ok:false, error:'Servidor Supabase não conectado. Verifique sua conexão.' }
+  const cleanUser = cleanUsername(username), cleanMail = cleanEmail(email)
+  if (cleanUser.length < 3 || cleanUser.length > 20) return { ok:false, error:'O nickname deve ter entre 3 e 20 caracteres.' }
+  if (!isEmail(cleanMail)) return { ok:false, error:'Informe um e-mail válido.' }
+  if (!password || password.length < 8) return { ok:false, error:'A senha deve ter pelo menos 8 caracteres.' }
   try {
-    const { data, error } = await client
-      .from('player_profiles')
-      .select('*')
-      .eq('id', accountId)
-      .maybeSingle()
-
-    if (error) {
-      return { ok: false, error: `Erro ao buscar conta: ${error.message}` }
-    }
-
-    // Se o perfil ainda não existe no Supabase, cria automaticamente com o Nick
-    if (!data) {
-      const passwordHash = password ? await hashPassword(password) : null
-      const now = new Date().toISOString()
-      const newProfile = {
-        id: accountId,
-        name: cleanUser,
-        level: 1,
-        guild_rank: 'E',
-        last_lobby: server || 'asterra-01',
-        game_data: {
-          auth: {
-            username: cleanUser,
-            passwordHash,
-            createdAt: Date.now()
-          }
-        },
-        updated_at: now
-      }
-      await client.from('player_profiles').insert(newProfile)
-
-      const session = {
-        accountId,
-        username: cleanUser,
-        server: server || 'asterra-01',
-        loginTime: Date.now()
-      }
-      saveAccountSession(session)
-
-      return {
-        ok: true,
-        session,
-        profile: {
-          id: accountId,
-          name: cleanUser,
-          level: 1,
-          guildRank: 'E',
-          lastLobby: server || 'asterra-01',
-          updatedAt: Date.now(),
-          game: null
-        },
-        isNew: true
-      }
-    }
-
-    const savedAuth = data.game_data?.auth
-    const expectedHash = savedAuth?.passwordHash
-
-    // Se a conta já possui senha cadastrada, exige a validação da senha
-    if (expectedHash) {
-      if (!password) {
-        return { ok: false, error: 'Esta conta possui senha cadastrada. Digite a senha para entrar.' }
-      }
-      const inputHash = await hashPassword(password)
-      if (inputHash !== expectedHash) {
-        return { ok: false, error: 'Senha incorreta. Verifique e tente novamente.' }
-      }
-    } else if (password) {
-      // Se a conta não tinha senha (apenas nick) e o usuário digitou uma agora, salva a senha
-      const newHash = await hashPassword(password)
-      const updatedGameData = { ...(data.game_data || {}), auth: { ...(savedAuth || {}), username: cleanUser, passwordHash: newHash } }
-      await client.from('player_profiles').update({ game_data: updatedGameData }).eq('id', accountId)
-    }
-
-    const chosenServer = server || data.last_lobby || 'asterra-01'
-
-    const session = {
-      accountId,
-      username: data.name || cleanUser,
-      server: chosenServer,
-      loginTime: Date.now()
-    }
+    const { data, error } = await client.auth.signUp({ email:cleanMail, password, options:{ data:{ username:cleanUser } } })
+    if (error) return { ok:false, error:error.message }
+    if (!data.user) return { ok:false, error:'Não foi possível criar a conta.' }
+    if (!data.session) return { ok:true, requiresEmailConfirmation:true, message:'Conta criada. Confirme o e-mail para entrar.' }
+    const ownProfile = await loadOrCreateOwnProfile(client, data.user, server)
+    if (!ownProfile.ok) return ownProfile
+    const session = makeSession(data.user, ownProfile.profile, server)
     saveAccountSession(session)
+    return { ok:true, session, profile:ownProfile.profile, isNew:true }
+  } catch (err) { return { ok:false, error:String(err?.message || err) } }
+}
 
-    return {
-      ok: true,
-      session,
-      profile: {
-        id: data.id,
-        name: data.name,
-        level: data.level,
-        guildRank: data.guild_rank,
-        lastLobby: chosenServer,
-        updatedAt: data.updated_at ? new Date(data.updated_at).getTime() : 0,
-        game: data.game_data || null
-      }
-    }
-  } catch (err) {
-    return { ok: false, error: String(err?.message || err) }
-  }
+export async function loginAccount({ email, password, server = null }) {
+  const client = getSupabaseClient()
+  if (!client) return { ok:false, error:'Servidor Supabase não conectado. Verifique sua conexão.' }
+  const cleanMail = cleanEmail(email)
+  if (!isEmail(cleanMail)) return { ok:false, error:'Informe o e-mail da conta.' }
+  if (!password) return { ok:false, error:'Informe a senha.' }
+  try {
+    const { data, error } = await client.auth.signInWithPassword({ email:cleanMail, password })
+    if (error || !data.user) return { ok:false, error:error?.message || 'Não foi possível autenticar a conta.' }
+    const ownProfile = await loadOrCreateOwnProfile(client, data.user, server || 'asterra-global')
+    if (!ownProfile.ok) return ownProfile
+    const session = makeSession(data.user, ownProfile.profile, server)
+    saveAccountSession(session)
+    return { ok:true, session, profile:ownProfile.profile }
+  } catch (err) { return { ok:false, error:String(err?.message || err) } }
+}
+
+export async function restoreAccountSession() {
+  const client = getSupabaseClient()
+  if (!client) return { ok:false, error:'not_configured' }
+  const { data, error } = await client.auth.getUser()
+  if (error || !data.user) return { ok:false, error:'no_session' }
+  const ownProfile = await loadOrCreateOwnProfile(client, data.user)
+  if (!ownProfile.ok) return ownProfile
+  const session = makeSession(data.user, ownProfile.profile)
+  saveAccountSession(session)
+  return { ok:true, session, profile:ownProfile.profile }
+}
+
+export async function signOutAccount() {
+  const client = getSupabaseClient()
+  if (client) await client.auth.signOut()
+  clearAccountSession()
 }
 
 // ---------------------------------------------------------------------------
