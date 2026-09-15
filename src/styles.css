@@ -1152,6 +1152,7 @@
   text-align: center;
   padding: 24px;
 }
+.trade-remote-offer{width:100%;display:flex;flex-direction:column;gap:8px;text-align:left}.trade-remote-gold{color:#fbbf24;font-size:13px;font-weight:800}.trade-remote-items{display:flex;flex-direction:column;gap:5px;max-height:210px;overflow:auto}.trade-item-row.remote{grid-template-columns:22px 1fr;cursor:default}.trade-item-row.remote:hover{background:rgba(15,23,42,.52)}.trade-remote-offer>p{margin:0;color:#94a3b8;font-size:11px;text-align:center}
 .trade-success-box, .trade-waiting-box, .trade-standby-box {
   display: flex;
   flex-direction: column;

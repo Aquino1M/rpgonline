@@ -672,7 +672,7 @@ export class MultiplayerClient {
       this.onEvent({type:'pong', clientTime:m.clientTime, serverTime:now()})
       return
     }
-    this._broadcast('game', {...m, eventId:m.eventId || uid(), from:this.playerId, room:GLOBAL_MULTIPLAYER_ROOM})
+    this._broadcast('game', {...m, eventId:m.eventId || uid(), from:this.playerId, fromName:this.name, room:GLOBAL_MULTIPLAYER_ROOM})
   }
 
   sync(state, timestamp=performance.now()) {

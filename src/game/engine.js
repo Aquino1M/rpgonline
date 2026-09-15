@@ -18,6 +18,8 @@ const mesh=(geo,material)=>{const m=new THREE.Mesh(geo,material);m.castShadow=tr
 
 const mixHex=(a,b,t=.5)=>{const ca=new THREE.Color(a),cb=new THREE.Color(b);ca.lerp(cb,t);return ca.getHex()}
 const rankColor=rank=>rank?.startsWith('ZZZ')?0xff4fd8:rank?.startsWith('ZZ')?0xc84fff:rank?.startsWith('Z')?0x9d62ff:rank?.startsWith('EX')?0xff6b77:rank?.startsWith('SSS')?0xffa233:rank?.startsWith('SS')?0xffcf45:rank?.startsWith('S')?0xf5df71:rank==='A'?0xd18cff:rank==='B'?0x68b9ff:rank==='C'?0x72d89c:rank==='D'?0xa7bdcc:0x7f98a8
+const normalizeTradeOffer=offer=>({gold:Math.max(0,Math.min(100000000,Math.round(Number(offer?.gold)||0))),items:(Array.isArray(offer?.items)?offer.items:[]).slice(0,20).filter(item=>item&&item.id).map(item=>({...item,id:String(item.id).slice(0,128),name:String(item.name||'Item').slice(0,80)})),updatedAt:Number(offer?.updatedAt)||Date.now()})
+const tradeOfferHash=offer=>`${Math.max(0,Math.round(Number(offer?.gold)||0))}|${(offer?.items||[]).map(item=>`${item.id}:${Math.max(1,Number(item.qty)||1)}`).sort().join('|')}`
 
 export class ShadowGame {
   constructor(canvas,onHud){
@@ -45,7 +47,7 @@ export class ShadowGame {
       abilities:ABILITIES.map(a=>({...a,remaining:0,ready:true})),currentCity:null,combatMode:false,inCombat:false,combatTimer:0,
       attributes:{strength:0,vitality:0,agility:0,intellect:0},attributePoints:0,
       guildRankIndex:0,guildRank:'E',guildPoints:0,guildMissions:[],guildMissionCycle:null,shopRefresh:null,
-      economy:{cityId:'aurora-city',...CITY_ECONOMIES['aurora-city']},party:{id:null,leaderId:null,members:[],totalXP:0},onlinePlayers:[],
+      economy:{cityId:'aurora-city',...CITY_ECONOMIES['aurora-city']},party:{id:null,leaderId:null,members:[],totalXP:0},onlinePlayers:[],trade:null,
       multiplayer:{connected:false,url:this.settings.multiplayerUrl,room:savedLobby,players:0,serverSave:false,transport:'offline',reason:'',latencyMs:0,quality:'offline',reconnecting:false},mobileRunning:false,
     }
     this.savedPosition={...SAFE_SPAWNS['aurora-city']}; this.loadGame(); this.state.party={id:null,leaderId:null,members:[],totalXP:0}; this.discovered=new Set(this.savedDiscovered||[]); this.init()
@@ -1993,20 +1995,60 @@ export class ShadowGame {
     this.toast(`${count} itens vendidos • +${totalGained} ◈ Ouro${demandedCount>0?` (${demandedCount} com Alta Demanda!)`:''}`)
     this.saveGame()
   }
-  executeTrade({partnerId,itemIds=[],gold=0}={}){
-    if(!this.multiplayer?.connected||!partnerId){this.toast('Conecte ao multiplayer e escolha um jogador para trocar.');return false}
-    const idSet=new Set(itemIds)
-    const items=this.state.inventory.filter(it=>idSet.has(it.id)).map(it=>({...it}))
+  submitTradeOffer({partnerId,itemIds=[],gold=0}={}){
+    const targetId=String(partnerId||'')
+    if(!this.multiplayer?.connected||!targetId){this.toast('Conecte ao multiplayer e escolha um jogador para trocar.');return false}
+    const idSet=new Set((Array.isArray(itemIds)?itemIds:[]).map(String))
+    const items=this.state.inventory.filter(item=>idSet.has(String(item.id))).slice(0,20).map(item=>({...item}))
     const sendGold=Math.max(0,Math.min(this.state.gold,Math.round(Number(gold)||0)))
     if(!items.length&&!sendGold){this.toast('Escolha pelo menos um item ou ouro para trocar.');return false}
-    const tradeId=`trade-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,9)}`
-    this.state.inventory=this.state.inventory.filter(it=>!idSet.has(it.id))
-    this.state.gold=Math.max(0,this.state.gold-sendGold)
-    this._pendingTrades ||= new Map()
-    this._pendingTrades.set(tradeId,{items:items.map(it=>({...it})),gold:sendGold,createdAt:Date.now()})
-    this.toast(`🤝 Oferta enviada! (${items.length} itens, ${sendGold}◈)`)
+    const active=this.state.trade
+    if(active&&active.status!=='completed'&&active.partnerId!==targetId){this.toast('Cancele a troca atual antes de escolher outro jogador.');return false}
+    const tradeId=active?.id||`trade-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,9)}`
+    const localOffer=normalizeTradeOffer({items,gold:sendGold,updatedAt:Date.now()})
+    this.state.trade={id:tradeId,partnerId:targetId,partnerName:active?.partnerName||this.remotePlayers.get(targetId)?.data?.name||'Aventureiro',localOffer,remoteOffer:active?.id===tradeId?active.remoteOffer:null,localConfirmed:false,remoteConfirmed:false,status:'offered'}
+    this.multiplayer.send({type:'trade_offer',to:targetId,tradeId,offer:localOffer,world:this.currentWorldId()})
+    this.toast(`🤝 Proposta enviada: ${items.length} item(ns)${sendGold?` e ${sendGold}◈`:''}.`)
+    return true
+  }
+  executeTrade(args={}){return this.submitTradeOffer(args)}
+  confirmTrade(){
+    const trade=this.state.trade
+    if(!trade?.id||trade.status==='completed'||!trade.localOffer||!trade.remoteOffer){this.toast('Aguarde a oferta do outro jogador antes de confirmar.');return false}
+    const idSet=new Set((trade.localOffer.items||[]).map(item=>String(item.id)))
+    const stillOwned=this.state.inventory.filter(item=>idSet.has(String(item.id)))
+    if(stillOwned.length!==idSet.size||this.state.gold<Number(trade.localOffer.gold||0)){this.toast('Sua oferta mudou. Envie a proposta novamente.');this.state.trade={...trade,localConfirmed:false,remoteConfirmed:false};return false}
+    if(this.state.inventory.filter(item=>!idSet.has(String(item.id))).length+(trade.remoteOffer.items||[]).length>40){this.toast('Não há espaço suficiente na mochila para receber esta oferta.');return false}
+    this.state.trade={...trade,localConfirmed:true,status:'confirming'}
+    this.multiplayer.send({type:'trade_confirm',to:trade.partnerId,tradeId:trade.id,localOfferHash:tradeOfferHash(trade.localOffer),remoteOfferHash:tradeOfferHash(trade.remoteOffer),world:this.currentWorldId()})
+    if(trade.remoteConfirmed)this.completeTrade()
+    else this.toast('Confirmação enviada. Aguardando o outro jogador.')
+    return true
+  }
+  cancelTrade(message='Troca cancelada.',notify=true){
+    const trade=this.state.trade
+    if(!trade)return false
+    if(notify&&trade.status!=='completed'&&this.multiplayer?.connected)this.multiplayer.send({type:'trade_cancel',to:trade.partnerId,tradeId:trade.id,world:this.currentWorldId(),message})
+    this.state.trade=null
+    if(message)this.toast(message)
+    return true
+  }
+  completeTrade(){
+    const trade=this.state.trade
+    if(!trade?.localConfirmed||!trade.remoteConfirmed||trade.status==='completed')return false
+    const localOffer=normalizeTradeOffer(trade.localOffer),remoteOffer=normalizeTradeOffer(trade.remoteOffer)
+    const idSet=new Set(localOffer.items.map(item=>String(item.id)))
+    const offered=this.state.inventory.filter(item=>idSet.has(String(item.id)))
+    if(offered.length!==idSet.size||this.state.gold<localOffer.gold){this.cancelTrade('Troca cancelada: sua oferta não está mais disponível.');return false}
+    const remaining=this.state.inventory.filter(item=>!idSet.has(String(item.id)))
+    if(remaining.length+remoteOffer.items.length>40){this.cancelTrade('Troca cancelada: não há espaço suficiente na mochila.');return false}
+    this.state.inventory=remaining
+    this.state.gold-=localOffer.gold
+    for(const raw of remoteOffer.items)this.addInventoryItem({...raw,id:`trade-${Date.now()}-${Math.random().toString(36).slice(2,8)}`})
+    this.state.gold+=remoteOffer.gold
+    this.state.trade={...trade,status:'completed'}
     this.saveGame()
-    this.multiplayer.send({type:'player_trade',tradeId,targetId:partnerId,items,gold:sendGold,world:this.currentWorldId(),fromName:this.state.playerName||'Aventureiro'})
+    this.toast(`🤝 Troca concluída: recebeu ${remoteOffer.items.length} item(ns)${remoteOffer.gold?` e ${remoteOffer.gold}◈`:''}.`)
     return true
   }
   buyItem(shopId){const item=(this.state.merchant||[]).find(x=>x.id===shopId);if(!item||this.state.gold<item.value)return false;const stackable=item.subtype==='potion'&&this.state.inventory.some(x=>x.subtype==='potion');if(!stackable&&this.state.inventory.length>=40){this.toast('Mochila cheia.');return false}this.state.gold-=item.value;if(item.subtype==='potion'){const found=this.state.inventory.find(x=>x.subtype==='potion');if(found)found.qty=(found.qty||1)+1;else this.state.inventory.unshift({...item,id:`p-${Date.now()}`})}else{this.state.inventory.unshift({...item,id:`b-${Date.now()}-${Math.random()}`});this.state.merchant=this.state.merchant.filter(x=>x.id!==shopId)}this.toast('Compra realizada');return true}
@@ -2642,39 +2684,34 @@ applyEnemyNetworkState(st){
     if(e.type==='party_xp_award'){const amount=Math.max(0,Math.round(Number(e.amount)||0));if(amount){this.gainXp(amount);this.toast(`Equipe: +${amount} XP compartilhado`)}return}
     if(e.type==='party_error'){this.toast(e.message||'Não foi possível alterar a equipe.');return}
     if(e.type==='renamed'){this.state.playerName=e.name||this.state.playerName;return}
-    if(e.type==='trade_sent'){
-      if(e.tradeId)this._pendingTrades?.delete(e.tradeId)
-      return
-    }
-    if(e.type==='trade_error'){
-      const pending=e.tradeId?this._pendingTrades?.get(e.tradeId):null
-      if(pending){
-        for(const raw of pending.items||[]){
-          const restored={...raw,id:raw.id||`trade-return-${Date.now()}-${Math.random().toString(36).slice(2,8)}`}
-          this.addInventoryItem(restored)
-        }
-        this.state.gold+=Math.max(0,Number(pending.gold)||0)
-        this._pendingTrades.delete(e.tradeId)
-        this.saveGame()
-      }
-      this.toast(e.message||'Não foi possível concluir a troca.')
-      return
-    }
-    if(e.type==='player_trade'){
+    if(e.type==='trade_offer'){
       if(e.world&&e.world!==this.currentWorldId())return
-      this._seenTrades ||= new Set()
-      if(e.tradeId&&this._seenTrades.has(e.tradeId))return
-      if(e.tradeId){this._seenTrades.add(e.tradeId);if(this._seenTrades.size>200)this._seenTrades.delete(this._seenTrades.values().next().value)}
-      const incoming=Array.isArray(e.items)?e.items.slice(0,20):[]
-      let received=0
-      for(const raw of incoming){
-        const item={...raw,id:`trade-${Date.now()}-${Math.random().toString(36).slice(2,8)}`}
-        if(this.addInventoryItem(item))received++
+      const offer=normalizeTradeOffer(e.offer)
+      if(!e.tradeId||(!offer.items.length&&!offer.gold))return
+      const active=this.state.trade
+      if(active&&active.status!=='completed'&&(active.id!==e.tradeId||active.partnerId!==e.from)){
+        this.multiplayer?.send({type:'trade_cancel',to:e.from,tradeId:e.tradeId,world:this.currentWorldId(),message:'Este jogador já está em outra troca.'})
+        return
       }
-      const gold=Math.max(0,Math.min(100000000,Math.round(Number(e.gold)||0)))
-      if(gold)this.state.gold+=gold
-      this.toast(`🤝 ${e.fromName||'Jogador'} enviou ${received} item(ns)${gold?` e ${gold}◈`:''}.`)
-      this.saveGame()
+      this.state.trade={id:e.tradeId,partnerId:e.from,partnerName:e.fromName||this.remotePlayers.get(e.from)?.data?.name||'Aventureiro',localOffer:active?.localOffer||null,remoteOffer:offer,localConfirmed:false,remoteConfirmed:false,status:'offered'}
+      this.toast(`🤝 ${this.state.trade.partnerName} enviou uma proposta de troca.`)
+      return
+    }
+    if(e.type==='trade_confirm'){
+      const trade=this.state.trade
+      if(!trade||trade.id!==e.tradeId||trade.partnerId!==e.from||e.world&&e.world!==this.currentWorldId())return
+      if(e.localOfferHash!==tradeOfferHash(trade.remoteOffer)||e.remoteOfferHash!==tradeOfferHash(trade.localOffer)){
+        this.state.trade={...trade,remoteConfirmed:false}
+        this.toast('A outra proposta foi alterada. Revise os itens antes de confirmar.')
+        return
+      }
+      this.state.trade={...trade,remoteConfirmed:true,status:trade.localConfirmed?'completing':'awaiting-confirmation'}
+      if(this.state.trade.localConfirmed)this.completeTrade()
+      else this.toast(`${trade.partnerName} confirmou a proposta.`)
+      return
+    }
+    if(e.type==='trade_cancel'){
+      if(this.state.trade?.id===e.tradeId&&this.state.trade.partnerId===e.from){this.state.trade=null;this.toast(e.message||'A outra pessoa cancelou a troca.')}
       return
     }
     if(e.type==='join'||e.type==='state'){const p=e.player;if(!p||p.id===this.multiplayer?.id)return;let r=this.remotePlayers.get(p.id);if(!r){r=this.makeRemoteAvatar(p);this.remotePlayers.set(p.id,r)}r.data={...r.data,...p};r.target={x:+p.x||0,y:+p.y||0,z:+p.z||0,r:+p.r||0};this.updatePlayerNameplate(r.marker,r.data,false);this.state.multiplayer.players=this.remotePlayers.size;return}
@@ -2745,8 +2782,8 @@ applyEnemyNetworkState(st){
   }
   connectMultiplayer(url){const value=String(url||'').trim();this.settings.multiplayerUrl=value;this.state.multiplayer.url=value;localStorage.setItem('shadow-ascension-mp-url',value);if(value)this.multiplayer.connect(value);else this.multiplayer.disconnect();this.saveGame()}
   setMultiplayerLobby(room){const next=this.multiplayer?.setRoom?.(room)||String(room||'asterra-global');this.state.multiplayer.room=next;localStorage.setItem('shadow-ascension-last-lobby',next);this.toast(`Entrando no ${next.replace('asterra-','Lobby ')}...`);this.saveGame();return next}
-  profileSnapshot(){const room=this.multiplayer?.room||this.state.multiplayer?.room||localStorage.getItem('shadow-ascension-last-lobby')||'asterra-global';return{state:{...this.state,version:8,target:null,dungeon:null,uiPanel:null,dialogue:null,portal:null,interactionPrompt:null,merchant:[],minimap:null,mapSnapshot:null,party:{id:null,leaderId:null,members:[],totalXP:0},onlinePlayers:[],multiplayer:{connected:false,url:this.settings.multiplayerUrl,room,players:0}},position:{x:this.player?.position.x||0,z:this.player?.position.z||0},dayHours:this.dayHours,settings:this.settings,multiplayerRoom:room,discovered:[...this.discovered]}}
-  applyServerProfile(game,updatedAt=0){try{const incoming=normalizeSaveState({...this.state,...(game.state||{}),version:8,target:null,dungeon:null,uiPanel:null,dialogue:null});this.state={...this.state,...incoming,needsNickname:!incoming.playerName,party:{id:null,leaderId:null,members:[],totalXP:0}};if(game.position){this.player.position.set(Number(game.position.x)||0,0,Number(game.position.z)||0)}this.dayHours=game.dayHours??this.dayHours;this.discovered=new Set(game.discovered||[]);const liveUrl=this.multiplayer?.url||this.settings.multiplayerUrl;this.settings={...this.settings,...(game.settings||{}),multiplayerUrl:liveUrl||game.settings?.multiplayerUrl||''};this.state.settings=this.settings;this.state.multiplayer.url=this.settings.multiplayerUrl;const liveRoom=this.multiplayer?.room||localStorage.getItem('shadow-ascension-last-lobby')||game.multiplayerRoom||this.state.multiplayer.room||'asterra-global';this.state.multiplayer.room=liveRoom;localStorage.setItem('shadow-ascension-last-lobby',liveRoom);this.localUpdatedAt=updatedAt;this.recalcStats();if(this.state.playerName)this.setPlayerName(this.state.playerName)}catch{}}
+  profileSnapshot(){const room=this.multiplayer?.room||this.state.multiplayer?.room||localStorage.getItem('shadow-ascension-last-lobby')||'asterra-global';return{state:{...this.state,version:8,target:null,dungeon:null,uiPanel:null,dialogue:null,portal:null,interactionPrompt:null,merchant:[],minimap:null,mapSnapshot:null,party:{id:null,leaderId:null,members:[],totalXP:0},onlinePlayers:[],trade:null,multiplayer:{connected:false,url:this.settings.multiplayerUrl,room,players:0}},position:{x:this.player?.position.x||0,z:this.player?.position.z||0},dayHours:this.dayHours,settings:this.settings,multiplayerRoom:room,discovered:[...this.discovered]}}
+  applyServerProfile(game,updatedAt=0){try{const incoming=normalizeSaveState({...this.state,...(game.state||{}),version:8,target:null,dungeon:null,uiPanel:null,dialogue:null,trade:null});this.state={...this.state,...incoming,needsNickname:!incoming.playerName,party:{id:null,leaderId:null,members:[],totalXP:0},trade:null};if(game.position){this.player.position.set(Number(game.position.x)||0,0,Number(game.position.z)||0)}this.dayHours=game.dayHours??this.dayHours;this.discovered=new Set(game.discovered||[]);const liveUrl=this.multiplayer?.url||this.settings.multiplayerUrl;this.settings={...this.settings,...(game.settings||{}),multiplayerUrl:liveUrl||game.settings?.multiplayerUrl||''};this.state.settings=this.settings;this.state.multiplayer.url=this.settings.multiplayerUrl;const liveRoom=this.multiplayer?.room||localStorage.getItem('shadow-ascension-last-lobby')||game.multiplayerRoom||this.state.multiplayer.room||'asterra-global';this.state.multiplayer.room=liveRoom;localStorage.setItem('shadow-ascension-last-lobby',liveRoom);this.localUpdatedAt=updatedAt;this.recalcStats();if(this.state.playerName)this.setPlayerName(this.state.playerName)}catch{}}
   updateMultiplayer(dt){
     const world=this.currentWorldId()
     for(const r of this.remotePlayers.values()){

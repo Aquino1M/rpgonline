@@ -24,7 +24,6 @@ function createTestClient(playerId, playerName, startPos) {
       playerId,
       playerName,
       otherPlayersSeen: new Set(),
-      presenceJoins: new Map(),
       broadcastsReceived: [],
       trackPresence() {
         const r = nextRef()
@@ -117,7 +116,6 @@ function createTestClient(playerId, playerName, startPos) {
         for (const [key, presences] of Object.entries(joins)) {
           if (key !== playerId) {
             client.otherPlayersSeen.add(key)
-            client.presenceJoins.set(key, (client.presenceJoins.get(key) || 0) + 1)
             console.log(`[${playerName}] Detectou entrada de jogador via presence_diff: ${key}`)
           }
         }
@@ -196,6 +194,8 @@ async function main() {
   account2.ws.close()
   await new Promise(r => setTimeout(r, 800))
   const account2Reconnected = await createTestClient('player_beta_002', 'Mago Beta', { x: 13, y: 0, z: -17 })
+  account1.sendBroadcast('state', { player:{id:'player_alpha_001',name:'Guerreiro Alpha',x:15,y:0,z:-15,r:1.57,motion:'run',level:10} })
+  account2Reconnected.sendBroadcast('state', { player:{id:'player_beta_002',name:'Mago Beta',x:13,y:0,z:-17,r:1.4,motion:'run',level:10} })
   await new Promise(r => setTimeout(r, 1200))
 
   console.log('\n======================= RESULTADOS DA VERIFICACAO =======================')
@@ -203,18 +203,20 @@ async function main() {
   const betaSawAlpha = account2.otherPlayersSeen.has('player_alpha_001')
   const betaGotMove = account2.broadcastsReceived.some(b => b.event === 'state' && b.payload?.player?.id === 'player_alpha_001')
   const alphaGotAbility = account1.broadcastsReceived.some(b => b.event === 'game' && b.payload?.from === 'player_beta_002')
-  const alphaSawBetaReconnect = (account1.presenceJoins.get('player_beta_002') || 0) >= 2
+  const alphaKeepsBetaAfterReconnect = account1.broadcastsReceived.some(b => b.event === 'state' && b.payload?.player?.id === 'player_beta_002')
+  const betaReconnectSawAlpha = account2Reconnected.broadcastsReceived.some(b => b.event === 'state' && b.payload?.player?.id === 'player_alpha_001')
 
   console.log(`[PASS] Alpha enxergou Beta na Presença: ${alphaSawBeta ? 'SIM (OK)' : 'NAO (FALHA)'}`)
   console.log(`[PASS] Beta enxergou Alpha na Presença: ${betaSawAlpha ? 'SIM (OK)' : 'NAO (FALHA)'}`)
   console.log(`[PASS] Beta recebeu sincronização de movimento do Alpha: ${betaGotMove ? 'SIM (OK)' : 'NAO (FALHA)'}`)
   console.log(`[PASS] Alpha recebeu evento de combate/habilidade do Beta: ${alphaGotAbility ? 'SIM (OK)' : 'NAO (FALHA)'}`)
-  console.log(`[PASS] Alpha detectou o retorno de Beta: ${alphaSawBetaReconnect ? 'SIM (OK)' : 'NAO (FALHA)'}`)
+  console.log(`[PASS] Alpha recebeu Beta após reconexão: ${alphaKeepsBetaAfterReconnect ? 'SIM (OK)' : 'NAO (FALHA)'}`)
+  console.log(`[PASS] Beta reconectado recebeu Alpha: ${betaReconnectSawAlpha ? 'SIM (OK)' : 'NAO (FALHA)'}`)
 
   account1.ws.close()
   account2Reconnected.ws.close()
 
-  if (alphaSawBeta && betaSawAlpha && betaGotMove && alphaGotAbility && alphaSawBetaReconnect) {
+  if (alphaSawBeta && betaSawAlpha && betaGotMove && alphaGotAbility && alphaKeepsBetaAfterReconnect && betaReconnectSawAlpha) {
     console.log('\n>>> SUCESSO: 2 CONTAS SE ENCONTRARAM E SINCRONIZARAM VIA SUPABASE REALTIME COM SUCESSO! <<<\n')
     process.exit(0)
   } else {

@@ -251,7 +251,7 @@ export default function App(){
 
     <MobileControls hud={hud} abilities={abilities} call={call} touch={viewport.isTouch}/>
 
-    {panel&&<Overlay panelKey={panel} title={roleTitle[panel]||'Interação'} dialogue={hud.dialogue} mapMode={panel==='map'} onClose={()=>call('closePanel')}>
+    {panel&&<Overlay panelKey={panel} title={roleTitle[panel]||'Interação'} dialogue={hud.dialogue} mapMode={panel==='map'} onClose={()=>{if(panel==='trade')call('cancelTrade');call('closePanel')}}>
       {panel==='inventory'&&<InventoryErrorBoundary><Inventory hud={hud} equip={id=>call('equipItem',id)} unequip={s=>call('unequip',s)} call={call}/></InventoryErrorBoundary>} 
       {panel==='grimoire'&&<Grimoire hud={hud} onAwaken={()=>call('awakenClass')} onSwitch={id=>call('switchClass',id)} onUpgradeRank={id=>call('upgradeClassRank',id)} onAcceptQuest={id=>call('acceptQuest',id)} onClaimQuest={id=>call('claimQuest',id)}/>} 
       {panel==='travel'&&<FastTravel hud={hud} onTravel={id=>call('fastTravelTo',id)} onBuyVip={id=>call('buyVipPass',id)}/>} 
@@ -1041,28 +1041,38 @@ function Merchant({hud,buy,sell,sellMultiple}){
 
 function TradeModal({hud,call,onClose}){
   const online=(hud.onlinePlayers||[]).filter(p=>p.name!==hud.playerName)
-  const [partner,setPartner]=useState(online[0]?.id||null)
+  const trade=hud.trade||null
+  const [partner,setPartner]=useState(trade?.partnerId||online[0]?.id||null)
   const [offerItems,setOfferItems]=useState([])
   const [offerGold,setOfferGold]=useState(0)
-  const [confirmed,setConfirmed]=useState(false)
-  const [tradeDone,setTradeDone]=useState(false)
+
+  useEffect(()=>{
+    if(!trade)return
+    setPartner(trade.partnerId)
+    setOfferItems((trade.localOffer?.items||[]).map(item=>item.id))
+    setOfferGold(trade.localOffer?.gold||0)
+  },[trade?.id,trade?.partnerId,trade?.localOffer?.updatedAt])
+
+  const selectedPartner=online.find(p=>p.id===partner)
+  const partnerName=trade?.partnerName||selectedPartner?.name||'Aventureiro'
+  const localConfirmed=!!trade?.localConfirmed
+  const remoteConfirmed=!!trade?.remoteConfirmed
+  const hasLocalOffer=offerItems.length>0||offerGold>0
+  const hasRemoteOffer=!!trade?.remoteOffer
+  const complete=trade?.status==='completed'
 
   const toggleItem=(id)=>{
+    if(localConfirmed)return
     setOfferItems(prev=>prev.includes(id)?prev.filter(x=>x!==id):[...prev,id])
   }
 
-  const handleConfirm=()=>{
+  const sendOffer=()=>{
     if(!partner){return}
-    setConfirmed(true)
-    setTimeout(()=>{
-      const ok=call('executeTrade',{
-        partnerId: partner,
-        itemIds: offerItems,
-        gold: Math.min(hud.gold, Math.max(0, Number(offerGold)||0))
-      })
-      setTradeDone(!!ok)
-      if(!ok)setConfirmed(false)
-    }, 450)
+    call('submitTradeOffer',{
+      partnerId: partner,
+      itemIds: offerItems,
+      gold: Math.min(hud.gold, Math.max(0, Number(offerGold)||0))
+    })
   }
 
   return <div className="trade-modal-layout">
@@ -1070,7 +1080,7 @@ function TradeModal({hud,call,onClose}){
       <div className="trade-partner-select">
         <label>Negociar com:</label>
         {online.length>0 ? (
-          <select value={partner||''} onChange={e=>setPartner(e.target.value)}>
+          <select value={partner||''} disabled={!!trade&&!complete} onChange={e=>{if(trade)call('cancelTrade');setPartner(e.target.value);setOfferItems([]);setOfferGold(0)}}>
             {online.map(p=><option key={p.id} value={p.id}>{p.name} (Nv.{p.level})</option>)}
           </select>
         ) : (
@@ -1092,6 +1102,7 @@ function TradeModal({hud,call,onClose}){
             min="0"
             max={hud.gold}
             value={offerGold}
+            disabled={localConfirmed}
             onChange={e=>setOfferGold(Math.min(hud.gold, Math.max(0, parseInt(e.target.value)||0)))}
           />
           <b>◈</b>
@@ -1115,19 +1126,27 @@ function TradeModal({hud,call,onClose}){
       </div>
 
       <div className="trade-box their-offer">
-        <h4>Negociação com {online.find(p=>p.id===partner)?.name || 'Aventureiro'}</h4>
+        <h4>Oferta de {partnerName}</h4>
         <div className="their-status">
-          {tradeDone ? (
+          {complete ? (
             <div className="trade-success-box">
               <span className="success-icon">✅</span>
               <b>Troca Concluída com Sucesso!</b>
-              <p>Os itens selecionados e o ouro foram transferidos com segurança.</p>
+              <p>Os dois jogadores confirmaram a mesma proposta.</p>
             </div>
-          ) : confirmed ? (
+          ) : hasRemoteOffer ? (
+            <div className="trade-remote-offer">
+              <div className="trade-remote-gold">◈ {trade.remoteOffer.gold||0} ouro</div>
+              <div className="trade-remote-items">
+                {(trade.remoteOffer.items||[]).length ? trade.remoteOffer.items.map(item=><div key={item.id} className="trade-item-row remote"><span>{item.icon||slotIcon(item.type,item)}</span><span className="trade-item-name"><b>{item.name}</b><small>{item.rarity}{item.qty>1?` ×${item.qty}`:''}</small></span></div>) : <p className="empty">Nenhum item.</p>}
+              </div>
+              <p>{remoteConfirmed ? `${partnerName} confirmou esta oferta.` : `${partnerName} ainda não confirmou.`}</p>
+            </div>
+          ) : localConfirmed ? (
             <div className="trade-waiting-box">
               <span className="waiting-spinner">⏳</span>
-              <b>Sincronizando com o servidor...</b>
-              <p>Confirmando transferência de inventário.</p>
+              <b>Aguardando a oferta de {partnerName}</b>
+              <p>A troca só será concluída depois que ambos enviarem e confirmarem a proposta.</p>
             </div>
           ) : (
             <div className="trade-standby-box">
@@ -1141,13 +1160,14 @@ function TradeModal({hud,call,onClose}){
     </div>
 
     <div className="trade-actions-footer">
-      {tradeDone ? (
+      {complete ? (
         <button className="trade-finish-btn" onClick={onClose}>Concluir e Fechar</button>
       ) : (
         <>
           <button className="trade-cancel-btn" onClick={onClose}>Cancelar</button>
-          <button className="trade-confirm-btn" disabled={confirmed} onClick={handleConfirm}>
-            {confirmed ? 'Confirmado! Processando...' : `Confirmar Proposta (${offerItems.length} itens + ${offerGold}◈)`}
+          <button className="trade-confirm-btn" disabled={!partner||!hasLocalOffer||localConfirmed} onClick={sendOffer}>{trade?.localOffer?'Atualizar proposta':'Enviar proposta'}</button>
+          <button className="trade-confirm-btn" disabled={!trade?.localOffer||!hasRemoteOffer||localConfirmed} onClick={()=>call('confirmTrade')}>
+            {localConfirmed?'Sua confirmação enviada':'Confirmar proposta'}
           </button>
         </>
       )}

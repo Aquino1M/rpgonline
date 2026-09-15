@@ -12,7 +12,8 @@
     "lan": "npm run build && npm run server:lan",
     "import:pack2": "node tools/import-packs.mjs PACK PACK2",
     "import:packs": "node tools/import-packs.mjs PACK PACK2",
-    "test:multiplayer": "node tools/test-supabase-multiplayer-2players.mjs"
+    "test:multiplayer": "node tools/test-supabase-multiplayer-2players.mjs",
+    "test:trade": "node tools/test-trade-confirmation.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.116.0",
