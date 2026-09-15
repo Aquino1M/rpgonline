@@ -1,5 +1,5 @@
 // DungeonBossAI.js - 3-phase intelligent boss fight manager with telegraphs and abilities
-import { DUNGEON_BOSSES } from './DungeonConfig.js'
+import { DUNGEON_BOSSES, GATE_RANKS } from './DungeonConfig.js'
 
 export class DungeonBossAI {
   constructor(game) {
@@ -27,10 +27,12 @@ export class DungeonBossAI {
     }
 
     // High stats reflecting boss rank
-    boss.maxHp = Math.round(boss.maxHp * (rank === 'S' ? 4.2 : rank === 'A' ? 3.2 : rank === 'B' ? 2.4 : 1.8))
+    const rankScale = { E: 1.8, D: 2.0, C: 2.35, B: 2.8, A: 3.4, S: 4.2 }[rank] || 1.8
+    const config = GATE_RANKS[rank] || GATE_RANKS.E
+    boss.maxHp = Math.round(boss.maxHp * rankScale)
     boss.hp = boss.maxHp
-    boss.atk = Math.round(boss.atk * 1.45)
-    boss.def = Math.round(boss.def * 1.35)
+    boss.atk = Math.round(boss.atk * 1.45 * config.baseAtkMult)
+    boss.def = Math.round(boss.def * 1.35 * config.baseDefMult)
 
     return boss
   }

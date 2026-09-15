@@ -106,6 +106,7 @@ export class DungeonRewards {
     const baseGold = Math.round((120 + level * 16) * config.goldMult)
     const bonusKillGold = kills * 5
     const totalGold = Math.round(baseGold + bonusKillGold + elites * 35 + bosses * 150)
+    const guildXp = Math.round((18 + level * 1.2) * config.xpMult)
 
     // Roll for exclusive loot
     const loot = []
@@ -151,6 +152,7 @@ export class DungeonRewards {
     return {
       xp: totalXP,
       gold: totalGold,
+      guildXp,
       loot,
       kills,
       elites,

@@ -1008,10 +1008,10 @@ export class ShadowGame {
     }
 
     const progression=resolveEntityProgression(name,level,{dungeon:!!this.state.dungeon});level=progression.level
-    g.position.set(x,0,z);(this.state.dungeon?this.dungeonArena:this.worldRoot).add(g);const maxHp=(boss?260:58)+level*(boss?19:6.2)
+    g.position.set(x,0,z);(this.state.dungeon?this.dungeonArena:this.worldRoot).add(g);const maxHp=(boss?320:78)+level*(boss?24:11)
     const enemy={
       g,body,head,legs:[leg1,leg2],level,name,boss,zoneId:zone?.id||'dungeon',
-      hp:maxHp,maxHp,atk:6+level*.92,last:0,dead:false,chunkKey,
+      hp:maxHp,maxHp,atk:7+level*1.05,def:Math.round((boss?5:2)+level*(boss?.38:.24)),last:0,dead:false,chunkKey,
       netId:netId||`enemy:${Math.round(x)}:${Math.round(z)}:${level}:${name}`,
       phase:Math.random()*6.28,baseBodyY,mixer,customMesh,attackAnim:0,
       specialTimer:boss?(2.8+Math.random()*2):(3.8+Math.random()*3),
@@ -1488,7 +1488,7 @@ export class ShadowGame {
   damageEnemy(e,amount,{knockback=.35,crit=false,network=true}={}){
     if(e?.isCaravanGuard||e?.isCaravanCart)return this.caravanManager?.onDamageCaravanEntity(e,amount,{knockback,crit})
     if(e?.adventurer)return this.damageBot(e,amount,{crit})
-    if(!e||e.dead)return false;this.enterCombat(8);const dealt=Math.max(1,Math.round(amount));e.hp-=dealt
+    if(!e||e.dead)return false;this.enterCombat(8);const dealt=Math.max(1,Math.round(amount*100/(100+(e.def||0)*5)));e.hp-=dealt
     this.state.target={name:e.name,level:e.level,hp:Math.max(0,e.hp),maxHp:e.maxHp,boss:e.boss,crit};if(network&&e.netId)this.multiplayer?.send({type:'enemy_damage',netId:e.netId,amount:dealt,hpAfter:Math.max(0,e.hp),maxHp:e.maxHp,world:this.currentWorldId(),respawnAt:Date.now()+5000});this.spawnDamageText(e.g.position,dealt,crit);this.flashEnemy(e,crit)
     if(knockback)e.g.position.addScaledVector(e.g.position.clone().sub(this.player.position).normalize(),knockback)
     if(e.hp<=0)this.kill(e);return true
@@ -1700,7 +1700,7 @@ export class ShadowGame {
     const aimed=this.getCrosshairTarget(6,.24);let best=aimed
     if(!best){let bd=4.15;const f=V3().set(Math.sin(this.player.rotation.y),0,Math.cos(this.player.rotation.y));for(const e of [...this.enemies,...this.bots]){if(e.dead||!e.g.visible)continue;const d=e.g.position.distanceTo(this.player.position);if(d<bd){const dir=e.g.position.clone().sub(this.player.position).normalize();if(dir.dot(f)>.05){best=e;bd=d}}}}
     if(best){
-      const dir=best.g.position.clone().sub(this.player.position);dir.y=0;if(dir.lengthSq())this.player.rotation.y=Math.atan2(dir.x,dir.z);let dmg=Math.floor(this.state.atk*(.82+Math.random()*.45));const crit=Math.random()<Math.min(.65,.14+(this.state.critChance||0)/100);if(crit)dmg=Math.round(dmg*1.65);this.damageEnemy(best,dmg,{knockback:.45,crit});this.haptic(crit?28:10);this.multiplayer?.send({type:'combat',action:'attack',world:this.currentWorldId()})
+      const dir=best.g.position.clone().sub(this.player.position);dir.y=0;if(dir.lengthSq())this.player.rotation.y=Math.atan2(dir.x,dir.z);let dmg=Math.floor(this.state.atk*(.72+Math.random()*.30));const crit=Math.random()<Math.min(.35,.08+(this.state.critChance||0)/100);if(crit)dmg=Math.round(dmg*1.5);this.damageEnemy(best,dmg,{knockback:.45,crit});this.haptic(crit?28:10);this.multiplayer?.send({type:'combat',action:'attack',world:this.currentWorldId()})
       return
     }
 
@@ -1766,9 +1766,9 @@ export class ShadowGame {
     arrowMesh.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),dir)
     ;(this.state.dungeon?this.dungeonArena:this.worldRoot).add(arrowMesh)
 
-    let dmg=Math.floor(this.state.atk*(.88+Math.random()*.42))
-    const crit=Math.random()<Math.min(.70,.18+(this.state.critChance||0)/100)
-    if(crit)dmg=Math.round(dmg*1.75)
+    let dmg=Math.floor(this.state.atk*(.78+Math.random()*.30))
+    const crit=Math.random()<Math.min(.4,.10+(this.state.critChance||0)/100)
+    if(crit)dmg=Math.round(dmg*1.55)
 
     this.projectiles.push({
       mesh:arrowMesh,
@@ -1872,9 +1872,9 @@ export class ShadowGame {
       const target=this.getCrosshairTarget(ability.range,.22)
       if(!target){this.abilityCooldowns[ability.id]=0;this.state.stamina+=ability.cost;this.toast('Mire em um inimigo para usar Corte Astral.');return false}
       const dir=target.g.position.clone().sub(this.player.position);dir.y=0;if(dir.lengthSq())this.player.rotation.y=Math.atan2(dir.x,dir.z)
-      this.specialAnim=.42;this.player.userData.motion='special';this.spawnAbilityRing(0x76d9ff,2.2,.32);const dmg=Math.floor(this.state.atk*1.55*(this.state.abilityDamageMult||1));this.damageEnemy(target,dmg,{knockback:.7});this.toast(`Corte Astral • ${dmg}`)
+      this.specialAnim=.42;this.player.userData.motion='special';this.spawnAbilityRing(0x76d9ff,2.2,.32);const dmg=Math.floor(this.state.atk*1.3*(this.state.abilityDamageMult||1));this.damageEnemy(target,dmg,{knockback:.7});this.toast(`Corte Astral • ${dmg}`)
     }else if(ability.slot===2){
-      this.specialAnim=.55;this.player.userData.motion='special';this.spawnAbilityRing(0x9d7cff,ability.range,.55);for(const e of [...this.enemies,...this.bots])if(!e.dead&&e.g.visible&&e.g.position.distanceTo(this.player.position)<ability.range)this.damageEnemy(e,Math.floor(this.state.atk*1.85*(this.state.abilityDamageMult||1)),{knockback:.65})
+      this.specialAnim=.55;this.player.userData.motion='special';this.spawnAbilityRing(0x9d7cff,ability.range,.55);for(const e of [...this.enemies,...this.bots])if(!e.dead&&e.g.visible&&e.g.position.distanceTo(this.player.position)<ability.range)this.damageEnemy(e,Math.floor(this.state.atk*1.55*(this.state.abilityDamageMult||1)),{knockback:.65})
       this.toast('Onda Astral!')
     }else{
       this.dashTime=.34;this.invuln=.42;this.player.userData.motion='dash';this.spawnAbilityRing(0x75f4cf,2.5,.28);this.toast('Passo Etéreo!')

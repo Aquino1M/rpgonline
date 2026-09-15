@@ -40,6 +40,9 @@ if (!ShadowGame.prototype[PATCH_FLAG]) {
         points.push({ x: spawn.x, z: spawn.z, r: spawnRadius })
       }
     }
+    for (const gate of game?.gateManager?.activeGates || []) {
+      points.push({ x: gate.x, z: gate.z, r: 10 })
+    }
     return points
   }
 
@@ -56,6 +59,35 @@ if (!ShadowGame.prototype[PATCH_FLAG]) {
       if (Math.hypot(x - spawn.x, z - spawn.z) < pad) return true
     }
     return false
+  }
+
+  proto.clearWorldResourcesAround = function clearWorldResourcesAround(x, z, radius = 10) {
+    if (!Number.isFinite(x) || !Number.isFinite(z)) return 0
+    const within = (gx, gz) => Number.isFinite(gx) && Number.isFinite(gz) && Math.hypot(gx - x, gz - z) < radius
+    const removedIds = new Set()
+    for (const node of this.resourceNodes || []) {
+      if (!within(Number(node.gx), Number(node.gz))) continue
+      removedIds.add(node.id)
+      if (node.durabilitySprite) this.scene?.remove?.(node.durabilitySprite)
+      node.mesh?.parent?.remove?.(node.mesh)
+      disposeProceduralObject(node.mesh)
+      if (node.collider) node.collider.active = false
+    }
+    if (removedIds.size) this.resourceNodes = (this.resourceNodes || []).filter(node => !removedIds.has(node?.id))
+    let trees = 0
+    for (const chunk of this.chunks?.values?.() || []) {
+      for (const child of [...(chunk.group?.children || [])]) {
+        if (!child?.userData?.runtimeWorldTree) continue
+        const gx = (chunk.group.position?.x || 0) + child.position.x
+        const gz = (chunk.group.position?.z || 0) + child.position.z
+        if (!within(gx, gz)) continue
+        chunk.group.remove(child)
+        disposeProceduralObject(child)
+        trees++
+      }
+      chunk.colliders = (chunk.colliders || []).filter(collider => !within(collider?.x, collider?.z))
+    }
+    return removedIds.size + trees
   }
 
   // Force a larger useful render distance even for old saves that still contain 2 chunks.

@@ -4,6 +4,7 @@ import { GATE_RANKS, DUNGEON_THEMES, DUNGEON_MODIFIERS, DUNGEON_BOSSES } from '.
 import { DungeonGenerator } from './DungeonGenerator.js'
 import { DungeonBossAI } from './DungeonBossAI.js'
 import { DungeonRewards } from './DungeonRewards.js'
+import { progressGuildMissions, progressQuest, updateGuildRank } from '../rpgSystems.js'
 
 export class GateManager {
   constructor(game) {
@@ -124,6 +125,7 @@ export class GateManager {
     gate.mesh = meshGroup
 
     this.activeGates.push(gate)
+    this.game.clearWorldResourcesAround?.(gate.x, gate.z, 10)
 
     // Global announcement banner (only for runtime spawns, lasts strictly 3 seconds)
     if (!silent) {
@@ -340,7 +342,15 @@ export class GateManager {
   }
 
   confirmSoloEntry(gate) {
+    if (!this.canEnterGate(gate)) return
     this.triggerEnterCountdown(gate, true)
+  }
+
+  canEnterGate(gate) {
+    const requiredLevel = gate?.rankConfig?.levelRange?.[0] || 1
+    if ((this.game.state?.level || 1) >= requiredLevel) return true
+    this.game.toast?.(`Portal Rank ${gate.rankKey} requer nível ${requiredLevel}.`)
+    return false
   }
 
   triggerEnterCountdown(gate, isSolo = true) {
@@ -577,6 +587,7 @@ export class GateManager {
   }
 
   createDungeonInstance(gate, { isSolo = true }) {
+    if (!gate || !this.canEnterGate(gate)) return
     // Clean up open world entities and clear stale waypoint
     this.game.state.destinationMarker = null
     this.game.state.mount.active = false
@@ -593,6 +604,7 @@ export class GateManager {
       seed: gate.seed,
       rank: gate.rankKey || gate.rank || 'E',
       level: gate.dungeonLevel,
+      rankConfig: gate.rankConfig || GATE_RANKS[gate.rankKey] || GATE_RANKS.E,
       themeKey: gate.themeKey,
       totalRounds,
       currentRound: 1,
@@ -726,6 +738,11 @@ export class GateManager {
         `dungeon_mob_r${roundNumber}_${i}`
       )
       mob.isDungeonMob = true
+      const rankConfig = inst.rankConfig || GATE_RANKS.E
+      mob.maxHp = Math.round(mob.maxHp * (rankConfig.baseHpMult || 1))
+      mob.hp = mob.maxHp
+      mob.atk = Math.round(mob.atk * (rankConfig.baseAtkMult || 1))
+      mob.def = Math.round((mob.def || 0) * (rankConfig.baseDefMult || 1))
 
       if (isElite) {
         mob.maxHp = Math.round(mob.maxHp * 2.2)
@@ -809,7 +826,8 @@ export class GateManager {
 
   onBossDefeated() {
     const inst = this.activeInstance
-    if (!inst) return
+    if (!inst || inst.completed) return
+    inst.completed = true
 
     const durationSeconds = (Date.now() - inst.startedAt) / 1000
     const rewards = DungeonRewards.calculateCompletionReward({
@@ -821,19 +839,35 @@ export class GateManager {
       bosses: 1
     })
 
-    // Expose completion result to game state for modal
-    this.game.state.dungeonCompletion = rewards
+    // Mark completion before the legacy dungeon loop can process this instance.
+    if (this.game.state.dungeon) this.game.state.dungeon.transition = true
 
-    // Award XP and Gold with enhanced feedback
+    // Award the instance once, then consume its source gate so it disappears from the map.
     this.game.gainXp?.(rewards.xp)
     this.game.state.gold = (this.game.state.gold || 0) + rewards.gold
+    this.game.state.guildPoints = (this.game.state.guildPoints || 0) + rewards.guildXp
+    const guildRankAdvanced = updateGuildRank(this.game.state)
+    this.game.state.stats.dungeons = (this.game.state.stats.dungeons || 0) + 1
+    progressQuest(this.game.state, 'dungeon', 'clear', 1)
+    progressGuildMissions(this.game.state, 'dungeon', 'clear', 1)
 
-    // Deliver loot to inventory
     for (const item of rewards.loot) {
       this.game.addInventoryItem?.(item)
     }
 
-    this.game.toast?.(`🏆 MASMORRA CONCLUÍDA! +${rewards.xp} XP e +${rewards.gold}◈ Ouro obtidos!`)
+    this.removeGate(inst.gateId)
+    this.game.state.dungeonCompletion = { ...rewards, guildRankAdvanced }
+    this.game.toast?.(`🏆 MASMORRA CONCLUÍDA! +${rewards.xp} XP, +${rewards.gold}◈ e +${rewards.guildXp} XP da Guilda!`)
+  }
+
+  removeGate(gateId) {
+    const index = this.activeGates.findIndex(gate => gate.id === gateId)
+    if (index < 0) return null
+    const [gate] = this.activeGates.splice(index, 1)
+    gate.mesh?.parent?.remove?.(gate.mesh)
+    if (this.game.state?.destinationMarker?.id === gate.id) this.game.state.destinationMarker = null
+    this.syncGatesToState()
+    return gate
   }
 
   leaveDungeon() {
