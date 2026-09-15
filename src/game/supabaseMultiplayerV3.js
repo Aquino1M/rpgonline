@@ -17,6 +17,9 @@ import {
 
 export const GLOBAL_MULTIPLAYER_ROOM = 'asterra-global'
 const REMOTE_LEAVE_GRACE_MS = 15_000
+const PRESENCE_RENEW_MS = 20_000
+const HEARTBEAT_INTERVAL_MS = 25_000
+const HEARTBEAT_TIMEOUT_MS = 10_000
 
 const storage = typeof window !== 'undefined' ? window.localStorage : null
 export const DEFAULT_SUPABASE_PROJECT_URL = 'https://kfnlcrsnvckexzmhbyoy.supabase.co'
@@ -107,6 +110,9 @@ class NativeSupabaseRealtime {
     this.joinRef = null
     this.joined = false
     this.heartbeat = null
+    this.heartbeatRef = null
+    this.heartbeatDeadline = null
+    this.lastMessageAt = 0
     this.presence = new Map()
     this.reconnectTimer = null
     this.wanted = false
@@ -165,20 +171,29 @@ class NativeSupabaseRealtime {
       })
       ws.addEventListener('message', e => {
         if (ws !== this.ws) return
+        this.lastMessageAt = now()
         let m
         try { m = JSON.parse(e.data) } catch { return }
         if (!m || m.topic !== this.topic && m.topic !== 'phoenix') return
 
-        if (m.event === 'phx_reply' && m.ref === this.joinRef) {
-          if (m.payload?.status === 'ok') {
-            this.joined = true
-            this.reconnectAttempts = 0
-            this._startHeartbeat()
-            this.onSubscribed?.()
-          } else {
-            this.onClosed?.(`join_${m.payload?.status || 'error'}`)
+        if (m.event === 'phx_reply') {
+          if (m.ref === this.joinRef) {
+            if (m.payload?.status === 'ok') {
+              this.joined = true
+              this.reconnectAttempts = 0
+              this._startHeartbeat()
+              this.onSubscribed?.()
+            } else {
+              this._restart(`join_${m.payload?.status || 'error'}`)
+            }
+            return
           }
-          return
+          if (m.ref === this.heartbeatRef) {
+            clearTimeout(this.heartbeatDeadline)
+            this.heartbeatDeadline = null
+            this.heartbeatRef = null
+            return
+          }
         }
 
         if (m.event === 'presence_state') {
@@ -197,18 +212,16 @@ class NativeSupabaseRealtime {
           return
         }
         if (m.event === 'phx_error' || m.event === 'phx_close') {
-          this.onClosed?.(m.event)
+          this._restart(m.event)
         }
       })
       ws.addEventListener('close', () => {
         if (ws !== this.ws) return
+        this.ws = null
         this.joined = false
         this._stopHeartbeat()
         this.onClosed?.('closed')
-        if (this.wanted) {
-          const wait = Math.min(12000, 700 * Math.pow(1.7, this.reconnectAttempts++))
-          this.reconnectTimer = setTimeout(() => this._open(), wait)
-        }
+        this._scheduleReconnect()
       })
       ws.addEventListener('error', () => {})
     } catch (err) {
@@ -268,16 +281,52 @@ class NativeSupabaseRealtime {
 
   _startHeartbeat() {
     this._stopHeartbeat()
-    this.heartbeat = setInterval(() => {
-      if (this.ws?.readyState === WebSocket.OPEN) {
-        this._push('heartbeat', {}, 'phoenix')
-      }
-    }, 25000)
+    const beat = () => {
+      const ref = this._push('heartbeat', {}, 'phoenix')
+      if (!ref) return this._restart('heartbeat_socket_closed')
+      this.heartbeatRef = ref
+      clearTimeout(this.heartbeatDeadline)
+      this.heartbeatDeadline = setTimeout(() => {
+        if (this.heartbeatRef === ref) this._restart('heartbeat_timeout')
+      }, HEARTBEAT_TIMEOUT_MS)
+    }
+    beat()
+    this.heartbeat = setInterval(beat, HEARTBEAT_INTERVAL_MS)
   }
 
   _stopHeartbeat() {
     clearInterval(this.heartbeat)
+    clearTimeout(this.heartbeatDeadline)
     this.heartbeat = null
+    this.heartbeatRef = null
+    this.heartbeatDeadline = null
+  }
+
+  _scheduleReconnect(delay) {
+    if (!this.wanted) return
+    clearTimeout(this.reconnectTimer)
+    const wait = Number.isFinite(delay) ? delay : Math.min(12000, 700 * Math.pow(1.7, this.reconnectAttempts++))
+    this.reconnectTimer = setTimeout(() => this._open(), wait)
+  }
+
+  _restart(reason, delay) {
+    if (!this.wanted) return
+    const ws = this.ws
+    this.ws = null
+    this.joined = false
+    this._stopHeartbeat()
+    this.onClosed?.(reason)
+    try { ws?.close() } catch {}
+    this._scheduleReconnect(delay)
+  }
+
+  ensureHealthy() {
+    if (!this.wanted) return
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN || !this.joined) {
+      this._restart('resume', 0)
+      return
+    }
+    if (now() - this.lastMessageAt > HEARTBEAT_INTERVAL_MS + HEARTBEAT_TIMEOUT_MS) this._restart('resume_stale', 0)
   }
 
   close() {
@@ -287,8 +336,9 @@ class NativeSupabaseRealtime {
     try {
       if (this.joined) this._push('phx_leave', {})
     } catch {}
-    try { this.ws?.close() } catch {}
+    const ws = this.ws
     this.ws = null
+    try { ws?.close() } catch {}
     this.joined = false
     this.presence.clear()
   }
@@ -451,7 +501,7 @@ export class MultiplayerClient {
   }
 
   _emitConnection(connected, reason='') {
-    this.onEvent({type:'connection', connected, url:this.url, transport:this.transport, room:GLOBAL_MULTIPLAYER_ROOM, reason})
+    this.onEvent({type:'connection', connected, reconnecting:this.wanted && !connected, url:this.url, transport:this.transport, room:GLOBAL_MULTIPLAYER_ROOM, reason})
   }
 
   _emitNetwork(force=false) {
@@ -468,7 +518,7 @@ export class MultiplayerClient {
   _trackPresence(force=false) {
     if (!this.rt || !this.connected) return
     const t = now()
-    if (!force && t - this.lastPresenceTrack < 5000) return
+    if (!force && t - this.lastPresenceTrack < PRESENCE_RENEW_MS) return
     this.lastPresenceTrack = t
     const player = safePlayer({...this.lastState, name:this.name, lastSeen:t}, this.playerId)
     this.rt.track({player, online_at:new Date(t).toISOString(), room:GLOBAL_MULTIPLAYER_ROOM})
@@ -686,5 +736,15 @@ export class MultiplayerClient {
     this.presenceIds.clear()
     this.remoteState.clear()
     this.pendingRemoteLeaves.clear()
+  }
+
+  ensureConnected() {
+    if (!this.wanted) return
+    if (this.transport === 'supabase') {
+      this.rt?.ensureHealthy?.()
+      if (!this.rt) this.connect()
+      return
+    }
+    if (!this.connected) this.connect()
   }
 }

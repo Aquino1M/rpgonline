@@ -694,8 +694,8 @@ export class ShadowGame {
     on(document,'pointerlockchange',()=>{this.pointerLocked=document.pointerLockElement===this.canvas;if(!this.isTouchDevice&&this.combatMode&&!this.pointerLocked&&document.visibilityState==='visible'){this.combatMode=false;this.state.combatMode=false}})
     on(this.canvas,'contextmenu',e=>e.preventDefault())
     on(window,'beforeunload',()=>{try{this.saveGame()}catch{}})
-    on(document,'visibilitychange',()=>{if(document.visibilityState==='hidden')this.saveGame();else if(this.multiplayer?.wanted&&!this.multiplayer.connected)this.multiplayer.connect(this.multiplayer.url)})
-    on(window,'online',()=>{if(this.multiplayer?.url&&!this.multiplayer.connected)this.multiplayer.connect(this.multiplayer.url)})
+    on(document,'visibilitychange',()=>{if(document.visibilityState==='hidden')this.saveGame();else this.multiplayer?.ensureConnected?.()})
+    on(window,'online',()=>this.multiplayer?.ensureConnected?.())
   }
 
   rotateCamera(dx=0,dy=0){
@@ -2627,7 +2627,7 @@ applyEnemyNetworkState(st){
   }
 
   onMultiplayerEvent(e){
-    if(e.type==='connection'){this.state.multiplayer={...this.state.multiplayer,connected:!!e.connected,url:e.url||this.state.multiplayer.url,room:e.room||this.multiplayer?.room||this.state.multiplayer.room,transport:e.transport||this.state.multiplayer.transport||'offline',reason:e.reason||'',serverSave:e.connected?this.state.multiplayer.serverSave:false};if(e.connected)this.toast(e.transport==='supabase'?'Multiplayer Supabase Realtime conectado':e.transport==='http'?'Multiplayer Vercel conectado':'Multiplayer LAN conectado');else{this.state.party={id:null,leaderId:null,members:[],totalXP:0};for(const r of this.remotePlayers.values()){this.scene.remove(r.g);r.marker?.material?.map?.dispose?.();r.marker?.material?.dispose?.()}this.remotePlayers.clear();this.state.multiplayer.players=0;this.state.multiplayer.totalOnline=0}return}
+    if(e.type==='connection'){const reconnecting=!!e.reconnecting;this.state.multiplayer={...this.state.multiplayer,connected:!!e.connected,reconnecting,url:e.url||this.state.multiplayer.url,room:e.room||this.multiplayer?.room||this.state.multiplayer.room,transport:e.transport||this.state.multiplayer.transport||'offline',reason:e.reason||'',serverSave:e.connected?this.state.multiplayer.serverSave:false};if(e.connected)this.toast(e.transport==='supabase'?'Multiplayer Supabase Realtime conectado':e.transport==='http'?'Multiplayer Vercel conectado':'Multiplayer LAN conectado');else if(!reconnecting){this.state.party={id:null,leaderId:null,members:[],totalXP:0};for(const r of this.remotePlayers.values()){this.scene.remove(r.g);r.marker?.material?.map?.dispose?.();r.marker?.material?.dispose?.()}this.remotePlayers.clear();this.state.multiplayer.players=0;this.state.multiplayer.totalOnline=0}return}
     if(e.type==='presence_count'){this.state.multiplayer.totalOnline=Math.max(1,Number(e.count)||1);this.state.multiplayer.players=this.remotePlayers.size;return}
     if(e.type==='welcome'){if(e.room){this.state.multiplayer.room=e.room;localStorage.setItem('shadow-ascension-last-lobby',e.room)}for(const p of e.players||[])this.onMultiplayerEvent({type:'state',player:p});this.state.multiplayer.players=this.remotePlayers.size;this.state.multiplayer.totalOnline=Math.max(1,this.remotePlayers.size+1);return}
     if(e.type==='lobby'){if(e.room){this.state.multiplayer.room=e.room;localStorage.setItem('shadow-ascension-last-lobby',e.room)}return}
