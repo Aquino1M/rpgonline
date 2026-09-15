@@ -3153,3 +3153,7 @@
 }
 
 .position-line { margin: 4px 0 6px; color: #a8cde1; font-size: 10px; font-weight: 800; }
+
+@media (pointer: coarse), (max-width: 780px) {
+  .app .combat-crosshair, .app .combat-mode-chip, .app .help-button, .app .help { display: none !important; }
+}

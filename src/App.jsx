@@ -25,8 +25,8 @@ function getViewportState(){
   const short=Math.min(w,h)
 
   // Real mobile phone: mobile UA and narrow/short screen, or explicit mobile emulation
-  const isPhone = isMobileUA ? (short <= 600 || w <= 950) : (short <= 520 || (w <= 768 && h <= 900 && !hasFinePointer))
-  const isTablet = !isPhone && (isMobileUA || (short <= 768 && !hasFinePointer))
+  const isPhone = isMobileUA ? (short <= 600 || w <= 950) : (short <= 520 || (w <= 768 && h <= 900 && isCoarse))
+  const isTablet = !isPhone && (isMobileUA || (short <= 900 && isCoarse))
   const isDesktop = !isPhone && !isTablet
 
   const isMobile = isPhone

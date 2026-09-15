@@ -78,12 +78,6 @@ if (!ShadowGame.prototype[PATCH_FLAG]) {
       this.camera.updateProjectionMatrix?.()
     }
 
-    // Make it obvious that the browser is running the fixed build rather than cached V0.8.4.
-    setTimeout(() => {
-      const version = document.querySelector?.('.brand-row small')
-      if (version) version.textContent = 'WEB 3D • V0.9.8 MOBILE/ONLINE'
-    }, 80)
-
     return result
   }
 
