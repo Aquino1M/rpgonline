@@ -90,6 +90,10 @@ export default function App(){
   const hp=pct(hud.hp,hud.maxHp),st=pct(hud.stamina,hud.maxStamina),xp=pct(hud.xp,hud.nextXp)
   const potionQty=hud.inventory?.find(i=>i.subtype==='potion')?.qty||0
   const grimoireQty=hud.inventory?.find(i=>i.subtype==='grimoire')?.qty||0
+  // V4.1: defensive class data. Never let a missing class definition blank the whole UI.
+  const uiActiveClassId = hud.classState?.activeClassId || 'mercenary_swordsman'
+  const uiActiveClass = CLASSES_LIST?.find?.(c=>c?.id===uiActiveClassId) || CLASSES_LIST?.[0] || {name:'Espadachim Mercenário',tier:'COMMON'}
+  const uiActiveTier = CLASS_TIERS?.[uiActiveClass?.tier] || CLASS_TIERS?.COMMON || {color:'#94a3b8',icon:'⚔'}
   const activeClassId=hud.classState?.activeClassId||'mercenary_swordsman'
   const activeClass=CLASSES_LIST.find(c=>c.id===activeClassId)||CLASSES_LIST[0]
   const activeTier=CLASS_TIERS[activeClass.tier]||CLASS_TIERS.COMMON
@@ -120,7 +124,7 @@ export default function App(){
       <div className="brand-row">
         <div><b>SHADOW ASCENSION</b><small>☀ {hud.time} • {weatherIcon(hud.weather)} {hud.weather}</small></div>
         <div style={{display:'flex',gap:'6px',alignItems:'center'}}>
-          <button className="class-chip" onClick={()=>call('togglePanel','grimoire')} style={{'--tier-color':activeTier.color}} title="Clique para abrir o Grimório do Despertar">{activeTier.icon} {activeClass.name}</button>
+          <button className="class-chip" onClick={()=>call('togglePanel','grimoire')} style={{'--tier-color':uiActiveTier.color}} title="Clique para abrir o Grimório do Despertar">{uiActiveTier.icon} {uiActiveClass.name}</button>
           <span className="level-chip">NV. {hud.level}</span>
         </div>
       </div>
@@ -239,7 +243,7 @@ export default function App(){
     <MobileControls hud={hud} abilities={abilities} call={call} touch={!viewport.isDesktop && viewport.isTouch} onHelp={()=>setHelp(v=>!v)}/>
 
     {panel&&<Overlay panelKey={panel} title={roleTitle[panel]||'Interação'} dialogue={hud.dialogue} mapMode={panel==='map'} onClose={()=>call('closePanel')}>
-      {panel==='inventory'&&<Inventory hud={hud} equip={id=>call('equipItem',id)} unequip={s=>call('unequip',s)} call={call}/>} 
+      {panel==='inventory'&&<InventoryErrorBoundary><Inventory hud={hud} equip={id=>call('equipItem',id)} unequip={s=>call('unequip',s)} call={call}/></InventoryErrorBoundary>} 
       {panel==='grimoire'&&<Grimoire hud={hud} onAwaken={()=>call('awakenClass')} onSwitch={id=>call('switchClass',id)} onUpgradeRank={id=>call('upgradeClassRank',id)} onAcceptQuest={id=>call('acceptQuest',id)} onClaimQuest={id=>call('claimQuest',id)}/>} 
       {panel==='travel'&&<FastTravel hud={hud} onTravel={id=>call('fastTravelTo',id)} onBuyVip={id=>call('buyVipPass',id)}/>} 
       {panel==='quests'&&<Quests hud={hud} accept={id=>call('acceptQuest',id)} claim={id=>call('claimQuest',id)}/>} 
@@ -286,6 +290,22 @@ function HorizontalRail({children,className=''}){
     if(el.scrollWidth>el.clientWidth){el.scrollLeft+=e.deltaY;e.preventDefault()}
   }
   return <div ref={ref} className={`horizontal-rail ${className}`} onWheel={wheel}>{children}</div>
+}
+
+
+class InventoryErrorBoundary extends React.Component {
+  constructor(props){super(props);this.state={error:null}}
+  static getDerivedStateFromError(error){return{error}}
+  componentDidCatch(error,info){console.error('[Shadow Ascension] Inventory UI crash captured by V4.1',error,info)}
+  render(){
+    if(!this.state.error)return this.props.children
+    return <div className="inventory-recovery-card">
+      <h3>Inventário recuperado</h3>
+      <p>Um dado inválido impediu esta janela de ser renderizada. O jogo continuou aberto.</p>
+      <small>{String(this.state.error?.message||'Erro desconhecido')}</small>
+      <button onClick={()=>this.setState({error:null})}>Tentar novamente</button>
+    </div>
+  }
 }
 
 function Inventory({hud,equip,unequip,call}){
