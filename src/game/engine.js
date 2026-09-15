@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import { WORLD, ZONES, RARITIES, CITIES, ROADS, LANDMARKS, NPC_DEFS, PORTAL_NAMES, MODEL_MANIFEST, WORLD_MAP, ABILITIES, GUILD_RANKS, CITY_ECONOMIES, SAFE_SPAWNS, RESPAWN_RULES, ADVENTURER_BOTS, CITY_GUARDS_CONFIG, HORSE_BREEDS } from './config.js'
 import { hash2, clamp, damp, zoneAt, weightedPick, fmtTime } from './utils.js'
 import { AssetLibrary } from './assetLoader.js'
-import { defaultClassState, starterInventory, defaultQuestState, merchantStock, shopRefreshInfo, makeItem, makeMaterialDrop, makeResourceDrop, makeTool, rollLootRarity, normalizeSaveState, totalEquipmentStats, progressQuest, activateQuest, claimQuest, refreshGuildBoard, activateGuildMission, progressGuildMissions, claimGuildMission, getGuildRank, guildRankRequirement, calculateKillXP, resolveEntityProgression, attributeBonuses, calculateGrimoireCost, getNextGrimoireLevel } from './rpgSystems.js'
+import { defaultClassState, starterInventory, defaultQuestState, merchantStock, shopRefreshInfo, makeItem, makeMaterialDrop, makeResourceDrop, makeTool, rollLootRarity, normalizeSaveState, totalEquipmentStats, progressQuest, activateQuest, claimQuest, refreshGuildBoard, activateGuildMission, progressGuildMissions, claimGuildMission, getGuildRank, guildRankRequirement, updateGuildRank, calculateKillXP, resolveEntityProgression, attributeBonuses, calculateGrimoireCost, getNextGrimoireLevel } from './rpgSystems.js'
 import { MultiplayerClient, sameOriginMultiplayerUrl, sameOriginHttpMultiplayerUrl } from './supabaseMultiplayerV3.js'
 import { CLASSES_LIST, rollDestinyClass, CLASS_RANKS, getClassRankInfo } from './classesData.js'
 import { TRAVEL_NODES, calculateTravelCost, rollRoadAmbush, defaultTravelState } from './fastTravel.js'
@@ -1927,6 +1927,7 @@ export class ShadowGame {
         this.toast(`Nível ${this.state.level}! +1 ponto de atributo`)
       }
     }
+    updateGuildRank(this.state)
     this.recalcStats()
     this.state.hp = this.state.maxHp
   }
