@@ -2762,6 +2762,7 @@ applyEnemyNetworkState(st){
     }
     this.saveGame()
     this.multiplayer?.connect()
+    this.gateManager?.hydrateSharedGateState?.()
     this.toast(`Bem-vindo, ${username}! Conectado ao ${server.replace('asterra-','Servidor ')}.`)
     return true
   }

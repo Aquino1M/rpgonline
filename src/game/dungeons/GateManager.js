@@ -5,6 +5,7 @@ import { DungeonGenerator } from './DungeonGenerator.js'
 import { DungeonBossAI } from './DungeonBossAI.js'
 import { DungeonRewards } from './DungeonRewards.js'
 import { progressGuildMissions, progressQuest, updateGuildRank } from '../rpgSystems.js'
+import { closeWorldGate, loadClosedWorldGates } from '../supabaseService.js'
 
 const GLOBAL_GATE_PERIOD_MS = 30 * 60 * 1000
 const GLOBAL_GATE_SLOTS = [
@@ -36,6 +37,23 @@ export class GateManager {
       if (!this.closedGateIds.has(id)) this.spawnGate({ rankKey: base.rankKey, pos:{x:base.x,z:base.z}, silent:true, shared:{cycle:this.globalCycle,slot} })
     }
     this.syncGatesToState()
+  }
+
+  async hydrateSharedGateState() {
+    const cycle = this.globalCycle
+    if (!Number.isInteger(cycle)) return
+    try {
+      const closedGateIds = await loadClosedWorldGates(cycle)
+      if (cycle !== this.globalCycle) return
+      for (const id of closedGateIds) this.removeGate(id, { broadcast:false })
+    } catch (error) {
+      // The immediate Broadcast sync still works while a migration is pending.
+      console.warn('[Gates] Não foi possível carregar estado global:', error?.message || error)
+    }
+  }
+
+  persistClosedGate(cycle, gateId) {
+    return closeWorldGate(cycle, gateId)
   }
 
   update(dt, t) {
@@ -881,11 +899,19 @@ export class GateManager {
     if (gate.shared) this.closedGateIds.add(gate.id)
     if (this.game.state?.destinationMarker?.id === gate.id) this.game.state.destinationMarker = null
     this.syncGatesToState()
-    if (broadcast && gate.shared) this.game.multiplayer?.send({type:'gate_closed', gateId:gate.id, cycle:this.globalCycle})
+    if (broadcast && gate.shared) {
+      this.persistClosedGate(this.globalCycle, gate.id)
+        .then(closedGateIds => {
+          for (const id of closedGateIds) this.removeGate(id, { broadcast:false })
+        })
+        .catch(error => console.warn('[Gates] Não foi possível salvar fechamento global:', error?.message || error))
+      this.game.multiplayer?.send({type:'gate_closed', gateId:gate.id, cycle:this.globalCycle})
+    }
     return gate
   }
 
   requestSharedGateState() {
+    this.hydrateSharedGateState()
     this.game.multiplayer?.send({type:'gate_sync_request', cycle:this.globalCycle})
   }
 

@@ -258,6 +258,31 @@ export async function signOutAccount() {
   clearAccountSession()
 }
 
+// Global gates are deterministic for each 30-minute cycle; this stores only
+// the gates completed by the community so a fresh session sees the same map.
+export async function loadClosedWorldGates(cycle) {
+  const client = getSupabaseClient()
+  if (!client || !Number.isInteger(cycle)) return []
+  const { data, error } = await client
+    .from('world_gate_cycles')
+    .select('closed_gate_ids')
+    .eq('cycle', cycle)
+    .maybeSingle()
+  if (error) throw error
+  return Array.isArray(data?.closed_gate_ids) ? data.closed_gate_ids.map(String) : []
+}
+
+export async function closeWorldGate(cycle, gateId) {
+  const client = getSupabaseClient()
+  if (!client || !Number.isInteger(cycle) || !gateId) throw new Error('Supabase indisponível.')
+  const { data, error } = await client.rpc('close_world_gate', {
+    p_cycle: cycle,
+    p_gate_id: String(gateId)
+  })
+  if (error) throw error
+  return Array.isArray(data) ? data.map(String) : []
+}
+
 // ---------------------------------------------------------------------------
 // REALTIME MULTIPLAYER CHANNEL
 // ---------------------------------------------------------------------------

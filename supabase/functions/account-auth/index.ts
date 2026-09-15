@@ -1,8 +1,9 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
 
-const allowedOrigins = new Set(['https://rpgonline-orpin.vercel.app', 'http://localhost:5173'])
+const productionOrigin = 'https://rpgonline-orpin.vercel.app'
+const isAllowedOrigin = (origin: string) => origin === productionOrigin || /^http:\/\/(localhost|127\.0\.0\.1)(?::\d+)?$/.test(origin)
 const cors = (origin: string) => ({
-  'Access-Control-Allow-Origin': allowedOrigins.has(origin) ? origin : 'https://rpgonline-orpin.vercel.app',
+  'Access-Control-Allow-Origin': isAllowedOrigin(origin) ? origin : productionOrigin,
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Content-Type': 'application/json',
@@ -21,7 +22,7 @@ async function hash(value: string) {
 Deno.serve(async req => {
   const origin = req.headers.get('origin') || ''
   if (req.method === 'OPTIONS') return new Response('ok', { headers:cors(origin) })
-  if (req.method !== 'POST' || !allowedOrigins.has(origin)) return json({ error:'Requisição não permitida.' }, 403, origin)
+  if (req.method !== 'POST' || !isAllowedOrigin(origin)) return json({ error:'Requisição não permitida.' }, 403, origin)
 
   const body = await req.json().catch(() => null)
   const action = body?.action === 'register' ? 'register' : body?.action === 'login' ? 'login' : ''

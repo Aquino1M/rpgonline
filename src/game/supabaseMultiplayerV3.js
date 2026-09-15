@@ -645,7 +645,9 @@ export class MultiplayerClient {
       return
     }
     if (m.type === 'party_xp') {
-      const members = this.party?.members?.length ? this.party.members : [this.playerId]
+      const world = String(m.world || this.lastState?.world || 'open')
+      const members = (this.party?.members?.length ? this.party.members : [this.playerId])
+        .filter(id => id === this.playerId || this.remoteState.get(id)?.world === world)
       const amount = Math.max(0, Math.round(Number(m.amount) || 0))
       const each = Math.floor(amount / Math.max(1, members.length))
       const rem = amount - each * members.length
