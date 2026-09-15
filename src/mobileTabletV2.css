@@ -314,6 +314,7 @@
 .app.touch-ui .window-blacksmith .forge-grid small{font-size:var(--t-small)!important}
 .app.touch-ui .window-blacksmith .forge-actions button{min-height:var(--t-hit)!important;font-size:var(--t-small)!important}
 .app.touch-ui .window-blacksmith .smith-stock{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:7px!important}
+.backpack-forge-card{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:10px 0;padding:10px 12px;border:1px solid rgba(250,204,21,.35);border-radius:12px;background:linear-gradient(135deg,rgba(120,75,20,.3),rgba(12,29,45,.85))}.backpack-forge-card>div{display:grid;gap:3px}.backpack-forge-card small{color:#f8d77b;letter-spacing:.07em}.backpack-forge-card b{font-size:16px}.backpack-forge-card p{margin:0;color:#b8c8d6;font-size:11px}.backpack-forge-card button{flex:0 0 auto}
 
 /* Settings & all remaining panels inherit the same scale instead of staying tiny. */
 .app.touch-ui .window-settings .setting,
@@ -405,6 +406,21 @@
 }
 @media (pointer:coarse) and (orientation:portrait){
   .app.touch-ui .window-grimoire .grimoire-layout{grid-template-columns:1fr!important}.app.touch-ui .window-grimoire .classes-collection{max-height:none!important;overflow:visible!important}.app.touch-ui .map-toolbar .map-hint{display:none!important}
+}
+
+/* Tablet audit: legacy V4 rules reduced text to 5–9 px. Tablets have room for
+   normal reading sizes, while phone-specific rules above stay compact. */
+@media (pointer:coarse) and (min-width:700px){
+  .app.touch-ui{--t-font:14px;--t-small:12px;--t-title:22px;--t-window-pad:16px;--t-hit:46px}
+  .app.touch-ui .window-body{font-size:14px!important;line-height:1.35!important}
+  .app.touch-ui .window-body small{font-size:12px!important;line-height:1.35!important}
+  .app.touch-ui .window-body button,.app.touch-ui .window-body input,.app.touch-ui .window-body select{font-size:13px!important}
+  .app.touch-ui .window-attributes .attributes-layout{grid-template-columns:minmax(250px,.72fr) minmax(0,1.28fr)!important;gap:14px!important}
+  .app.touch-ui .window-attributes .attribute-hero{padding:14px!important}.app.touch-ui .window-attributes .attribute-hero>small{font-size:12px!important}.app.touch-ui .window-attributes .attribute-hero>strong{font-size:44px!important}.app.touch-ui .window-attributes .attribute-hero h3{font-size:18px!important}.app.touch-ui .window-attributes .attribute-hero p{font-size:12px!important;line-height:1.4!important}.app.touch-ui .window-attributes .attribute-summary span{font-size:12px!important;padding:7px!important}.app.touch-ui .window-attributes .attribute-grid{gap:10px!important}.app.touch-ui .window-attributes .attribute-grid article{grid-template-columns:44px 1fr auto!important;padding:11px!important;gap:10px!important}.app.touch-ui .window-attributes .attr-icon{width:44px!important;height:44px!important;font-size:20px!important}.app.touch-ui .window-attributes .attribute-grid small,.app.touch-ui .window-attributes .attribute-grid p{font-size:12px!important;line-height:1.35!important}.app.touch-ui .window-attributes .attribute-grid b{font-size:20px!important}.app.touch-ui .window-attributes .step-btn{width:40px!important;height:40px!important;min-width:40px!important;min-height:40px!important;font-size:16px!important}
+  .app.touch-ui .window-quests .quest-layout{display:block!important}.app.touch-ui .window-quests .quest-group{padding:14px!important;margin-bottom:12px!important}.app.touch-ui .window-quests .quest-group h3{font-size:17px!important;margin-bottom:10px!important}.app.touch-ui .window-quests .quest{padding:12px!important;margin-bottom:9px!important}.app.touch-ui .window-quests .quest b{font-size:15px!important}.app.touch-ui .window-quests .quest small,.app.touch-ui .window-quests .quest footer,.app.touch-ui .window-quests .quest p{font-size:12px!important;line-height:1.4!important}.app.touch-ui .quest-tabs button{font-size:13px!important;min-height:44px!important}
+  .app.touch-ui .window-travel .travel-layout{grid-template-columns:minmax(0,1.35fr) minmax(260px,.65fr)!important;gap:14px!important}.app.touch-ui .window-travel .travel-card{padding:12px!important}.app.touch-ui .window-travel .travel-card-header b{font-size:15px!important}.app.touch-ui .window-travel .travel-card p,.app.touch-ui .window-travel .travel-card-footer span{font-size:12px!important;line-height:1.35!important}.app.touch-ui .window-travel .travel-sidebar h3{font-size:18px!important}
+  .app.touch-ui .window-grimoire .gacha-stage{padding:18px!important}.app.touch-ui .window-grimoire .class-card-item{min-height:66px!important;font-size:14px!important}.app.touch-ui .window-grimoire .class-card-item small{font-size:12px!important}
+  .app.touch-ui .window-blacksmith .blacksmith-layout{grid-template-columns:minmax(0,1.2fr) minmax(280px,.8fr)!important}.app.touch-ui .backpack-forge-card small,.app.touch-ui .backpack-forge-card p{font-size:12px!important}.app.touch-ui .backpack-forge-card b{font-size:18px!important}
 }
 
 /* Inventory tabs are exclusive on touch; each active screen owns the full panel. */

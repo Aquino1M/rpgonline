@@ -99,7 +99,7 @@ export class DungeonBossAI {
         const d = boss.g.position.distanceTo(this.game.player.position)
         if (d < 4.5) {
           const dmg = Math.max(8, Math.round(boss.atk * 1.35 - this.game.state.def * 0.35))
-          this.game.damagePlayer?.(this.game.state.blocking ? Math.round(dmg * 0.35) : dmg)
+          this.game.damagePlayer?.(dmg)
           this.game.haptic?.(45)
         }
       }, 900)

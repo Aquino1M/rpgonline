@@ -179,6 +179,10 @@ if(!ShadowGame.prototype[PATCH_FLAG]){
     this.state.autoAttacking=!!active
     if(active){this.attack(true);this.haptic?.(10)}
   }
+  proto.toggleAutoAttack=function v095ToggleAutoAttack(){
+    this.setAutoAttack(!this.state.autoAttacking)
+    return this.state.autoAttacking
+  }
 
   const prevTogglePanel=proto.togglePanel
   proto.togglePanel=function v095TogglePanel(...args){this.state.autoAttacking=false;return prevTogglePanel.apply(this,args)}

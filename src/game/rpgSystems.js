@@ -302,6 +302,8 @@ export function normalizeSaveState(state){
   return {
     ...state,
     inventory,
+    inventoryCapacity:Math.max(40,Math.min(100,Math.round(Number(state.inventoryCapacity)||40))),
+    backpackLevel:Math.max(0,Math.min(6,Math.round(Number(state.backpackLevel)||0))),
     equipment:normalizedEquipment,
     quests,
     mount:{

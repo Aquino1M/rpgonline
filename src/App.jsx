@@ -9,7 +9,7 @@ import { promptInstallApp, toggleFullScreen, subscribePWA, getPWAState } from '.
 import MiniMap from './ui/Minimap.jsx'
 import WorldMap from './ui/WorldMap.jsx'
 
-const initial={playerName:'',needsNickname:true,level:1,xp:0,nextXp:120,hp:120,maxHp:120,stamina:100,maxStamina:100,gold:220,atk:16,def:5,critChance:0,zone:'Vila Aurora',zoneId:'aurora',currentCity:'Cidadela Aurora',inventory:[],equipment:{},quests:[],guildMissions:[],guildRank:'E',guildRankIndex:0,guildPoints:0,attributePoints:0,attributes:{strength:0,vitality:0,agility:0,intellect:0},weather:'Céu limpo',time:'08:15',mount:{},abilities:[],combatMode:false,inCombat:false,combatTimer:0,multiplayer:{connected:false,url:'',room:'asterra-global',players:0,latencyMs:0,quality:'offline',reconnecting:false},settings:{renderDistance:2,pixelRatio:1,uiScale:1.2,invertCameraX:false,invertCameraY:false,invertCamera:false,multiplayerUrl:''},playerPosition:{x:0,z:0},stats:{kills:0,bosses:0,dungeons:0},ores:0,party:{id:null,leaderId:null,members:[],totalXP:0},onlinePlayers:[],economy:{label:'Mercado dos Despertos',description:'Itens iniciais',theme:'Aurora'}}
+const initial={playerName:'',needsNickname:true,level:1,xp:0,nextXp:120,hp:120,maxHp:120,stamina:100,maxStamina:100,gold:220,atk:16,def:5,critChance:0,zone:'Vila Aurora',zoneId:'aurora',currentCity:'Cidadela Aurora',inventory:[],inventoryCapacity:40,backpackLevel:0,equipment:{},quests:[],guildMissions:[],guildRank:'E',guildRankIndex:0,guildPoints:0,attributePoints:0,attributes:{strength:0,vitality:0,agility:0,intellect:0},weather:'Céu limpo',time:'08:15',mount:{},abilities:[],combatMode:false,inCombat:false,combatTimer:0,multiplayer:{connected:false,url:'',room:'asterra-global',players:0,latencyMs:0,quality:'offline',reconnecting:false},settings:{renderDistance:2,pixelRatio:1,uiScale:1.2,invertCameraX:false,invertCameraY:false,invertCamera:false,multiplayerUrl:''},playerPosition:{x:0,z:0},stats:{kills:0,bosses:0,dungeons:0},ores:0,party:{id:null,leaderId:null,members:[],totalXP:0},onlinePlayers:[],economy:{label:'Mercado dos Despertos',description:'Itens iniciais',theme:'Aurora'}}
 const slotNames={weapon:'Arma',armor:'Armadura',boots:'Botas',talisman:'Talismã'}
 const roleTitle={inventory:'Inventário & Equipamento',grimoire:'Grimório do Despertar (Roleta de Almas)',travel:'Moço Viajante (Rotas de Caravana)',quests:'Missões',guild:'Guilda de Aventureiros',townhall:'Prefeitura de Aurora (Juramento do Cavaleiro)',attributes:'Atributos',merchant:'Mercador',blacksmith:'Ferreiro Rúnico',stable:'Estábulos & Domação de Montarias',map:'Mapa de Asterra',settings:'Configurações',trade:'Troca entre Jogadores'}
 const fallbackAbilities=[{slot:1,name:'Corte Astral',short:'Corte',icon:'✦',cost:14,remaining:0,ready:true},{slot:2,name:'Onda Astral',short:'Onda',icon:'✹',cost:28,remaining:0,ready:true},{slot:3,name:'Passo Etéreo',short:'Passo',icon:'➠',cost:22,remaining:0,ready:true}]
@@ -260,7 +260,7 @@ export default function App(){
       {panel==='townhall'&&<TownHall hud={hud} accept={id=>call('acceptQuest',id)} claim={id=>call('claimQuest',id)} onOpenStable={()=>call('togglePanel','stable')}/>} 
       {panel==='attributes'&&<Attributes hud={hud} allocate={dist=>call('allocateAttributes',dist)}/>} 
       {panel==='merchant'&&<Merchant hud={hud} buy={id=>call('buyItem',id)} sell={id=>call('sellItem',id)} sellMultiple={ids=>call('sellMultipleItems',ids)}/>} 
-      {panel==='blacksmith'&&<Blacksmith hud={hud} upgrade={s=>call('upgrade',s)} repair={s=>call('repairItem',s)} buy={id=>call('buyItem',id)}/>} 
+      {panel==='blacksmith'&&<Blacksmith hud={hud} upgrade={s=>call('upgrade',s)} repair={s=>call('repairItem',s)} buy={id=>call('buyItem',id)} upgradeBackpack={()=>call('backpackUpgrade')}/>}
       {panel==='stable'&&<Stable hud={hud} horseBreeds={hud.horseBreeds||HORSE_BREEDS} onTame={id=>call('tameHorse',id)} onSelect={id=>call('selectHorse',id)} toggle={()=>call('toggleMount')} onOpenTownHall={()=>call('togglePanel','townhall')}/>} 
       {panel==='trade'&&<TradeModal hud={hud} call={call} onClose={()=>call('closePanel')}/>}
       {panel==='map'&&<WorldMap hud={hud}/>} 
@@ -355,7 +355,7 @@ function Inventory({hud,equip,unequip,call}){
           className={`inv-subtab ${mobileTab==='bag'?'active':''}`}
           onClick={()=>setMobileTab('bag')}
         >
-          🎒 Inventário ({items.length}/40)
+          🎒 Inventário ({items.length}/{hud.inventoryCapacity||40})
         </button>
         <button
           type="button"
@@ -469,7 +469,7 @@ function Inventory({hud,equip,unequip,call}){
         <section className={`bag-rpg ${mobileTab!=='bag' ? 'inventory-tab-hidden' : ''}`}>
           <div className="section-title">
             <div><small>INVENTÁRIO ORGANIZADO</small><h3>Mochila do Desperto</h3></div>
-            <span>{items.length}/40 slots</span>
+            <span>{items.length}/{hud.inventoryCapacity||40} slots</span>
           </div>
           <div className="bag-category-tabs inventory-tabs native-tab-row category-tab-wrap">
             <button className={tab==='all'?'active':''} onPointerUp={tabPointer(setTab,'all')} onClick={()=>setTab('all')}>Todos ({items.length})</button>
@@ -796,7 +796,7 @@ function MobileControls({hud,abilities,call,touch}){
       />
 
       <div className="mobile-actions">
-        <button className="mobile-attack" onPointerDown={startHold('setAutoAttack')} onPointerUp={stopHold('setAutoAttack')} onPointerCancel={stopHold('setAutoAttack')} onTouchStart={touchFallback(startHold('setAutoAttack'))} onTouchEnd={touchFallback(stopHold('setAutoAttack'))}>⚔<small>ATACAR</small></button>
+        <button className={`mobile-attack ${hud.autoAttacking?'active':''}`} onPointerDown={press('toggleAutoAttack')} onTouchStart={touchFallback(press('toggleAutoAttack'))}>⚔<small>{hud.autoAttacking?'PARAR':'ATACAR'}</small></button>
         <button className="mobile-block" onPointerDown={startHold('setMobileBlock')} onPointerUp={stopHold('setMobileBlock')} onPointerCancel={stopHold('setMobileBlock')} onTouchStart={touchFallback(startHold('setMobileBlock'))} onTouchEnd={touchFallback(stopHold('setMobileBlock'))}>🛡<small>DEFESA</small></button>
         <button className="mobile-dash" onPointerDown={press('dash')} onTouchStart={touchFallback(press('dash'))}>↯<small>ESQUIVA</small></button>
         <button className={`mobile-use ${hud.actionButton?'has-context':''}`} onClick={(e)=>{e.stopPropagation();call('interact')}}>{hud.actionButton?.icon||'☞'}<small>USAR</small></button>
@@ -1175,9 +1175,10 @@ function TradeModal({hud,call,onClose}){
   </div>
 }
 
-function Blacksmith({hud,upgrade,buy,repair}){
+function Blacksmith({hud,upgrade,buy,repair,upgradeBackpack}){
   const weapons=(hud.merchant||[]).filter(it=>it.type==='weapon'||it.type==='armor'),eco=hud.economy||{}
-  return <><div className="economy-banner forge-economy"><div><small>FORJA REGIONAL</small><b>{eco.label||hud.currentCity||'Forja local'}</b></div><p>Melhore e repare sua durabilidade. Equipamentos quebrados perdem grande parte da eficiência.</p><span>{eco.material||'Minério regional'}</span></div><div className="blacksmith-layout"><section><div className="forge-banner"><span>🔥</span><div><h3>Forja de {hud.currentCity||'Asterra'}</h3><p>Armas, ferramentas e armaduras perdem durabilidade durante combate e coleta.</p></div><b>◆ {hud.ores||0}</b></div><div className="forge-grid">{EQUIPMENT_SLOTS.map(slot=>{const it=hud.equipment?.[slot],up=it?.upgrade||0,cost=it?Math.round(80+(up+1)*65+it.level*4):0,ore=1+Math.floor(up/3),max=Number(it?.maxDurability)||0,cur=Number.isFinite(Number(it?.durability))?Number(it.durability):max,repairCost=it&&max?Math.max(8,Math.round(Math.max(0,max-cur)*(.22+(Number(it.level)||1)*.012+itemRarityRank(it)*.09))):0;return <article key={slot} style={{'--rarity':it?.color||'#607080'}}><span>{slotIcon(slot,it)}</span><b>{it?.name||slotNames[slot]}</b><small>{it?`${it.rarity} • Nv.${it.level} • +${up}${max?` • Dur. ${Math.round(cur)}/${max}`:''}`:'Nenhum item equipado'}</small><div className="forge-actions"><button disabled={!it||up>=10||hud.gold<cost||(hud.ores||0)<ore} onClick={()=>upgrade(slot)}>{up>=10?'Máximo':`Melhorar ${cost}◈ + ${ore}◆`}</button>{it&&max>0&&cur<max&&<button className="repair-btn" disabled={hud.gold<repairCost} onClick={()=>repair(slot)}>🔧 Reparar {repairCost}◈</button>}</div></article>})}</div></section><aside className="smith-shop"><div className="section-title"><div><small>ARMAS & ARMADURAS</small><h3>Comprar na forja</h3></div><span>◈ {hud.gold}</span></div><div className="smith-stock shop-scroll-list">{weapons.map(it=><article key={it.id} className="shop-scroll-card" style={{'--rarity':it.color}}><ItemCard item={it} compact/><button type="button" disabled={hud.gold<it.value} onClick={()=>buy(it.id)}>Comprar • {it.value}◈</button></article>)}</div></aside></div></>
+  const backpackLevel=Number(hud.backpackLevel)||0,capacity=Number(hud.inventoryCapacity)||40,bagGold=180+backpackLevel*220,bagOres=1+Math.floor(backpackLevel/2)
+  return <><div className="economy-banner forge-economy"><div><small>FORJA REGIONAL</small><b>{eco.label||hud.currentCity||'Forja local'}</b></div><p>Melhore e repare sua durabilidade. Equipamentos quebrados perdem grande parte da eficiência.</p><span>{eco.material||'Minério regional'}</span></div><div className="blacksmith-layout"><section><div className="forge-banner"><span>🔥</span><div><h3>Forja de {hud.currentCity||'Asterra'}</h3><p>Armas, ferramentas e armaduras perdem durabilidade durante combate e coleta.</p></div><b>◆ {hud.ores||0}</b></div><div className="backpack-forge-card"><div><small>MOCHILA DO DESPERTO • NÍVEL {backpackLevel}</small><b>{capacity}/100 espaços</b><p>Amplie em +10 espaços para guardar mais recompensas.</p></div><button type="button" disabled={capacity>=100||hud.gold<bagGold||(hud.ores||0)<bagOres} onClick={upgradeBackpack}>{capacity>=100?'Mochila máxima':`Ampliar +10 • ${bagGold}◈ + ${bagOres}◆`}</button></div><div className="forge-grid">{EQUIPMENT_SLOTS.map(slot=>{const it=hud.equipment?.[slot],up=it?.upgrade||0,cost=it?Math.round(80+(up+1)*65+it.level*4):0,ore=1+Math.floor(up/3),max=Number(it?.maxDurability)||0,cur=Number.isFinite(Number(it?.durability))?Number(it.durability):max,repairCost=it&&max?Math.max(8,Math.round(Math.max(0,max-cur)*(.22+(Number(it.level)||1)*.012+itemRarityRank(it)*.09))):0;return <article key={slot} style={{'--rarity':it?.color||'#607080'}}><span>{slotIcon(slot,it)}</span><b>{it?.name||slotNames[slot]}</b><small>{it?`${it.rarity} • Nv.${it.level} • +${up}${max?` • Dur. ${Math.round(cur)}/${max}`:''}`:'Nenhum item equipado'}</small><div className="forge-actions"><button disabled={!it||up>=10||hud.gold<cost||(hud.ores||0)<ore} onClick={()=>upgrade(slot)}>{up>=10?'Máximo':`Melhorar ${cost}◈ + ${ore}◆`}</button>{it&&max>0&&cur<max&&<button className="repair-btn" disabled={hud.gold<repairCost} onClick={()=>repair(slot)}>🔧 Reparar {repairCost}◈</button>}</div></article>})}</div></section><aside className="smith-shop"><div className="section-title"><div><small>ARMAS & ARMADURAS</small><h3>Comprar na forja</h3></div><span>◈ {hud.gold}</span></div><div className="smith-stock shop-scroll-list">{weapons.map(it=><article key={it.id} className="shop-scroll-card" style={{'--rarity':it.color}}><ItemCard item={it} compact/><button type="button" disabled={hud.gold<it.value} onClick={()=>buy(it.id)}>Comprar • {it.value}◈</button></article>)}</div></aside></div></>
 }
 
 function ActiveQuestTrackerHUD({ hud, onOpenQuests, onClaim }) {

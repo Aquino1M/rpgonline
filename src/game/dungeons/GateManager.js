@@ -6,6 +6,13 @@ import { DungeonBossAI } from './DungeonBossAI.js'
 import { DungeonRewards } from './DungeonRewards.js'
 import { progressGuildMissions, progressQuest, updateGuildRank } from '../rpgSystems.js'
 
+const GLOBAL_GATE_PERIOD_MS = 30 * 60 * 1000
+const GLOBAL_GATE_SLOTS = [
+  { rankKey:'E', x:120, z:90 }, { rankKey:'D', x:-170, z:80 },
+  { rankKey:'C', x:210, z:-170 }, { rankKey:'B', x:-260, z:-130 }
+]
+const gateRoll = seed => Math.abs(Math.sin(seed * 12.9898) * 43758.5453) % 1
+
 export class GateManager {
   constructor(game) {
     this.game = game
@@ -13,8 +20,8 @@ export class GateManager {
     this.bossAI = new DungeonBossAI(game)
     this.activeGates = []
     this.activeInstance = null
-    this.spawnIntervalTimer = 0
-    this.maxActiveGates = 6
+    this.globalCycle = null
+    this.closedGateIds = new Set()
   }
 
   init() {
@@ -22,20 +29,22 @@ export class GateManager {
   }
 
   spawnInitialGates() {
-    // Spawn 4 initial gates across the world silently so no alert pops up on boot
-    const ranks = ['E', 'D', 'C', 'B']
-    for (let i = 0; i < ranks.length; i++) {
-      this.spawnGate({ rankKey: ranks[i], silent: true })
+    this.globalCycle = Math.floor(Date.now() / GLOBAL_GATE_PERIOD_MS)
+    for (let slot = 0; slot < GLOBAL_GATE_SLOTS.length; slot++) {
+      const base = GLOBAL_GATE_SLOTS[slot]
+      const id = `global-gate-${this.globalCycle}-${slot}`
+      if (!this.closedGateIds.has(id)) this.spawnGate({ rankKey: base.rankKey, pos:{x:base.x,z:base.z}, silent:true, shared:{cycle:this.globalCycle,slot} })
     }
+    this.syncGatesToState()
   }
 
   update(dt, t) {
-    // Check gate lifetimes and spawning
-    this.spawnIntervalTimer += dt
-    if (this.spawnIntervalTimer >= 120 && this.activeGates.length < this.maxActiveGates) {
-      this.spawnIntervalTimer = 0
-      const rollRank = Math.random() < 0.35 ? 'E' : Math.random() < 0.65 ? 'D' : Math.random() < 0.85 ? 'C' : Math.random() < 0.96 ? 'B' : Math.random() < 0.99 ? 'A' : 'S'
-      this.spawnGate({ rankKey: rollRank })
+    const cycle = Math.floor(Date.now() / GLOBAL_GATE_PERIOD_MS)
+    if (cycle !== this.globalCycle) {
+      for (const gate of this.activeGates) gate.mesh?.parent?.remove?.(gate.mesh)
+      this.activeGates = []
+      this.closedGateIds.clear()
+      this.spawnInitialGates()
     }
 
     const now = Date.now()
@@ -68,10 +77,11 @@ export class GateManager {
     }
   }
 
-  spawnGate({ rankKey = 'C', pos = null, silent = false }) {
+  spawnGate({ rankKey = 'C', pos = null, silent = false, shared = null }) {
     const rank = GATE_RANKS[rankKey] || GATE_RANKS.C
     const themes = Object.keys(DUNGEON_THEMES)
-    const themeKey = themes[Math.floor(Math.random() * themes.length)]
+    const seed = shared ? shared.cycle * 31 + shared.slot * 17 + 7 : Math.random() * 999999
+    const themeKey = themes[Math.floor(gateRoll(seed) * themes.length)]
     const theme = DUNGEON_THEMES[themeKey]
 
     // Find candidate position in world
@@ -82,24 +92,24 @@ export class GateManager {
     if (!p) return null
 
     const zone = this.game.zoneAt ? this.game.zoneAt(p.x, p.z, this.game.ZONES || []) : { name: 'Ermos de Asterra', id: 'wild' }
-    const dungeonLevel = Math.round(rank.levelRange[0] + Math.random() * (rank.levelRange[1] - rank.levelRange[0]))
-    const totalRounds = Math.round((rank.rounds?.[0] || 3) + Math.random() * ((rank.rounds?.[1] || 4) - (rank.rounds?.[0] || 3)))
+    const dungeonLevel = Math.round(rank.levelRange[0] + gateRoll(seed + 1) * (rank.levelRange[1] - rank.levelRange[0]))
+    const totalRounds = Math.round((rank.rounds?.[0] || 3) + gateRoll(seed + 2) * ((rank.rounds?.[1] || 4) - (rank.rounds?.[0] || 3)))
     const totalFloors = totalRounds
 
     // Check for rare anomaly (Unstable Gate)
-    const isUnstable = Math.random() < 0.12
+    const isUnstable = gateRoll(seed + 3) < 0.12
     const modifiers = []
     if (rankKey !== 'E' || isUnstable) {
-      const mod = DUNGEON_MODIFIERS[Math.floor(Math.random() * DUNGEON_MODIFIERS.length)]
+      const mod = DUNGEON_MODIFIERS[Math.floor(gateRoll(seed + 4) * DUNGEON_MODIFIERS.length)]
       modifiers.push(mod)
     }
 
-    const gateId = `gate_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
+    const gateId = shared ? `global-gate-${shared.cycle}-${shared.slot}` : `gate_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
     const durationMs = (rank.lifetimeMinutes || 30) * 60000
 
     const gate = {
       id: gateId,
-      seed: Math.floor(Math.random() * 999999),
+      seed: Math.floor(seed * 999999),
       x: p.x,
       z: p.z,
       zoneName: zone.name || 'Asterra',
@@ -113,8 +123,9 @@ export class GateManager {
       modifiers,
       isUnstable,
       state: 'ACTIVE',
-      spawnedAt: Date.now(),
-      expiresAt: Date.now() + durationMs,
+      spawnedAt: shared ? shared.cycle * GLOBAL_GATE_PERIOD_MS : Date.now(),
+      expiresAt: shared ? (shared.cycle + 1) * GLOBAL_GATE_PERIOD_MS : Date.now() + durationMs,
+      shared: !!shared,
       name: `Portal Rank ${rankKey} — ${theme.name}${isUnstable ? ' [INSTÁVEL]' : ''}`
     }
 
@@ -550,7 +561,7 @@ export class GateManager {
     this.activeGates.splice(index, 1)
 
     // Rare Dungeon Break event: spawn a wandering elite mob
-    if (Math.random() < 0.35) {
+    if (!gate.shared && Math.random() < 0.35) {
       this.game.toast?.(`⚠️ RUPTURA DE PORTAL! Feras da Masmorra escaparam para ${gate.zoneName}!`)
       if (this.game.enemies) {
         const mob = this.game.makeEnemy(gate.x, gate.z, gate.dungeonLevel + 2, `Fera Escapada [${gate.rankKey}]`, false, null, null, `break_${Date.now()}`)
@@ -857,19 +868,37 @@ export class GateManager {
       this.game.addInventoryItem?.(item)
     }
 
-    this.removeGate(inst.gateId)
+    this.removeGate(inst.gateId, { broadcast:true })
     this.game.state.dungeonCompletion = { ...rewards, guildRankAdvanced }
     this.game.toast?.(`🏆 MASMORRA CONCLUÍDA! +${rewards.xp} XP, +${rewards.gold}◈ e +${rewards.guildXp} XP da Guilda!`)
   }
 
-  removeGate(gateId) {
+  removeGate(gateId, { broadcast=false } = {}) {
     const index = this.activeGates.findIndex(gate => gate.id === gateId)
     if (index < 0) return null
     const [gate] = this.activeGates.splice(index, 1)
     gate.mesh?.parent?.remove?.(gate.mesh)
+    if (gate.shared) this.closedGateIds.add(gate.id)
     if (this.game.state?.destinationMarker?.id === gate.id) this.game.state.destinationMarker = null
     this.syncGatesToState()
+    if (broadcast && gate.shared) this.game.multiplayer?.send({type:'gate_closed', gateId:gate.id, cycle:this.globalCycle})
     return gate
+  }
+
+  requestSharedGateState() {
+    this.game.multiplayer?.send({type:'gate_sync_request', cycle:this.globalCycle})
+  }
+
+  handleMultiplayerEvent(event = {}) {
+    if (event.type === 'gate_sync_request' && event.from && event.cycle === this.globalCycle) {
+      this.game.multiplayer?.send({type:'gate_sync_state', to:event.from, cycle:this.globalCycle, closedGateIds:[...this.closedGateIds]})
+      return
+    }
+    if (event.type === 'gate_sync_state' && event.to === this.game.multiplayer?.playerId && event.cycle === this.globalCycle) {
+      for (const id of event.closedGateIds || []) this.removeGate(String(id), { broadcast:false })
+      return
+    }
+    if (event.type === 'gate_closed' && event.cycle === this.globalCycle) this.removeGate(String(event.gateId || ''), { broadcast:false })
   }
 
   leaveDungeon() {

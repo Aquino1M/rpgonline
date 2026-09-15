@@ -40,7 +40,7 @@ export class ShadowGame {
     this.state={
       version:8,playerName:savedNick,needsNickname:true,level:1,xp:0,nextXp:120,hp:120,maxHp:120,baseMaxHp:120,stamina:100,maxStamina:100,baseMaxStamina:100,gold:220,
       baseAtk:16,baseDef:5,atk:16,def:5,speed:7.1,zone:'Vila Aurora',zoneId:'aurora',target:null,dungeon:null,boss:null,
-      inventory:starterInventory(),equipment:{weapon:null,armor:null,boots:null,talisman:null},quests:defaultQuestState(),
+      inventory:starterInventory(),inventoryCapacity:40,backpackLevel:0,equipment:{weapon:null,armor:null,boots:null,talisman:null},quests:defaultQuestState(),
       mount:{unlocked:false,active:false,oathCompleted:false,name:'Corcel de Aurora',currentHorseId:'horse_aurora',speedBonus:4.7,tamedHorses:[]},classState:defaultClassState(),travelState:defaultTravelState(),ambush:null,uiPanel:null,dialogue:null,interactionPrompt:null,
       weather:'Céu limpo',time:'08:15',timeHours:8.25,portal:null,merchant:[],toast:null,settings:this.settings,
       worldMap:WORLD_MAP,playerPosition:{x:0,z:0},playerHeading:0,stats:{kills:0,dungeons:0,bosses:0},ores:2,
@@ -681,7 +681,7 @@ export class ShadowGame {
         this.freeLook=true;this.freeLookPointer=e.pointerId;this.freeLookLast={x:e.clientX,y:e.clientY};this.canvas.setPointerCapture?.(e.pointerId);e.preventDefault();return
       }
       if(!this.combatMode||this.state.uiPanel)return
-      if(e.button===0)this.attack();if(e.button===2)this.state.blocking=true
+      if(e.button===0)this.toggleAutoAttack?.();if(e.button===2)this.state.blocking=true
     })
     on(window,'pointerup',e=>{
       if(e.button===2){this.state.blocking=false;this.freeLook=false;this.freeLookPointer=null;this.freeLookLast=null}
@@ -1010,10 +1010,10 @@ export class ShadowGame {
     }
 
     const progression=resolveEntityProgression(name,level,{dungeon:!!this.state.dungeon});level=progression.level
-    g.position.set(x,0,z);(this.state.dungeon?this.dungeonArena:this.worldRoot).add(g);const maxHp=(boss?320:78)+level*(boss?24:11)
+    g.position.set(x,0,z);(this.state.dungeon?this.dungeonArena:this.worldRoot).add(g);const maxHp=(boss?460:112)+level*(boss?32:16)
     const enemy={
       g,body,head,legs:[leg1,leg2],level,name,boss,zoneId:zone?.id||'dungeon',
-      hp:maxHp,maxHp,atk:7+level*1.05,def:Math.round((boss?5:2)+level*(boss?.38:.24)),last:0,dead:false,chunkKey,
+      hp:maxHp,maxHp,atk:(boss?18:12)+level*(boss?2.6:1.9),def:Math.round((boss?7:3)+level*(boss?.42:.28)),last:0,dead:false,chunkKey,
       netId:netId||`enemy:${Math.round(x)}:${Math.round(z)}:${level}:${name}`,
       phase:Math.random()*6.28,baseBodyY,mixer,customMesh,attackAnim:0,
       specialTimer:boss?(2.8+Math.random()*2):(3.8+Math.random()*3),
@@ -1148,12 +1148,10 @@ export class ShadowGame {
                 if(bot.sword) bot.sword.rotation.x = 0
               }
             },130)
-            const dmg=Math.max(2,Math.round(bot.atk*(.75+Math.random()*.38)))
+            const dmg=Math.max(3,Math.round(bot.atk*(.82+Math.random()*.38)))
             if(targetIsPlayer){
               if(this.invuln<=0){
-                let dealt=Math.max(1,Math.round(dmg-this.state.def*.42))
-                if(this.state.blocking)dealt=Math.max(1,Math.round(dealt*.32))
-                this.damagePlayer(dealt)
+                this.damagePlayer(Math.max(1,Math.round(dmg-this.state.def*.42)))
               }
             }else{
               target.hp-=dmg
@@ -1179,7 +1177,8 @@ export class ShadowGame {
   }
 
   damagePlayer(amount){
-    const dealt=Math.max(1,Math.round(amount))
+    const incoming=Math.max(1,Math.round(amount))
+    const dealt=this.state.blocking?Math.max(1,Math.round(incoming*.32)):incoming
     this.state.hp=Math.max(0,this.state.hp-dealt)
     this.enterCombat(8)
     return dealt
@@ -1934,12 +1933,21 @@ export class ShadowGame {
     this.state.hp = this.state.maxHp
   }
 
+  inventoryCapacity(){return Math.max(40,Math.min(100,Math.round(Number(this.state.inventoryCapacity)||40)))}
+  backpackUpgrade(){
+    const capacity=this.inventoryCapacity(),level=Math.max(0,Math.round(Number(this.state.backpackLevel)||0))
+    if(capacity>=100){this.toast('Mochila já está no tamanho máximo.');return false}
+    const gold=180+level*220,ores=1+Math.floor(level/2)
+    if((this.state.gold||0)<gold||(this.state.ores||0)<ores){this.toast(`Precisa de ${gold} ouro e ${ores} minério para ampliar a mochila.`);return false}
+    this.state.gold-=gold;this.state.ores-=ores;this.state.backpackLevel=level+1;this.state.inventoryCapacity=Math.min(100,capacity+10)
+    this.toast(`🎒 Mochila ampliada: ${this.state.inventoryCapacity} espaços.`);this.saveGame();return true
+  }
   addInventoryItem(item){
     if(!item)return false
     if(item.type==='material'||item.subtype==='monster-drop'){
       const stack=this.state.inventory.find(x=>x.type===item.type&&x.name===item.name);if(stack){stack.qty=(stack.qty||1)+(item.qty||1);return true}
     }
-    if(this.state.inventory.length>=40){this.toast('Mochila cheia: venda ou equipe itens antes de coletar.');return false}
+    if(this.state.inventory.length>=this.inventoryCapacity()){this.toast('Mochila cheia: venda, equipe itens ou amplie no ferreiro.');return false}
     this.state.inventory=[item,...this.state.inventory];return true
   }
 
@@ -1954,7 +1962,7 @@ export class ShadowGame {
     if(!['weapon','armor','boots','talisman'].includes(slot))return
     const old=this.state.equipment[slot];this.state.equipment[slot]={...item};this.state.inventory=this.state.inventory.filter(x=>x.id!==id);if(old)this.state.inventory.unshift(old);this.recalcStats();this.saveGame()
   }
-  unequip(slot){const item=this.state.equipment[slot];if(!item)return;if(this.state.inventory.length>=40){this.toast('Mochila cheia.');return}this.state.inventory.unshift(item);this.state.equipment[slot]=null;this.recalcStats()}
+  unequip(slot){const item=this.state.equipment[slot];if(!item)return;if(this.state.inventory.length>=this.inventoryCapacity()){this.toast('Mochila cheia.');return}this.state.inventory.unshift(item);this.state.equipment[slot]=null;this.recalcStats()}
   sellItem(id){
     const i=this.state.inventory.findIndex(x=>x.id===id);if(i<0)return
     const item=this.state.inventory[i],qty=Math.max(1,item.qty||1)
@@ -2041,7 +2049,7 @@ export class ShadowGame {
     const offered=this.state.inventory.filter(item=>idSet.has(String(item.id)))
     if(offered.length!==idSet.size||this.state.gold<localOffer.gold){this.cancelTrade('Troca cancelada: sua oferta não está mais disponível.');return false}
     const remaining=this.state.inventory.filter(item=>!idSet.has(String(item.id)))
-    if(remaining.length+remoteOffer.items.length>40){this.cancelTrade('Troca cancelada: não há espaço suficiente na mochila.');return false}
+    if(remaining.length+remoteOffer.items.length>(this.inventoryCapacity?.()||40)){this.cancelTrade('Troca cancelada: não há espaço suficiente na mochila.');return false}
     this.state.inventory=remaining
     this.state.gold-=localOffer.gold
     for(const raw of remoteOffer.items)this.addInventoryItem({...raw,id:`trade-${Date.now()}-${Math.random().toString(36).slice(2,8)}`})
@@ -2051,7 +2059,7 @@ export class ShadowGame {
     this.toast(`🤝 Troca concluída: recebeu ${remoteOffer.items.length} item(ns)${remoteOffer.gold?` e ${remoteOffer.gold}◈`:''}.`)
     return true
   }
-  buyItem(shopId){const item=(this.state.merchant||[]).find(x=>x.id===shopId);if(!item||this.state.gold<item.value)return false;const stackable=item.subtype==='potion'&&this.state.inventory.some(x=>x.subtype==='potion');if(!stackable&&this.state.inventory.length>=40){this.toast('Mochila cheia.');return false}this.state.gold-=item.value;if(item.subtype==='potion'){const found=this.state.inventory.find(x=>x.subtype==='potion');if(found)found.qty=(found.qty||1)+1;else this.state.inventory.unshift({...item,id:`p-${Date.now()}`})}else{this.state.inventory.unshift({...item,id:`b-${Date.now()}-${Math.random()}`});this.state.merchant=this.state.merchant.filter(x=>x.id!==shopId)}this.toast('Compra realizada');return true}
+  buyItem(shopId){const item=(this.state.merchant||[]).find(x=>x.id===shopId);if(!item||this.state.gold<item.value)return false;const stackable=item.subtype==='potion'&&this.state.inventory.some(x=>x.subtype==='potion');if(!stackable&&this.state.inventory.length>=this.inventoryCapacity()){this.toast('Mochila cheia.');return false}this.state.gold-=item.value;if(item.subtype==='potion'){const found=this.state.inventory.find(x=>x.subtype==='potion');if(found)found.qty=(found.qty||1)+1;else this.state.inventory.unshift({...item,id:`p-${Date.now()}`})}else{this.state.inventory.unshift({...item,id:`b-${Date.now()}-${Math.random()}`});this.state.merchant=this.state.merchant.filter(x=>x.id!==shopId)}this.toast('Compra realizada');return true}
   upgrade(slot){const item=this.state.equipment[slot];if(!item)return false;const level=item.upgrade||0;if(level>=10)return false;const cost=Math.round(80+(level+1)*65+item.level*4),ore=1+Math.floor(level/3);if(this.state.gold<cost||this.state.ores<ore)return false;this.state.gold-=cost;this.state.ores-=ore;item.upgrade=level+1;progressQuest(this.state,'upgrade',slot,1);this.recalcStats();this.toast(`${item.name} +${item.upgrade}`);return true}
   usePotion(){const p=this.state.inventory.find(x=>x.subtype==='potion'&&(x.qty||1)>0);if(!p||this.state.hp>=this.state.maxHp)return;p.qty=(p.qty||1)-1;this.state.hp=Math.min(this.state.maxHp,this.state.hp+(p.power||50));if(p.qty<=0)this.state.inventory=this.state.inventory.filter(x=>x!==p);this.toast('Poção usada')}
 
@@ -2362,8 +2370,7 @@ export class ShadowGame {
                 this.updatePlayerNameplate(victimBot.label,{name:`${victimBot.name} [IA]`,level:victimBot.level,hp:victimBot.hp,maxHp:victimBot.maxHp,guildRank:victimBot.guildRank},false)
                 if(victimBot.hp<=0)this.killBot(victimBot,{byPlayer:false})
               }else if(this.invuln<=0&&!this.isInsideCitySafeZone(this.player.position.x,this.player.position.z,1)){
-                const dmgDealt=this.state.blocking?Math.round(dmg*.3):dmg
-                this.damagePlayer(dmgDealt)
+                this.damagePlayer(dmg)
                 this.haptic(35)
               }
             }
@@ -2378,14 +2385,13 @@ export class ShadowGame {
             if(victimBot){
               victimBot.hp=Math.max(0,victimBot.hp-Math.max(1,Math.round(dmg-victimBot.def*.35)))
             }else if(this.invuln<=0&&!this.isInsideCitySafeZone(this.player.position.x,this.player.position.z,1)){
-              const dmgDealt=Math.max(1,Math.round(dmg-this.state.def*.35))
-              this.damagePlayer(dmgDealt)
+              this.damagePlayer(Math.max(1,Math.round(dmg-this.state.def*.35)))
             }
           }
         }
       }
       if(d<16&&d>1.7){const dir=victim.position.clone().sub(e.g.position);dir.y=0;if(dir.lengthSq())dir.normalize();const step=(e.boss?2.2:2.75)*dt,next=e.g.position.clone().addScaledVector(dir,step),safe=this.cityAt(next.x,next.z,2.5);if(!safe&&this.canOccupy(next.x,next.z,e.boss?1.1:.55)){e.g.position.copy(next)}else if(safe){const away=e.g.position.clone().sub(new THREE.Vector3(safe.x,0,safe.z)).normalize();e.g.position.addScaledVector(away,step*.45)}e.g.rotation.y=Math.atan2(dir.x,dir.z);if(lunge)e.g.position.addScaledVector(dir,lunge*dt)}
-      if(d<=1.85&&performance.now()-e.last>1100){e.last=performance.now();e.attackAnim=.34;if(victimBot){const dmg=Math.max(1,Math.round(e.atk-victimBot.def*.42));victimBot.hp=Math.max(0,victimBot.hp-dmg);this.updatePlayerNameplate(victimBot.label,{name:`${victimBot.name} [IA]`,level:victimBot.level,hp:victimBot.hp,maxHp:victimBot.maxHp,guildRank:victimBot.guildRank},false);if(victimBot.hp<=0)this.killBot(victimBot,{byPlayer:false})}else if(!this.isInsideCitySafeZone(this.player.position.x,this.player.position.z,1)&&this.invuln<=0){let dmg=Math.max(1,Math.round(e.atk-this.state.def*.45));if(this.state.blocking)dmg=Math.max(1,Math.round(dmg*.3));this.damagePlayer(dmg)}}
+      if(d<=1.85&&performance.now()-e.last>1100){e.last=performance.now();e.attackAnim=.34;if(victimBot){const dmg=Math.max(1,Math.round(e.atk-victimBot.def*.42));victimBot.hp=Math.max(0,victimBot.hp-dmg);this.updatePlayerNameplate(victimBot.label,{name:`${victimBot.name} [IA]`,level:victimBot.level,hp:victimBot.hp,maxHp:victimBot.maxHp,guildRank:victimBot.guildRank},false);if(victimBot.hp<=0)this.killBot(victimBot,{byPlayer:false})}else if(!this.isInsideCitySafeZone(this.player.position.x,this.player.position.z,1)){this.damagePlayer(Math.max(1,Math.round(e.atk-this.state.def*.45)))}}
     }
   }
 
@@ -2669,7 +2675,8 @@ applyEnemyNetworkState(st){
   }
 
   onMultiplayerEvent(e){
-    if(e.type==='connection'){const reconnecting=!!e.reconnecting;this.state.multiplayer={...this.state.multiplayer,connected:!!e.connected,reconnecting,url:e.url||this.state.multiplayer.url,room:e.room||this.multiplayer?.room||this.state.multiplayer.room,transport:e.transport||this.state.multiplayer.transport||'offline',reason:e.reason||'',serverSave:e.connected?this.state.multiplayer.serverSave:false};if(e.connected)this.toast(e.transport==='supabase'?'Multiplayer Supabase Realtime conectado':e.transport==='http'?'Multiplayer Vercel conectado':'Multiplayer LAN conectado');else if(!reconnecting){this.state.party={id:null,leaderId:null,members:[],totalXP:0};for(const r of this.remotePlayers.values()){this.scene.remove(r.g);r.marker?.material?.map?.dispose?.();r.marker?.material?.dispose?.()}this.remotePlayers.clear();this.state.multiplayer.players=0;this.state.multiplayer.totalOnline=0}return}
+    if(e.type==='connection'){const reconnecting=!!e.reconnecting;this.state.multiplayer={...this.state.multiplayer,connected:!!e.connected,reconnecting,url:e.url||this.state.multiplayer.url,room:e.room||this.multiplayer?.room||this.state.multiplayer.room,transport:e.transport||this.state.multiplayer.transport||'offline',reason:e.reason||'',serverSave:e.connected?this.state.multiplayer.serverSave:false};if(e.connected){this.toast(e.transport==='supabase'?'Multiplayer Supabase Realtime conectado':e.transport==='http'?'Multiplayer Vercel conectado':'Multiplayer LAN conectado');this.gateManager?.requestSharedGateState?.()}else if(!reconnecting){this.state.party={id:null,leaderId:null,members:[],totalXP:0};for(const r of this.remotePlayers.values()){this.scene.remove(r.g);r.marker?.material?.map?.dispose?.();r.marker?.material?.dispose?.()}this.remotePlayers.clear();this.state.multiplayer.players=0;this.state.multiplayer.totalOnline=0}return}
+    if(String(e.type||'').startsWith('gate_')){this.gateManager?.handleMultiplayerEvent?.(e);return}
     if(e.type==='presence_count'){this.state.multiplayer.totalOnline=Math.max(1,Number(e.count)||1);this.state.multiplayer.players=this.remotePlayers.size;return}
     if(e.type==='welcome'){if(e.room){this.state.multiplayer.room=e.room;localStorage.setItem('shadow-ascension-last-lobby',e.room)}for(const p of e.players||[])this.onMultiplayerEvent({type:'state',player:p});this.state.multiplayer.players=this.remotePlayers.size;this.state.multiplayer.totalOnline=Math.max(1,this.remotePlayers.size+1);return}
     if(e.type==='lobby'){if(e.room){this.state.multiplayer.room=e.room;localStorage.setItem('shadow-ascension-last-lobby',e.room)}return}
