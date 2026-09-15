@@ -33,19 +33,23 @@ function createTestClient(playerId, playerName, startPos) {
             type: 'presence',
             event: 'track',
             payload: {
-              id: playerId,
-              name: playerName,
-              x: startPos.x,
-              y: startPos.y,
-              z: startPos.z,
-              level: 10,
-              hp: 120,
-              maxHp: 120,
-              motion: 'idle',
-              world: 'open',
-              guildRank: 'C',
-              classId: 'mercenary_swordsman',
-              onlineAt: Date.now()
+              player: {
+                id: playerId,
+                name: playerName,
+                x: startPos.x,
+                y: startPos.y,
+                z: startPos.z,
+                level: 10,
+                hp: 120,
+                maxHp: 120,
+                motion: 'idle',
+                world: 'open',
+                guildRank: 'C',
+                classId: 'mercenary_swordsman',
+                lastSeen: Date.now()
+              },
+              online_at: new Date().toISOString(),
+              room: 'asterra-global'
             }
           },
           ref: r,

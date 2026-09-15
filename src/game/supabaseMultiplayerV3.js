@@ -16,15 +16,17 @@ import {
 } from './multiplayer.js'
 
 export const GLOBAL_MULTIPLAYER_ROOM = 'asterra-global'
+const REMOTE_LEAVE_GRACE_MS = 15_000
 
 const storage = typeof window !== 'undefined' ? window.localStorage : null
 export const DEFAULT_SUPABASE_PROJECT_URL = 'https://kfnlcrsnvckexzmhbyoy.supabase.co'
 export const DEFAULT_SUPABASE_PUBLIC_KEY = 'sb_publishable_zB3YmZc3TNkKCHzHWQ-X5g_kKRvlkRI'
 
-const SUPABASE_URL = String(import.meta.env.VITE_SUPABASE_URL || DEFAULT_SUPABASE_PROJECT_URL).trim()
+const env = import.meta.env || {}
+const SUPABASE_URL = String(env.VITE_SUPABASE_URL || DEFAULT_SUPABASE_PROJECT_URL).trim()
 const SUPABASE_KEY = String(
-  import.meta.env.VITE_SUPABASE_ANON_KEY ||
-  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+  env.VITE_SUPABASE_ANON_KEY ||
+  env.VITE_SUPABASE_PUBLISHABLE_KEY ||
   DEFAULT_SUPABASE_PUBLIC_KEY
 ).trim()
 
@@ -319,6 +321,7 @@ export class MultiplayerClient {
     this.lastState = safePlayer({name:this.name}, this.playerId)
     this.presenceIds = new Set()
     this.remoteState = new Map()
+    this.pendingRemoteLeaves = new Map()
     this.seenEventIds = new Set()
     this.party = null
     this.rt = null
@@ -419,7 +422,7 @@ export class MultiplayerClient {
         this._trackPresence(true)
         this._emitConnection(true)
         this.onEvent({type:'welcome', id:this.playerId, room:GLOBAL_MULTIPLAYER_ROOM, players:[...this.remoteState.values()]})
-        this.onEvent({type:'presence_count', count:this.presenceIds.size + 1, players:[...this.remoteState.values()]})
+        this.onEvent({type:'presence_count', count:this.remoteState.size + 1, players:[...this.remoteState.values()]})
         this._emitNetwork(true)
       },
       onClosed:reason => {
@@ -434,8 +437,7 @@ export class MultiplayerClient {
           const p = payload?.player
           if (!p?.id || p.id === this.playerId) return
           this.lastPacketAt = now()
-          this.remoteState.set(p.id, p)
-          this.onEvent({type:'state', player:p})
+          this._upsertRemote(p)
         } else if (event === 'game') {
           this._receiveGameEvent(payload)
         }
@@ -472,7 +474,24 @@ export class MultiplayerClient {
     this.rt.track({player, online_at:new Date(t).toISOString(), room:GLOBAL_MULTIPLAYER_ROOM})
   }
 
+  _upsertRemote(player) {
+    this.pendingRemoteLeaves.delete(player.id)
+    this.remoteState.set(player.id, player)
+    this.onEvent({type:'state', player})
+  }
+
+  _pruneRemoteLeaves(t=now()) {
+    for (const [id, expiresAt] of this.pendingRemoteLeaves) {
+      if (expiresAt > t) continue
+      this.pendingRemoteLeaves.delete(id)
+      this.remoteState.delete(id)
+      this.onEvent({type:'leave', id})
+    }
+  }
+
   _presenceSync(state={}) {
+    const t = now()
+    this._pruneRemoteLeaves(t)
     const next = new Set()
     for (const [key, entries] of Object.entries(state || {})) {
       if (key === this.playerId) continue
@@ -481,18 +500,16 @@ export class MultiplayerClient {
       const p = meta?.player
       if (!p?.id) continue
       next.add(p.id)
-      this.remoteState.set(p.id, p)
-      this.onEvent({type:'state', player:p})
+      this._upsertRemote(p)
     }
     for (const oldId of this.presenceIds) {
       if (!next.has(oldId)) {
-        this.remoteState.delete(oldId)
-        this.onEvent({type:'leave', id:oldId})
+        this.pendingRemoteLeaves.set(oldId, t + REMOTE_LEAVE_GRACE_MS)
       }
     }
     this.presenceIds = next
-    this.lastPacketAt = now()
-    this.onEvent({type:'presence_count', count:this.presenceIds.size + 1, players:[...this.remoteState.values()]})
+    this.lastPacketAt = t
+    this.onEvent({type:'presence_count', count:this.remoteState.size + 1, players:[...this.remoteState.values()]})
     this._emitNetwork()
   }
 
@@ -615,6 +632,7 @@ export class MultiplayerClient {
       return
     }
     if (!this.connected || this.transport !== 'supabase') return
+    this._pruneRemoteLeaves()
     const hidden = typeof document !== 'undefined' && document.hidden
     const interval = hidden ? 900 : 130
     if (timestamp - this.lastSend < interval) return
@@ -643,7 +661,7 @@ export class MultiplayerClient {
       connected:this.connected,
       room:GLOBAL_MULTIPLAYER_ROOM,
       playerId:this.playerId,
-      onlineOthers:this.presenceIds.size,
+      onlineOthers:this.remoteState.size,
       supabaseConfigured:hasSupabase(),
       supabaseUrl:SUPABASE_URL ? SUPABASE_URL.replace(/^(https:\/\/[^.]+).*/, '$1…') : '',
       lastPacketAt:this.lastPacketAt,
@@ -667,5 +685,6 @@ export class MultiplayerClient {
     this.rt = null
     this.presenceIds.clear()
     this.remoteState.clear()
+    this.pendingRemoteLeaves.clear()
   }
 }

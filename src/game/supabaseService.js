@@ -176,56 +176,65 @@ export function clearAccountSession() {
 }
 
 const cleanUsername = value => String(value || '').trim().replace(/[^\p{L}\p{N} _.\-]/gu, '').replace(/\s+/g, ' ')
-const cleanEmail = value => String(value || '').trim().toLowerCase()
-const isEmail = value => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
 const profileFromRow = row => row ? { id:row.id, name:row.name, level:row.level, guildRank:row.guild_rank, lastLobby:row.last_lobby, updatedAt:row.updated_at ? new Date(row.updated_at).getTime() : 0, game:row.game_data || null } : null
 
 async function loadOrCreateOwnProfile(client, user, server = 'asterra-global') {
   const { data, error } = await client.from('player_profiles').select('*').eq('id', user.id).maybeSingle()
   if (error) return { ok:false, error:error.message }
   if (data) return { ok:true, profile:profileFromRow(data) }
-  const username = cleanUsername(user.user_metadata?.username) || cleanEmail(user.email).split('@')[0] || 'Aventureiro'
+  const username = cleanUsername(user.user_metadata?.username) || 'Aventureiro'
   const { data:created, error:insertError } = await client.from('player_profiles').insert({ id:user.id, user_id:user.id, name:username.slice(0,32), level:1, guild_rank:'E', last_lobby:server || 'asterra-global', game_data:null }).select('*').single()
   if (insertError) return { ok:false, error:insertError.message }
   return { ok:true, profile:profileFromRow(created) }
 }
 
 function makeSession(user, profile, server) {
-  return { accountId:user.id, username:profile?.name || cleanUsername(user.user_metadata?.username) || 'Aventureiro', email:user.email || '', server:server || profile?.lastLobby || 'asterra-global', loginTime:Date.now() }
+  return { accountId:user.id, username:profile?.name || cleanUsername(user.user_metadata?.username) || 'Aventureiro', server:server || profile?.lastLobby || 'asterra-global', loginTime:Date.now() }
 }
 
-export async function registerAccount({ email, username, password, server = 'asterra-global' }) {
+async function authenticateNickname(client, action, username, password) {
+  const { data, error } = await client.functions.invoke('account-auth', { body:{ action, username, password } })
+  if (error) {
+    const detail = await error.context?.json?.().catch(() => null)
+    return { ok:false, error:detail?.error || error.message || 'Não foi possível acessar o servidor de contas.' }
+  }
+  if (!data?.session?.access_token || !data.session.refresh_token) return { ok:false, error:data?.error || 'O servidor de contas não retornou uma sessão válida.' }
+  const { error:setSessionError } = await client.auth.setSession({ access_token:data.session.access_token, refresh_token:data.session.refresh_token })
+  if (setSessionError) return { ok:false, error:setSessionError.message }
+  const { data:userData, error:userError } = await client.auth.getUser()
+  if (userError || !userData.user) return { ok:false, error:userError?.message || 'Sessão da conta não encontrada.' }
+  return { ok:true, user:userData.user }
+}
+
+export async function registerAccount({ username, password, server = 'asterra-global' }) {
   const client = getSupabaseClient()
   if (!client) return { ok:false, error:'Servidor Supabase não conectado. Verifique sua conexão.' }
-  const cleanUser = cleanUsername(username), cleanMail = cleanEmail(email)
+  const cleanUser = cleanUsername(username)
   if (cleanUser.length < 3 || cleanUser.length > 20) return { ok:false, error:'O nickname deve ter entre 3 e 20 caracteres.' }
-  if (!isEmail(cleanMail)) return { ok:false, error:'Informe um e-mail válido.' }
   if (!password || password.length < 8) return { ok:false, error:'A senha deve ter pelo menos 8 caracteres.' }
   try {
-    const { data, error } = await client.auth.signUp({ email:cleanMail, password, options:{ data:{ username:cleanUser } } })
-    if (error) return { ok:false, error:error.message }
-    if (!data.user) return { ok:false, error:'Não foi possível criar a conta.' }
-    if (!data.session) return { ok:true, requiresEmailConfirmation:true, message:'Conta criada. Confirme o e-mail para entrar.' }
-    const ownProfile = await loadOrCreateOwnProfile(client, data.user, server)
+    const auth = await authenticateNickname(client, 'register', cleanUser, password)
+    if (!auth.ok) return auth
+    const ownProfile = await loadOrCreateOwnProfile(client, auth.user, server)
     if (!ownProfile.ok) return ownProfile
-    const session = makeSession(data.user, ownProfile.profile, server)
+    const session = makeSession(auth.user, ownProfile.profile, server)
     saveAccountSession(session)
     return { ok:true, session, profile:ownProfile.profile, isNew:true }
   } catch (err) { return { ok:false, error:String(err?.message || err) } }
 }
 
-export async function loginAccount({ email, password, server = null }) {
+export async function loginAccount({ username, password, server = null }) {
   const client = getSupabaseClient()
   if (!client) return { ok:false, error:'Servidor Supabase não conectado. Verifique sua conexão.' }
-  const cleanMail = cleanEmail(email)
-  if (!isEmail(cleanMail)) return { ok:false, error:'Informe o e-mail da conta.' }
+  const cleanUser = cleanUsername(username)
+  if (cleanUser.length < 3 || cleanUser.length > 20) return { ok:false, error:'Informe o nickname da conta.' }
   if (!password) return { ok:false, error:'Informe a senha.' }
   try {
-    const { data, error } = await client.auth.signInWithPassword({ email:cleanMail, password })
-    if (error || !data.user) return { ok:false, error:error?.message || 'Não foi possível autenticar a conta.' }
-    const ownProfile = await loadOrCreateOwnProfile(client, data.user, server || 'asterra-global')
+    const auth = await authenticateNickname(client, 'login', cleanUser, password)
+    if (!auth.ok) return auth
+    const ownProfile = await loadOrCreateOwnProfile(client, auth.user, server || 'asterra-global')
     if (!ownProfile.ok) return ownProfile
-    const session = makeSession(data.user, ownProfile.profile, server)
+    const session = makeSession(auth.user, ownProfile.profile, server)
     saveAccountSession(session)
     return { ok:true, session, profile:ownProfile.profile }
   } catch (err) { return { ok:false, error:String(err?.message || err) } }

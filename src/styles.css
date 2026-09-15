@@ -2199,6 +2199,17 @@
   color: #38bdf8;
 }
 
+.auth-server-fixed {
+  padding: 9px 12px;
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  border-radius: 9px;
+  background: rgba(14, 55, 88, 0.48);
+  color: #7dd3fc;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+}
+
 .auth-servers-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);

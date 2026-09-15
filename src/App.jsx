@@ -265,7 +265,7 @@ export default function App(){
       {panel==='map'&&<WorldMap hud={hud}/>} 
       {panel==='settings'&&<Settings hud={hud} apply={v=>call('applySettings',v)} connect={url=>call('connectMultiplayer',url)} setName={name=>call('setPlayerName',name)} call={call}/>} 
     </Overlay>}
-    {hud.needsNickname&&<AuthGate initialServer={hud.multiplayer?.room||'asterra-global'} onLogin={(session,profile)=>call('setPlayerAccount',session,profile)}/>}
+    {hud.needsNickname&&<AuthGate onLogin={(session,profile)=>call('setPlayerAccount',session,profile)}/>}
     
     {hud.dungeonModal && <GateModal modal={hud.dungeonModal} call={call} onClose={() => call('closeGateModal')} />}
     {hud.dungeonCompletion && <DungeonCompletionModal completion={hud.dungeonCompletion} onClose={() => call('closeDungeonCompletion')} />}
@@ -321,7 +321,7 @@ function Inventory({hud,equip,unequip,call}){
   const activeClassId=hud.classState?.activeClassId||'mercenary_swordsman'
   const activeClass=CLASSES_LIST.find(c=>c.id===activeClassId)||CLASSES_LIST[0]||{name:'Mercenário',icon:'⚔️',tier:'COMMON'}
   const activeTier=CLASS_TIERS[activeClass.tier]||CLASS_TIERS.COMMON||{color:'#38bdf8'}
-  const [mobileTab,setMobileTab]=useState('bag') // 'bag' | 'character'
+  const [mobileTab,setMobileTab]=useState('character') // 'bag' | 'character'
   const [tab,setTab]=useState('all')
   const [rarity,setRarity]=useState('all')
   const [selectedBagItem,setSelectedBagItem]=useState(null)
@@ -1620,19 +1620,14 @@ function Setting({label,value,children}){return <label className="setting"><span
 function formatRefresh(ms){if(ms==null)return '--:--';const s=Math.max(0,Math.ceil(ms/1000));return `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`}
 
 
-function AuthGate({ initialServer = 'asterra-global', onLogin }) {
+function AuthGate({ onLogin }) {
   const [mode, setMode] = useState('login')
-  const [email, setEmail] = useState('')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const [selectedServer, setSelectedServer] = useState(() => {
-    const saved = getSavedAccountSession()
-    return saved?.server || initialServer || 'asterra-global'
-  })
+  const selectedServer = 'asterra-global'
   const [loading, setLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
-  const [successMsg, setSuccessMsg] = useState('')
   const [pwaState, setPwaState] = useState(getPWAState)
 
   useEffect(() => {
@@ -1644,26 +1639,17 @@ function AuthGate({ initialServer = 'asterra-global', onLogin }) {
     if (saved?.username) {
       setUsername(saved.username)
     }
-    if (saved?.email) setEmail(saved.email)
-    if (saved?.server) {
-      setSelectedServer(saved.server)
-    }
   }, [])
 
   const handleSubmit = async (e) => {
     e?.preventDefault?.()
     setErrorMsg('')
-    setSuccessMsg('')
     const clean = username.trim()
-    if (!email.trim()) {
-      setErrorMsg('Informe o e-mail da conta.')
+    if (clean.length < 3) {
+      setErrorMsg('O nickname deve ter pelo menos 3 caracteres.')
       return
     }
     if (mode === 'register') {
-      if (clean.length < 3) {
-        setErrorMsg('O nome de usuário deve ter pelo menos 3 caracteres.')
-        return
-      }
       if (!password || password.length < 8) {
         setErrorMsg('A senha deve ter pelo menos 8 caracteres.')
         return
@@ -1677,19 +1663,15 @@ function AuthGate({ initialServer = 'asterra-global', onLogin }) {
     setLoading(true)
     try {
       if (mode === 'register') {
-        const res = await registerAccount({ email, username: clean, password, server: selectedServer })
+        const res = await registerAccount({ username: clean, password, server: selectedServer })
         if (!res.ok) {
           setErrorMsg(res.error || 'Erro ao criar conta.')
           setLoading(false)
           return
         }
-        if (res.requiresEmailConfirmation) {
-          setSuccessMsg(res.message)
-          return
-        }
         onLogin(res.session, res.profile)
       } else {
-        const res = await loginAccount({ email, password, server: selectedServer })
+        const res = await loginAccount({ username: clean, password, server: selectedServer })
         if (!res.ok) {
           setErrorMsg(res.error || 'Erro ao entrar na conta.')
           setLoading(false)
@@ -1719,7 +1701,7 @@ function AuthGate({ initialServer = 'asterra-global', onLogin }) {
         <div className="auth-header">
           <small>ASTERRA ONLINE MMORPG</small>
           <h1>{mode === 'login' ? 'Portal de Acesso' : 'Criar Nova Conta'}</h1>
-          <p>{mode === 'login' ? 'Seu portal permanece aberto para escolher seu servidor e entrar.' : 'Crie sua conta para jogar e salvar seu progresso na nuvem.'}</p>
+          <p>{mode === 'login' ? 'Entre com seu nickname e conecte-se ao Asterra Global.' : 'Crie sua conta com nickname e senha para salvar seu progresso na nuvem.'}</p>
         </div>
 
         <div className="auth-tabs">
@@ -1741,25 +1723,11 @@ function AuthGate({ initialServer = 'asterra-global', onLogin }) {
 
         <form className="auth-form" onSubmit={handleSubmit}>
           {errorMsg && <div className="auth-error">⚠ {errorMsg}</div>}
-          {successMsg && <div className="auth-success">✓ {successMsg}</div>}
 
           <div className="auth-field">
-            <label>E-mail da Conta</label>
-            <input
-              autoFocus
-              type="email"
-              autoComplete="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              placeholder="voce@email.com"
-              disabled={loading}
-            />
+            <label>{mode === 'register' ? 'Nome do Aventureiro (Nickname)' : 'Nickname'}</label>
+            <input autoFocus type="text" maxLength={20} autoComplete="username" value={username} onChange={e => setUsername(e.target.value)} placeholder="Ex.: Aquino" disabled={loading}/>
           </div>
-
-          {mode === 'register' && <div className="auth-field">
-            <label>Nome do Aventureiro (Nickname)</label>
-            <input type="text" maxLength={20} value={username} onChange={e => setUsername(e.target.value)} placeholder="Ex.: Aquino" disabled={loading}/>
-          </div>}
 
           <div className="auth-field">
             <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1788,24 +1756,7 @@ function AuthGate({ initialServer = 'asterra-global', onLogin }) {
             </div>
           )}
 
-          <div className="auth-servers-section">
-            <label>
-              <b>Servidor Selecionado:</b>
-              <span>{multiplayerLobbies.find(x => x.id === selectedServer)?.name || selectedServer}</span>
-            </label>
-            <div className="auth-servers-grid">
-              {multiplayerLobbies.map(l => (
-                <div
-                  key={l.id}
-                  className={`auth-server-card ${selectedServer === l.id ? 'active' : ''}`}
-                  onClick={() => setSelectedServer(l.id)}
-                >
-                  <b>{l.name}</b>
-                  <small>{selectedServer === l.id ? '● SELECIONADO' : '○ DISPONÍVEL'}</small>
-                </div>
-              ))}
-            </div>
-          </div>
+          <div className="auth-server-fixed">● Asterra Global — conexão automática</div>
 
           <button type="submit" className="auth-submit-btn" disabled={loading}>
             {loading ? 'Conectando ao Mundo...' : mode === 'login' ? '⚔ Entrar no Mundo' : '✨ Criar Conta e Jogar'}
