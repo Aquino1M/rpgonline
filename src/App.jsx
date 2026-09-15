@@ -104,13 +104,13 @@ export default function App(){
 
     <section className="hud-card player-card glass">
       <div className="brand-row">
-        <div><b>SHADOW ASCENSION</b><small>☀ {hud.time} • {weatherIcon(hud.weather)} {hud.weather}</small></div>
+        <div><b>SHADOW ASCENSION</b><small>V0.9.11 • ONLINE • ☀ {hud.time} • {weatherIcon(hud.weather)} {hud.weather}</small></div>
         <div style={{display:'flex',gap:'6px',alignItems:'center'}}>
           <button className="class-chip" onClick={()=>call('togglePanel','grimoire')} style={{'--tier-color':activeTier.color}} title="Clique para abrir o Grimório do Despertar">{activeTier.icon} {activeClass.name}</button>
           <span className="level-chip">NV. {hud.level}</span>
         </div>
       </div>
-      <div className="identity-line"><strong>{hud.playerName||'Aventureiro'}</strong><span>RANK {hud.guildRank||'E'}</span></div><div className="zone-line"><strong>{hud.currentCity||hud.zone}</strong><span>⚔ {hud.atk} &nbsp; 🛡 {hud.def}</span></div>
+      <div className="identity-line"><strong>{hud.playerName||'Aventureiro'}</strong><span>RANK {hud.guildRank||'E'}</span></div><div className="zone-line"><strong>{hud.currentCity||hud.zone}</strong><span>⚔ {hud.atk} &nbsp; 🛡 {hud.def}</span></div><div className="position-line">COORD. {Math.round(hud.playerPosition?.x||0)}, {Math.round(hud.playerPosition?.z||0)}</div>
       <Bar label={`HP ${Math.floor(hud.hp)}/${hud.maxHp}${hud.inCombat ? ` [⚔ Em Combate ${hud.combatTimer||8}s]` : (hud.hp < hud.maxHp && hud.stamina >= hud.maxStamina - 0.5) ? ' [💚 Regen]' : ''}`} value={hp} cls="hp"/><Bar label={`Vigor ${Math.floor(hud.stamina)}/${hud.maxStamina}`} value={st} cls="stamina"/><Bar label={`XP ${Math.floor(hud.xp)}/${hud.nextXp}`} value={xp} cls="xp"/>
       <div className="currency-row"><span>◈ {hud.gold} ouro</span><span>◆ {hud.ores||0} minério</span><span>📖 {grimoireQty} grimório{grimoireQty!==1?'s':''}</span></div>
     </section>
@@ -590,8 +590,13 @@ function MobileControls({hud,abilities,call,touch}){
   const cameraPointerRef=useRef(null)
   const lastCamPosRef=useRef({x:0,y:0})
   const stickCenterRef=useRef(null)
+  const supportsPointerEvents=typeof window!=='undefined'&&'PointerEvent' in window
 
   const potionQty=hud.inventory?.find(i=>i.subtype==='potion')?.qty||0
+  const press=(method)=>e=>{e.preventDefault();e.stopPropagation();call(method)}
+  const startHold=(method)=>e=>{e.preventDefault();e.stopPropagation();if(e.pointerId!=null)try{e.currentTarget.setPointerCapture?.(e.pointerId)}catch{};call(method,true)}
+  const stopHold=(method)=>e=>{e.stopPropagation();if(e.pointerId!=null){try{e.currentTarget.releasePointerCapture?.(e.pointerId)}catch{}}call(method,false)}
+  const touchFallback=handler=>e=>{if(!supportsPointerEvents)handler(e)}
 
   // Movement Joystick Touch handlers (Dynamic floating joystick on left half)
   const handleJoystickDown=(e)=>{
@@ -726,12 +731,12 @@ function MobileControls({hud,abilities,call,touch}){
       />
 
       <div className="mobile-actions">
-        <button className="mobile-attack" onPointerDown={e=>{e.stopPropagation();e.currentTarget.setPointerCapture?.(e.pointerId);call('setAutoAttack',true)}} onPointerUp={e=>{e.stopPropagation();try{e.currentTarget.releasePointerCapture?.(e.pointerId)}catch{};call('setAutoAttack',false)}} onPointerCancel={e=>{e.stopPropagation();call('setAutoAttack',false)}}>⚔<small>ATACAR</small></button>
-        <button className="mobile-block" onPointerDown={e=>{e.stopPropagation();e.currentTarget.setPointerCapture?.(e.pointerId);call('setMobileBlock',true)}} onPointerUp={e=>{e.stopPropagation();try{e.currentTarget.releasePointerCapture?.(e.pointerId)}catch{};call('setMobileBlock',false)}} onPointerCancel={e=>{e.stopPropagation();call('setMobileBlock',false)}}>🛡<small>DEFESA</small></button>
-        <button className="mobile-dash" onPointerDown={e=>{e.preventDefault();e.stopPropagation();call('dash')}}>↯<small>ESQUIVA</small></button>
+        <button className="mobile-attack" onPointerDown={startHold('setAutoAttack')} onPointerUp={stopHold('setAutoAttack')} onPointerCancel={stopHold('setAutoAttack')} onTouchStart={touchFallback(startHold('setAutoAttack'))} onTouchEnd={touchFallback(stopHold('setAutoAttack'))}>⚔<small>ATACAR</small></button>
+        <button className="mobile-block" onPointerDown={startHold('setMobileBlock')} onPointerUp={stopHold('setMobileBlock')} onPointerCancel={stopHold('setMobileBlock')} onTouchStart={touchFallback(startHold('setMobileBlock'))} onTouchEnd={touchFallback(stopHold('setMobileBlock'))}>🛡<small>DEFESA</small></button>
+        <button className="mobile-dash" onPointerDown={press('dash')} onTouchStart={touchFallback(press('dash'))}>↯<small>ESQUIVA</small></button>
         <button className={`mobile-use ${hud.actionButton?'has-context':''}`} onClick={(e)=>{e.stopPropagation();call('interact')}}>{hud.actionButton?.icon||'☞'}<small>USAR</small></button>
-        <button className={`mobile-run ${hud.mobileRunning?'active':''}`} onPointerDown={e=>{e.preventDefault();e.stopPropagation();e.currentTarget.setPointerCapture?.(e.pointerId);call('setMobileRun',true)}} onPointerUp={e=>{e.stopPropagation();try{e.currentTarget.releasePointerCapture?.(e.pointerId)}catch{};call('setMobileRun',false)}} onPointerCancel={e=>{e.stopPropagation();call('setMobileRun',false)}} onLostPointerCapture={()=>call('setMobileRun',false)}>🏃<small>{hud.mobileRunning?'CORRENDO':'CORRER'}</small></button>
-        <button className="mobile-jump" onPointerDown={e=>{e.preventDefault();e.stopPropagation();call('setMobileJump')}}>↥<small>PULAR</small></button>
+        <button className={`mobile-run ${hud.mobileRunning?'active':''}`} onPointerDown={startHold('setMobileRun')} onPointerUp={stopHold('setMobileRun')} onPointerCancel={stopHold('setMobileRun')} onLostPointerCapture={()=>call('setMobileRun',false)} onTouchStart={touchFallback(startHold('setMobileRun'))} onTouchEnd={touchFallback(stopHold('setMobileRun'))}>🏃<small>{hud.mobileRunning?'CORRENDO':'CORRER'}</small></button>
+        <button className="mobile-jump" onPointerDown={press('setMobileJump')} onTouchStart={touchFallback(press('setMobileJump'))}>↥<small>PULAR</small></button>
       </div>
       <div className="mobile-powers-bottom">
         {abilities.map(a=><button key={a.slot} disabled={!a.ready||hud.stamina<a.cost} onClick={(e)=>{e.stopPropagation();call('castAbility',a.slot)}} title={`${a.name} • ${a.cost} vigor`}><span>{a.icon}</span><small>{a.short||a.name}</small>{a.remaining>0&&<em>{a.remaining.toFixed(1)}</em>}</button>)}
