@@ -318,6 +318,9 @@ class InventoryErrorBoundary extends React.Component {
 
 function Inventory({hud,equip,unequip,call}){
   const gear=hud.equipment||{}
+  const activeClassId=hud.classState?.activeClassId||'mercenary_swordsman'
+  const activeClass=CLASSES_LIST.find(c=>c.id===activeClassId)||CLASSES_LIST[0]||{name:'Mercenário',icon:'⚔️',tier:'COMMON'}
+  const activeTier=CLASS_TIERS[activeClass.tier]||CLASS_TIERS.COMMON||{color:'#38bdf8'}
   const [mobileTab,setMobileTab]=useState('bag') // 'bag' | 'character'
   const [tab,setTab]=useState('all')
   const [rarity,setRarity]=useState('all')

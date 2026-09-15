@@ -70,7 +70,11 @@
 .app.touch-ui .player-card .bar-wrap{margin:3px 0!important}
 .app.touch-ui .player-card .bar-label{font-size:var(--t-small)!important;margin:0 0 2px 1px!important}
 .app.touch-ui .player-card .bar{height:max(6px,calc(var(--t-small) - 1px))!important}
-.app.touch-ui .player-card .currency-row{display:none!important}
+.app.touch-ui .player-card .currency-row{
+  display:flex!important;flex-wrap:wrap!important;justify-content:flex-start!important;
+  gap:5px 8px!important;margin-top:6px!important;padding-top:5px!important;
+  font-size:var(--t-small)!important;
+}
 
 /* Minimap scales from the same setting. */
 .app.touch-ui .minimap{
@@ -328,8 +332,8 @@
 
 /* ---------- Landscape: phone/tablet layout matching Galaxy A55 reference ---------- */
 @media (orientation:landscape) and (max-height:720px){
-  .app.touch-ui .player-card{max-width:30vw!important;max-height:32vh!important}
-  .app.touch-ui .player-card .currency-row{display:none!important}
+  .app.touch-ui .player-card{max-width:30vw!important;max-height:none!important;overflow:visible!important}
+  .app.touch-ui .player-card .currency-row{display:flex!important}
   .app.touch-ui .minimap{max-width:18vw!important}
   .app.touch-ui .dungeon-card{top:max(5px,env(safe-area-inset-top))!important;width:min(310px,40vw)!important;max-width:40vw!important}
   .app.touch-ui .target-card{top:82px!important;width:min(280px,36vw)!important}
