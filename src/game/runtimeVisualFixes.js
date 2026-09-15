@@ -43,6 +43,9 @@ if (!ShadowGame.prototype[PATCH_FLAG]) {
     for (const gate of game?.gateManager?.activeGates || []) {
       points.push({ x: gate.x, z: gate.z, r: 10 })
     }
+    for (const camp of game?.campManager?.camps || []) {
+      points.push({ x: camp.x, z: camp.z, r: 12 })
+    }
     return points
   }
 

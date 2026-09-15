@@ -406,3 +406,19 @@
 @media (pointer:coarse) and (orientation:portrait){
   .app.touch-ui .window-grimoire .grimoire-layout{grid-template-columns:1fr!important}.app.touch-ui .window-grimoire .classes-collection{max-height:none!important;overflow:visible!important}.app.touch-ui .map-toolbar .map-hint{display:none!important}
 }
+
+/* Inventory tabs are exclusive on touch; each active screen owns the full panel. */
+.inventory-rpg-container.mobile-tab-character .character-hub,
+.inventory-rpg-container.mobile-tab-bag .bag-rpg{
+  width:100%!important;max-width:none!important;height:auto!important;min-height:0!important;overflow:visible!important;
+}
+.app.touch-ui .window-inventory .inventory-rpg-container.mobile-tab-character .character-display-stage{
+  min-height:260px!important;
+}
+.app.touch-ui .window-inventory .inventory-rpg-container.mobile-tab-character .equip-slots-layout{
+  max-width:620px!important;margin:auto!important;
+}
+.app.touch-ui .window-inventory .inventory-rpg-container.mobile-tab-character .inspect-gear-card,
+.app.touch-ui .window-inventory .inventory-rpg-container.mobile-tab-character .item-compare-panel{
+  max-width:620px!important;margin-left:auto!important;margin-right:auto!important;
+}

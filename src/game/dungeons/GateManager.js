@@ -661,6 +661,8 @@ export class GateManager {
 
     inst.floorData = floorData
     inst.floorGroup = floorData.group
+    inst.floorGroup.userData ||= {}
+    inst.floorGroup.userData.dungeonInstanceId = inst.id
     this.game.scene.add(floorData.group)
 
     // Teleport player to safe spawn
@@ -874,9 +876,7 @@ export class GateManager {
     const inst = this.activeInstance
     if (!inst) return
 
-    if (inst.floorGroup) {
-      this.game.scene.remove(inst.floorGroup)
-    }
+    this.clearDungeonGeometry(inst.id)
     this.game.clearEnemies()
 
     // Restore open world
@@ -884,6 +884,7 @@ export class GateManager {
     this.game.state.dungeon = null
     this.game.state.dungeonCompletion = null
     this.game.activeWorld = 'open'
+    this.game.dungeonArena.visible = false
     this.game.setWorldVisible(true)
 
     // Return player to position before entering
@@ -898,5 +899,14 @@ export class GateManager {
     this.game.scene.fog.far = 155
 
     this.game.toast?.('Você retornou ao mundo de Asterra.')
+  }
+
+  clearDungeonGeometry(instanceId) {
+    for (const child of [...this.game.scene.children]) {
+      if (child.userData?.dungeonInstanceId === instanceId) this.game.scene.remove(child)
+    }
+    this.game.dungeonArena?.children?.forEach(child => {
+      if (child.userData?.__modernDungeonDynamic) child.visible = false
+    })
   }
 }

@@ -331,6 +331,7 @@ function Inventory({hud,equip,unequip,call}){
   const categories={
     all:()=>true,
     equipment:it=>['weapon','armor','boots','talisman'].includes(it.type),
+    armor:it=>['armor','boots','talisman'].includes(it.type),
     tools:it=>it.type==='tool'||it.subtype==='axe'||it.subtype==='pickaxe',
     consumables:it=>it.type==='consumable'||it.subtype==='potion'||it.subtype==='grimoire',
     drops:it=>it.type==='material'||it.type==='resource'||['monster-drop','wood','coal','iron','fish'].includes(it.subtype),
@@ -473,6 +474,7 @@ function Inventory({hud,equip,unequip,call}){
           <div className="bag-category-tabs inventory-tabs native-tab-row category-tab-wrap">
             <button className={tab==='all'?'active':''} onPointerUp={tabPointer(setTab,'all')} onClick={()=>setTab('all')}>Todos ({items.length})</button>
             <button className={tab==='equipment'?'active':''} onPointerUp={tabPointer(setTab,'equipment')} onClick={()=>setTab('equipment')}>⚔ Equipamentos</button>
+            <button className={tab==='armor'?'active':''} onPointerUp={tabPointer(setTab,'armor')} onClick={()=>setTab('armor')}>🛡 Armaduras</button>
             <button className={tab==='tools'?'active':''} onPointerUp={tabPointer(setTab,'tools')} onClick={()=>setTab('tools')}>🪓 Ferramentas</button>
             <button className={tab==='consumables'?'active':''} onPointerUp={tabPointer(setTab,'consumables')} onClick={()=>setTab('consumables')}>🧪 Consumíveis</button>
             <button className={tab==='drops'?'active':''} onPointerUp={tabPointer(setTab,'drops')} onClick={()=>setTab('drops')}>🐟 Drops & Recursos</button>

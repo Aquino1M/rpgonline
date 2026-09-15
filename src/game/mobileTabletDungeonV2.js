@@ -82,7 +82,7 @@ function restoreLegacyDungeonRoot(game) {
   const root = game?.dungeonArena
   if (!root) return
   for (const child of root.children || []) {
-    if (child.userData?.[LEGACY]) child.visible = true
+    if (child.userData?.[LEGACY]) child.visible = false
   }
   root.visible = false
 }
@@ -180,6 +180,10 @@ function patchShadowGame() {
   const p = ShadowGame?.prototype
   if (!p || p[PATCH]) return
   Object.defineProperty(p, PATCH, { value: true, configurable: false })
+
+  // GateManager owns dungeons now. Keeping the retired portal route allowed its
+  // old arena decor to be revived in the open world after returning from a gate.
+  p.seedPortals = function disableLegacyPortalsV2() { this.portals = [] }
 
   if (typeof p.init === 'function') {
     const prev = p.init
