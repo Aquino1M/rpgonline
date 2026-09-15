@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS public.player_profiles (
   name TEXT NOT NULL DEFAULT 'Aventureiro',
   level INTEGER DEFAULT 1,
   guild_rank TEXT DEFAULT 'E',
-  last_lobby TEXT DEFAULT 'asterra-01',
+  last_lobby TEXT DEFAULT 'asterra-global',
   game_data JSONB,
   created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc', NOW()),
   updated_at TIMESTAMPTZ DEFAULT TIMEZONE('utc', NOW())

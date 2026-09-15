@@ -3,7 +3,7 @@ import { WORLD, ZONES, RARITIES, CITIES, ROADS, LANDMARKS, NPC_DEFS, PORTAL_NAME
 import { hash2, clamp, damp, zoneAt, weightedPick, fmtTime } from './utils.js'
 import { AssetLibrary } from './assetLoader.js'
 import { defaultClassState, starterInventory, defaultQuestState, merchantStock, shopRefreshInfo, makeItem, makeMaterialDrop, makeResourceDrop, makeTool, rollLootRarity, normalizeSaveState, totalEquipmentStats, progressQuest, activateQuest, claimQuest, refreshGuildBoard, activateGuildMission, progressGuildMissions, claimGuildMission, getGuildRank, guildRankRequirement, calculateKillXP, resolveEntityProgression, attributeBonuses, calculateGrimoireCost, getNextGrimoireLevel } from './rpgSystems.js'
-import { MultiplayerClient, sameOriginMultiplayerUrl, sameOriginHttpMultiplayerUrl } from './multiplayer.js'
+import { MultiplayerClient, sameOriginMultiplayerUrl, sameOriginHttpMultiplayerUrl, DEFAULT_MULTIPLAYER_ROOM } from './multiplayer.js'
 import { CLASSES_LIST, rollDestinyClass, CLASS_RANKS, getClassRankInfo } from './classesData.js'
 import { TRAVEL_NODES, calculateTravelCost, rollRoadAmbush, defaultTravelState } from './fastTravel.js'
 import { GateManager } from './dungeons/GateManager.js'
@@ -29,8 +29,9 @@ export class ShadowGame {
     this.abilityCooldowns=Object.fromEntries(ABILITIES.map(a=>[a.id,0])); this.raycaster=new THREE.Raycaster(); this.discovered=new Set(); this.savedDiscovered=[]; this.currentMerchantZoneMin=1; this.currentMerchantZoneMax=10; this.currentMerchantZoneId='aurora'; this.currentMerchantCityId='aurora-city'; this.localUpdatedAt=0; this.serverProfileTimestamp=0
     let savedSession = null
     try { savedSession = JSON.parse(localStorage.getItem('shadow_rpg_account_session') || 'null') } catch {}
+    this.accountId = String(savedSession?.accountId || '')
     const savedNick = (savedSession?.username || localStorage.getItem('shadow-ascension-nick') || '').trim()
-    const savedLobby = (savedSession?.server || localStorage.getItem('shadow-ascension-last-lobby') || '').trim() || 'asterra-01'
+    const savedLobby = DEFAULT_MULTIPLAYER_ROOM
     const hasValidLogin = Boolean(savedSession?.accountId && savedSession?.username)
     if (savedSession?.accountId) localStorage.setItem('shadow-ascension-player-id', savedSession.accountId)
     this.settings={renderDistance:2,pixelRatio:Math.min(window.devicePixelRatio||1,1.5),uiScale:1.2,shadows:true,invertCameraX:false,invertCameraY:false,invertCamera:false,multiplayerUrl:localStorage.getItem('shadow-ascension-mp-url')||''}
@@ -47,7 +48,7 @@ export class ShadowGame {
       economy:{cityId:'aurora-city',...CITY_ECONOMIES['aurora-city']},party:{id:null,leaderId:null,members:[],totalXP:0},onlinePlayers:[],
       multiplayer:{connected:false,url:this.settings.multiplayerUrl,room:savedLobby,players:0,serverSave:false,transport:'offline',reason:'',latencyMs:0,quality:'offline',reconnecting:false},mobileRunning:false,
     }
-    this.savedPosition={...SAFE_SPAWNS['aurora-city']}; this.loadGame(); this.state.party={id:null,leaderId:null,members:[],totalXP:0}; this.discovered=new Set(this.savedDiscovered||[]); this.init()
+    this.savedPosition={...SAFE_SPAWNS['aurora-city']}; this.loadGame(); if(hasValidLogin){this.state.playerName=savedNick;this.state.needsNickname=false;this.state.multiplayer.room=DEFAULT_MULTIPLAYER_ROOM} this.state.party={id:null,leaderId:null,members:[],totalXP:0}; this.discovered=new Set(this.savedDiscovered||[]); this.init()
   }
 
   init(){
@@ -242,6 +243,8 @@ export class ShadowGame {
   }
 
   isInsideCitySafeZone(x,z,pad=0){return !!this.cityAt(x,z,pad)}
+  isPlayerCombatVulnerable(){return !!this.state.dungeon||!this.isInsideCitySafeZone(this.player.position.x,this.player.position.z,1)}
+  canDungeonOccupy(x,z,radius=.55){return Math.hypot(x,z)<=Math.max(0,(this.dungeonBounds?.playRadius||34)-radius)}
 
   isOnRoad(x,z,pad=3.5){
     const byId=new Map(CITIES.map(c=>[c.id,c]))
@@ -316,7 +319,7 @@ export class ShadowGame {
   }
   moveWithCollisions(delta){
     const p=this.player.position,r=this.state.mount.active?.85:.55
-    if(this.state.dungeon){p.add(delta);return}
+    if(this.state.dungeon){const x=p.x+delta.x,z=p.z+delta.z;if(this.canDungeonOccupy(x,z,r)){p.x=x;p.z=z}return}
     const x=p.x+delta.x,z=p.z+delta.z
     if(this.canOccupy(x,z,r)){p.x=x;p.z=z;return}
     if(this.canOccupy(x,p.z,r))p.x=x
@@ -368,10 +371,7 @@ export class ShadowGame {
 
   createDungeonArena(){
     this.dungeonArena=new THREE.Group();this.dungeonArena.name='DungeonWorld';this.dungeonArena.visible=false;this.scene.add(this.dungeonArena)
-    const floor=mesh(new THREE.CylinderGeometry(30,32,1.1,40),mat(0x242637));floor.position.y=-.55;this.dungeonArena.add(floor)
-    const ring=mesh(new THREE.TorusGeometry(22,.45,8,40),mat(0x4b405f,{emissive:0x140b25,emissiveIntensity:.4}));ring.rotation.x=Math.PI/2;ring.position.y=.08;this.dungeonArena.add(ring)
-    for(let i=0;i<18;i++){const a=i/18*Math.PI*2,r=22+(i%3)*2;const p=mesh(new THREE.BoxGeometry(1.4+(i%2),4+(i%4),1.4),mat(i%3===0?0x43364d:0x313445));p.position.set(Math.cos(a)*r,(4+(i%4))/2,Math.sin(a)*r);p.rotation.y=-a;this.dungeonArena.add(p)}
-    for(let i=0;i<12;i++){const a=i/12*Math.PI*2,r=13+(i%2)*4;const crystal=mesh(new THREE.OctahedronGeometry(.45+(i%3)*.12),new THREE.MeshStandardMaterial({color:0x8b5cf6,emissive:0x4c1d95,emissiveIntensity:1.1}));crystal.position.set(Math.cos(a)*r,.8,Math.sin(a)*r);this.dungeonArena.add(crystal)}
+    this.dungeonBounds=null
   }
 
 
@@ -1811,7 +1811,7 @@ export class ShadowGame {
           const playerCenter = this.player.position.clone().add(new THREE.Vector3(0,1,0))
           if(p.pos.distanceTo(playerCenter) <= 1.25){
             hit = true
-            if(this.invuln <= 0 && !this.isInsideCitySafeZone(this.player.position.x, this.player.position.z, 1)){
+            if(this.invuln <= 0 && this.isPlayerCombatVulnerable()){
               let dealt = Math.max(2, Math.round(p.dmg - this.state.def * 0.38))
               if(this.state.blocking) dealt = Math.max(1, Math.round(dealt * 0.3))
               this.damagePlayer(dealt)
@@ -1948,7 +1948,7 @@ export class ShadowGame {
     if(!['weapon','armor','boots','talisman'].includes(slot))return
     const old=this.state.equipment[slot];this.state.equipment[slot]={...item};this.state.inventory=this.state.inventory.filter(x=>x.id!==id);if(old)this.state.inventory.unshift(old);this.recalcStats();this.saveGame()
   }
-  unequip(slot){const item=this.state.equipment[slot];if(!item)return;if(this.state.inventory.length>=40){this.toast('Mochila cheia.');return}this.state.inventory.unshift(item);this.state.equipment[slot]=null;this.recalcStats()}
+  unequip(slot){const item=this.state.equipment[slot];if(!item)return;if(this.state.inventory.length>=40){this.toast('Mochila cheia.');return}this.state.inventory.unshift(item);this.state.equipment[slot]=null;this.recalcStats();this.saveGame()}
   sellItem(id){
     const i=this.state.inventory.findIndex(x=>x.id===id);if(i<0)return
     const item=this.state.inventory[i],qty=Math.max(1,item.qty||1)
@@ -2259,14 +2259,13 @@ export class ShadowGame {
   }
 
   enterDungeon(p){
-    this.state.mount.active=false;this.mountModel.visible=false;this.player.position.y=0;this.dungeonReturnPosition={x:this.player.position.x,z:this.player.position.z}
-    this.state.dungeon={name:p.name,rarity:p.rarity.name,color:p.rarity.color,level:p.level,floor:1,floors:p.floors,transition:false,worldSeed:Math.floor(hash2(Math.round(p.x),Math.round(p.z))*999999)};this.clearEnemies();this.setWorldVisible(false);this.dungeonArena.visible=true;this.activeWorld='dungeon';this.player.position.set(0,0,9);this.scene.background.set(0x090711);this.scene.fog.color.set(0x090711);this.scene.fog.near=22;this.scene.fog.far=62;this.spawnDungeonFloor();this.closePanel();this.toast(`Entrando em ${p.name} — mundo instanciado`)
+    this.gateManager?.enterLegacyPortal(p)
   }
   setWorldVisible(v){for(const c of this.chunks.values())c.group.visible=v;for(const c of this.cityGroups||[])c.group.visible=v;for(const r of this.roadMeshes||[])r.mesh.visible=v;for(const lm of this.landmarkMeshes||[])lm.group.visible=v;for(const n of this.npcs)n.g.visible=v;for(const p of this.portals)p.g.visible=v}
   clearEnemies(){for(const e of this.enemies){this.worldRoot.remove(e.g);this.dungeonArena.remove(e.g)}this.enemies=[]}
   repopulateVisibleChunks(){for(const c of this.chunks.values())this.spawnChunkMobs(c.cx,c.cz,c.zone,c.key)}
   spawnDungeonFloor(){const d=this.state.dungeon;if(!d)return;this.toast(`${d.name} • Andar ${d.floor}/${d.floors}`);const count=4+d.floor*2;for(let i=0;i<count;i++){const a=i/count*Math.PI*2,r=9+(i%3)*4;this.enemies.push(this.makeEnemy(Math.cos(a)*r,Math.sin(a)*r,d.level+d.floor*2,`Guardião do Andar ${d.floor}`,false,null,null,`d:${d.worldSeed}:${d.floor}:mob:${i}`))}if(d.floor===d.floors)this.enemies.push(this.makeEnemy(0,-17,d.level+d.floor*3,`Chefe — ${d.name}`,true,null,null,`d:${d.worldSeed}:${d.floor}:boss`))}
-  advanceDungeonIfClear(){const d=this.state.dungeon;if(!d)return;if(!this.enemies.some(e=>!e.dead)&&!d.transition){d.transition=true;setTimeout(()=>{if(!this.state.dungeon)return;if(d.floor<d.floors){d.floor++;d.transition=false;this.spawnDungeonFloor()}else{this.state.stats.dungeons++;progressQuest(this.state,'dungeon','clear',1);progressGuildMissions(this.state,'dungeon','clear',1);this.state.dungeon=null;this.activeWorld='open';this.dungeonArena.visible=false;this.setWorldVisible(true);this.player.position.set(this.dungeonReturnPosition?.x||0,0,(this.dungeonReturnPosition?.z||0)+5);this.repopulateVisibleChunks();this.scene.fog.near=65;this.scene.fog.far=155;d.transition=false;this.toast('Masmorra concluída! Retornando a Asterra.')}} ,850)}}
+  advanceDungeonIfClear(){if(this.gateManager?.activeInstance)return;const d=this.state.dungeon;if(!d)return;if(!this.enemies.some(e=>!e.dead)&&!d.transition){d.transition=true;setTimeout(()=>{if(!this.state.dungeon)return;if(d.floor<d.floors){d.floor++;d.transition=false;this.spawnDungeonFloor()}else{this.state.stats.dungeons++;progressQuest(this.state,'dungeon','clear',1);progressGuildMissions(this.state,'dungeon','clear',1);this.state.dungeon=null;this.activeWorld='open';this.dungeonArena.visible=false;this.setWorldVisible(true);this.player.position.set(this.dungeonReturnPosition?.x||0,0,(this.dungeonReturnPosition?.z||0)+5);this.repopulateVisibleChunks();this.scene.fog.near=65;this.scene.fog.far=155;d.transition=false;this.toast('Masmorra concluída! Retornando a Asterra.')}} ,850)}}
 
   updatePortals(t){for(const p of this.portals){const d=Math.hypot(this.player.position.x-p.x,this.player.position.z-p.z);p.g.visible=!this.state.dungeon&&d<WORLD.decorDistance;if(p.g.visible){p.ring.rotation.z+=.008;p.core.rotation.z-=.004;p.sparks.forEach((s,i)=>{const a=t*1.5+s.userData.phase;s.position.set(Math.cos(a)*1.8,1.7+Math.sin(a*1.7)*.9,Math.sin(a)*.15)})}}}
 
@@ -2315,7 +2314,7 @@ export class ShadowGame {
                 victimBot.hp=Math.max(0,victimBot.hp-dmg)
                 this.updatePlayerNameplate(victimBot.label,{name:`${victimBot.name} [IA]`,level:victimBot.level,hp:victimBot.hp,maxHp:victimBot.maxHp,guildRank:victimBot.guildRank},false)
                 if(victimBot.hp<=0)this.killBot(victimBot,{byPlayer:false})
-              }else if(this.invuln<=0&&!this.isInsideCitySafeZone(this.player.position.x,this.player.position.z,1)){
+              }else if(this.invuln<=0&&this.isPlayerCombatVulnerable()){
                 const dmgDealt=this.state.blocking?Math.round(dmg*.3):dmg
                 this.damagePlayer(dmgDealt)
                 this.haptic(35)
@@ -2331,15 +2330,16 @@ export class ShadowGame {
             const dmg=Math.max(2,Math.round(e.atk*1.2))
             if(victimBot){
               victimBot.hp=Math.max(0,victimBot.hp-Math.max(1,Math.round(dmg-victimBot.def*.35)))
-            }else if(this.invuln<=0&&!this.isInsideCitySafeZone(this.player.position.x,this.player.position.z,1)){
+            }else if(this.invuln<=0&&this.isPlayerCombatVulnerable()){
               const dmgDealt=Math.max(1,Math.round(dmg-this.state.def*.35))
               this.damagePlayer(dmgDealt)
             }
           }
         }
       }
-      if(d<16&&d>1.7){const dir=victim.position.clone().sub(e.g.position);dir.y=0;if(dir.lengthSq())dir.normalize();const step=(e.boss?2.2:2.75)*dt,next=e.g.position.clone().addScaledVector(dir,step),safe=this.cityAt(next.x,next.z,2.5);if(!safe&&this.canOccupy(next.x,next.z,e.boss?1.1:.55)){e.g.position.copy(next)}else if(safe){const away=e.g.position.clone().sub(new THREE.Vector3(safe.x,0,safe.z)).normalize();e.g.position.addScaledVector(away,step*.45)}e.g.rotation.y=Math.atan2(dir.x,dir.z);if(lunge)e.g.position.addScaledVector(dir,lunge*dt)}
-      if(d<=1.85&&performance.now()-e.last>1100){e.last=performance.now();e.attackAnim=.34;if(victimBot){const dmg=Math.max(1,Math.round(e.atk-victimBot.def*.42));victimBot.hp=Math.max(0,victimBot.hp-dmg);this.updatePlayerNameplate(victimBot.label,{name:`${victimBot.name} [IA]`,level:victimBot.level,hp:victimBot.hp,maxHp:victimBot.maxHp,guildRank:victimBot.guildRank},false);if(victimBot.hp<=0)this.killBot(victimBot,{byPlayer:false})}else if(!this.isInsideCitySafeZone(this.player.position.x,this.player.position.z,1)&&this.invuln<=0){let dmg=Math.max(1,Math.round(e.atk-this.state.def*.45));if(this.state.blocking)dmg=Math.max(1,Math.round(dmg*.3));this.damagePlayer(dmg)}}
+      const chaseRange=this.state.dungeon?80:16
+      if(d<chaseRange&&d>1.7){const dir=victim.position.clone().sub(e.g.position);dir.y=0;if(dir.lengthSq())dir.normalize();const step=(e.boss?2.2:2.75)*dt,next=e.g.position.clone().addScaledVector(dir,step),safe=this.cityAt(next.x,next.z,2.5),radius=e.boss?1.1:.55;const canMove=this.state.dungeon?this.canDungeonOccupy(next.x,next.z,radius):!safe&&this.canOccupy(next.x,next.z,radius);if(canMove){e.g.position.copy(next)}else if(!this.state.dungeon&&safe){const away=e.g.position.clone().sub(new THREE.Vector3(safe.x,0,safe.z)).normalize();e.g.position.addScaledVector(away,step*.45)}e.g.rotation.y=Math.atan2(dir.x,dir.z);if(lunge){const lunged=e.g.position.clone().addScaledVector(dir,lunge*dt);if(!this.state.dungeon||this.canDungeonOccupy(lunged.x,lunged.z,radius))e.g.position.copy(lunged)}}
+      if(d<=1.85&&performance.now()-e.last>1100){e.last=performance.now();e.attackAnim=.34;if(victimBot){const dmg=Math.max(1,Math.round(e.atk-victimBot.def*.42));victimBot.hp=Math.max(0,victimBot.hp-dmg);this.updatePlayerNameplate(victimBot.label,{name:`${victimBot.name} [IA]`,level:victimBot.level,hp:victimBot.hp,maxHp:victimBot.maxHp,guildRank:victimBot.guildRank},false);if(victimBot.hp<=0)this.killBot(victimBot,{byPlayer:false})}else if(this.isPlayerCombatVulnerable()&&this.invuln<=0){let dmg=Math.max(1,Math.round(e.atk-this.state.def*.45));if(this.state.blocking)dmg=Math.max(1,Math.round(dmg*.3));this.damagePlayer(dmg)}}
     }
   }
 
@@ -2375,7 +2375,7 @@ export class ShadowGame {
     const targetPos=victim.position.clone().add(new THREE.Vector3(0,1.0,0))
     pMesh.position.copy(startPos)
     const dir=targetPos.clone().sub(startPos).normalize()
-    this.worldRoot.add(pMesh)
+    ;(this.state.dungeon?this.dungeonArena:this.worldRoot).add(pMesh)
 
     this.projectiles.push({
       fromMob:true,
@@ -2411,6 +2411,7 @@ export class ShadowGame {
 
   updatePlayer(dt,t){
     if(this.state.hp<=0){
+      if(this.state.dungeon&&this.gateManager?.activeInstance)this.gateManager.leaveDungeon()
       this.combatCooldown=0;this.inCombat=false;this.state.inCombat=false;this.state.combatTimer=0;
       this.state.hp=this.state.maxHp;this.state.mount.active=false;this.mountModel.visible=false;this.respawnPlayerAt('aurora-city');this.setWorldVisible(true);this.state.dungeon=null;this.dungeonArena.visible=false;this.repopulateVisibleChunks();this.toast('Você retornou à Cidadela Aurora.')
     }
@@ -2486,7 +2487,10 @@ export class ShadowGame {
     desired.y=target.y+Math.sin(pitch)*dist+1.2
     desired.y=Math.max(this.player.position.y+.68,desired.y)
     let safe=desired.clone()
-    if(!this.state?.dungeon&&this.canOccupy){
+    if(this.state?.dungeon){
+      const radius=Math.hypot(safe.x,safe.z),limit=this.dungeonBounds?.cameraRadius||38
+      if(radius>limit){safe.x=safe.x/radius*limit;safe.z=safe.z/radius*limit}
+    }else if(this.canOccupy){
       let previous=target.clone().addScaledVector(right,shoulder*.3);let hit=false
       for(let i=1;i<=16;i++){
         const k=i/16,probe=target.clone().addScaledVector(right,shoulder*(1-k*.3)).lerp(desired,k)
@@ -2621,9 +2625,9 @@ applyEnemyNetworkState(st){
   }
 
   onMultiplayerEvent(e){
-    if(e.type==='connection'){this.state.multiplayer={...this.state.multiplayer,connected:!!e.connected,url:e.url||this.state.multiplayer.url,room:e.room||this.multiplayer?.room||this.state.multiplayer.room,transport:e.transport||this.state.multiplayer.transport||'offline',reason:e.reason||'',serverSave:e.connected?this.state.multiplayer.serverSave:false};if(e.connected)this.toast(e.transport==='supabase'?'Multiplayer Supabase Realtime conectado':e.transport==='http'?'Multiplayer Vercel conectado':'Multiplayer LAN conectado');else{this.state.party={id:null,leaderId:null,members:[],totalXP:0};for(const r of this.remotePlayers.values()){this.scene.remove(r.g);r.marker?.material?.map?.dispose?.();r.marker?.material?.dispose?.()}this.remotePlayers.clear();this.state.multiplayer.players=0}return}
-    if(e.type==='welcome'){if(e.room){this.state.multiplayer.room=e.room;localStorage.setItem('shadow-ascension-last-lobby',e.room)}for(const p of e.players||[])this.onMultiplayerEvent({type:'state',player:p});this.state.multiplayer.players=this.remotePlayers.size;return}
-    if(e.type==='lobby'){if(e.room){this.state.multiplayer.room=e.room;localStorage.setItem('shadow-ascension-last-lobby',e.room)}return}
+    if(e.type==='connection'){this.state.multiplayer={...this.state.multiplayer,connected:!!e.connected,url:e.url||this.state.multiplayer.url,room:e.room||this.multiplayer?.room||this.state.multiplayer.room,transport:e.transport||this.state.multiplayer.transport||'offline',reason:e.reason||'',serverSave:e.connected?this.state.multiplayer.serverSave:false};if(e.connected)this.toast(e.transport==='supabase'?'Multiplayer Supabase Realtime conectado':e.transport==='http'?'Multiplayer Vercel conectado':'Multiplayer LAN conectado');else{this.state.party={id:null,leaderId:null,members:[],totalXP:0};for(const id of [...this.remotePlayers.keys()])this.removeRemotePlayer(id);this.state.multiplayer.players=0}return}
+    if(e.type==='welcome'){this.state.multiplayer.room=DEFAULT_MULTIPLAYER_ROOM;localStorage.setItem('shadow-ascension-last-lobby',DEFAULT_MULTIPLAYER_ROOM);for(const p of e.players||[])this.onMultiplayerEvent({type:'state',player:p});this.state.multiplayer.players=this.remotePlayers.size;return}
+    if(e.type==='lobby'){this.state.multiplayer.room=DEFAULT_MULTIPLAYER_ROOM;localStorage.setItem('shadow-ascension-last-lobby',DEFAULT_MULTIPLAYER_ROOM);return}
     if(e.type==='profile'){
       const profile=e.profile||{};this.serverProfileTimestamp=profile.updatedAt||0
       if(profile.game&&this.serverProfileTimestamp>(this.localUpdatedAt||0)){this.applyServerProfile(profile.game,this.serverProfileTimestamp);if(profile.name&&!this.state.playerName){this.state.playerName=profile.name;this.state.needsNickname=false;localStorage.setItem('shadow-ascension-nick',profile.name);this.multiplayer?.setIdentity(profile.name)}this.toast('Progresso carregado do servidor multiplayer')}
@@ -2670,60 +2674,48 @@ applyEnemyNetworkState(st){
       this.saveGame()
       return
     }
-    if(e.type==='join'||e.type==='state'){const p=e.player;if(!p||p.id===this.multiplayer?.id)return;let r=this.remotePlayers.get(p.id);if(!r){r=this.makeRemoteAvatar(p);this.remotePlayers.set(p.id,r)}r.data={...r.data,...p};r.target={x:+p.x||0,y:+p.y||0,z:+p.z||0,r:+p.r||0};this.updatePlayerNameplate(r.marker,r.data,false);this.state.multiplayer.players=this.remotePlayers.size;return}
-    if(e.type==='leave'){const r=this.remotePlayers.get(e.id);if(r){this.scene.remove(r.g);r.marker?.material?.map?.dispose?.();r.marker?.material?.dispose?.();this.remotePlayers.delete(e.id)};this.state.multiplayer.players=this.remotePlayers.size;return}
+    if(e.type==='join'||e.type==='state'){const p=e.player;if(!p||p.id===this.multiplayer?.id)return;let r=this.remotePlayers.get(p.id);if(!r){r=this.makeRemoteAvatar(p);this.remotePlayers.set(p.id,r)}r.data={...r.data,...p};r.target={x:+p.x||0,y:+p.y||0,z:+p.z||0,r:+p.r||0};r.removeAt=0;this.updatePlayerNameplate(r.marker,r.data,false);this.state.multiplayer.players=this.remotePlayers.size;return}
+    if(e.type==='leave'){const r=this.remotePlayers.get(e.id);if(r)r.removeAt=Date.now()+15000;return}
     if(e.type==='enemy_snapshot'){for(const st of e.states||[])this.applyEnemyNetworkState(st);return}
     if(e.type==='enemy_dead'){this.applyEnemyNetworkState({...e,dead:true});return}
     if(e.type==='enemy_damage'){if(e.world&&e.world!==this.currentWorldId())return;const mob=this.enemies.find(x=>!x.dead&&x.netId===e.netId);if(mob){mob.hp-=Math.max(0,Number(e.amount)||0);this.flashEnemy(mob,false);this.updateMobLabel(mob);if(mob.hp<=0)this.applyEnemyNetworkState({netId:e.netId,world:e.world,dead:true,respawnAt:e.respawnAt||Date.now()+5000})}return}
     if(e.type==='combat'||e.type==='ability'){const r=this.remotePlayers.get(e.from);if(r&&(!e.world||e.world===this.currentWorldId())){r.attackAnim=e.type==='ability'?.55:.32;r.abilityAnim=e.type==='ability'};return}
   }
 
+  removeRemotePlayer(id){const r=this.remotePlayers.get(id);if(!r)return;this.scene.remove(r.g);r.marker?.material?.map?.dispose?.();r.marker?.material?.dispose?.();this.remotePlayers.delete(id)}
+
   setPlayerName(name){const clean=String(name||'').normalize('NFKC').replace(/[^\p{L}\p{N} _.\-]/gu,'').replace(/\s+/g,' ').trim().slice(0,24);if(clean.length<2){this.toast('Use um nick com pelo menos 2 caracteres.');return false}this.state.playerName=clean;this.state.needsNickname=false;localStorage.setItem('shadow-ascension-nick',clean);this.multiplayer?.setIdentity(clean);this.updatePlayerNameplate(this.localPlayerLabel,{name:clean,level:this.state.level,hp:this.state.hp,maxHp:this.state.maxHp,guildRank:this.state.guildRank},true);this.saveGame();return true}
-  setPlayerAccount(session, profile = null){
-    if(!session) return false
-    const username = session.username || 'Aventureiro'
-    const server = session.server || 'asterra-01'
-    this.state.playerName = username
-    this.state.needsNickname = false
-    this.state.multiplayer.room = server
-    localStorage.setItem('shadow-ascension-nick', username)
-    localStorage.setItem('shadow-ascension-last-lobby', server)
-    if(session.accountId){
-      localStorage.setItem('shadow-ascension-player-id', session.accountId)
-      if(this.multiplayer) this.multiplayer.playerId = session.accountId
-    }
-    this.multiplayer?.setIdentity(username)
-    this.multiplayer?.setRoom(server)
-    this.updatePlayerNameplate(this.localPlayerLabel, {
-      name: username,
-      level: this.state.level,
-      hp: this.state.hp,
-      maxHp: this.state.maxHp,
-      guildRank: this.state.guildRank
-    }, true)
-    if(profile?.game){
-      this.applyServerProfile(profile.game, profile.updatedAt || Date.now())
-    }
-    this.saveGame()
-    this.multiplayer?.connect()
-    this.toast(`Bem-vindo, ${username}! Conectado ao ${server.replace('asterra-','Servidor ')}.`)
+  setPlayerAccount(session){
+    if(!session?.accountId) return false
+    if(this.accountId)this.saveGame()
+    const next={accountId:String(session.accountId),username:String(session.username||'Aventureiro'),server:DEFAULT_MULTIPLAYER_ROOM,loginTime:Date.now()}
+    localStorage.setItem('shadow_rpg_account_session',JSON.stringify(next))
+    localStorage.setItem('shadow-ascension-player-id',next.accountId)
+    localStorage.setItem('shadow-ascension-nick',next.username)
+    localStorage.setItem('shadow-ascension-last-lobby',DEFAULT_MULTIPLAYER_ROOM)
+    this.multiplayer?.disconnect()
+    window.location.reload()
     return true
   }
   logoutAccount(){
+    if(this.accountId)this.saveGame()
+    this.multiplayer?.disconnect()
     localStorage.removeItem('shadow_rpg_account_session')
     localStorage.removeItem('shadow-ascension-nick')
-    this.state.playerName = ''
-    this.state.needsNickname = true
-    this.multiplayer?.disconnect()
-    this.toast('Você saiu da sua conta.')
+    localStorage.removeItem('shadow-ascension-player-id')
+    localStorage.setItem('shadow-ascension-last-lobby',DEFAULT_MULTIPLAYER_ROOM)
+    this.accountId=''
+    window.location.reload()
   }
   connectMultiplayer(url){const value=String(url||'').trim();this.settings.multiplayerUrl=value;this.state.multiplayer.url=value;localStorage.setItem('shadow-ascension-mp-url',value);if(value)this.multiplayer.connect(value);else this.multiplayer.disconnect();this.saveGame()}
-  setMultiplayerLobby(room){const next=this.multiplayer?.setRoom?.(room)||String(room||'asterra-01');this.state.multiplayer.room=next;localStorage.setItem('shadow-ascension-last-lobby',next);this.toast(`Entrando no ${next.replace('asterra-','Lobby ')}...`);this.saveGame();return next}
-  profileSnapshot(){const room=this.multiplayer?.room||this.state.multiplayer?.room||localStorage.getItem('shadow-ascension-last-lobby')||'asterra-01';return{state:{...this.state,version:8,target:null,dungeon:null,uiPanel:null,dialogue:null,portal:null,interactionPrompt:null,merchant:[],minimap:null,mapSnapshot:null,party:{id:null,leaderId:null,members:[],totalXP:0},onlinePlayers:[],multiplayer:{connected:false,url:this.settings.multiplayerUrl,room,players:0}},position:{x:this.player?.position.x||0,z:this.player?.position.z||0},dayHours:this.dayHours,settings:this.settings,multiplayerRoom:room,discovered:[...this.discovered]}}
-  applyServerProfile(game,updatedAt=0){try{const incoming=normalizeSaveState({...this.state,...(game.state||{}),version:8,target:null,dungeon:null,uiPanel:null,dialogue:null});this.state={...this.state,...incoming,needsNickname:!incoming.playerName,party:{id:null,leaderId:null,members:[],totalXP:0}};if(game.position){this.player.position.set(Number(game.position.x)||0,0,Number(game.position.z)||0)}this.dayHours=game.dayHours??this.dayHours;this.discovered=new Set(game.discovered||[]);const liveUrl=this.multiplayer?.url||this.settings.multiplayerUrl;this.settings={...this.settings,...(game.settings||{}),multiplayerUrl:liveUrl||game.settings?.multiplayerUrl||''};this.state.settings=this.settings;this.state.multiplayer.url=this.settings.multiplayerUrl;const liveRoom=this.multiplayer?.room||localStorage.getItem('shadow-ascension-last-lobby')||game.multiplayerRoom||this.state.multiplayer.room||'asterra-01';this.state.multiplayer.room=liveRoom;localStorage.setItem('shadow-ascension-last-lobby',liveRoom);this.localUpdatedAt=updatedAt;this.recalcStats();if(this.state.playerName)this.setPlayerName(this.state.playerName)}catch{}}
+  setMultiplayerLobby(room){const next=this.multiplayer?.setRoom?.(room)||DEFAULT_MULTIPLAYER_ROOM;this.state.multiplayer.room=next;localStorage.setItem('shadow-ascension-last-lobby',next);this.toast(`Entrando no ${next.replace('asterra-','Lobby ')}...`);this.saveGame();return next}
+  profileSnapshot(){const room=DEFAULT_MULTIPLAYER_ROOM;return{state:{...this.state,version:8,target:null,dungeon:null,uiPanel:null,dialogue:null,portal:null,interactionPrompt:null,merchant:[],minimap:null,mapSnapshot:null,party:{id:null,leaderId:null,members:[],totalXP:0},onlinePlayers:[],multiplayer:{connected:false,url:this.settings.multiplayerUrl,room,players:0}},position:{x:this.player?.position.x||0,z:this.player?.position.z||0},dayHours:this.dayHours,settings:this.settings,multiplayerRoom:room,discovered:[...this.discovered]}}
+  applyServerProfile(game,updatedAt=0){try{const incoming=normalizeSaveState({...this.state,...(game.state||{}),version:8,target:null,dungeon:null,uiPanel:null,dialogue:null});this.state={...this.state,...incoming,needsNickname:!incoming.playerName,party:{id:null,leaderId:null,members:[],totalXP:0}};if(game.position){this.player.position.set(Number(game.position.x)||0,0,Number(game.position.z)||0)}this.dayHours=game.dayHours??this.dayHours;this.discovered=new Set(game.discovered||[]);const liveUrl=this.multiplayer?.url||this.settings.multiplayerUrl;this.settings={...this.settings,...(game.settings||{}),multiplayerUrl:liveUrl||game.settings?.multiplayerUrl||''};this.state.settings=this.settings;this.state.multiplayer.url=this.settings.multiplayerUrl;this.state.multiplayer.room=DEFAULT_MULTIPLAYER_ROOM;localStorage.setItem('shadow-ascension-last-lobby',DEFAULT_MULTIPLAYER_ROOM);this.localUpdatedAt=updatedAt;this.recalcStats();if(this.state.playerName)this.setPlayerName(this.state.playerName)}catch{}}
   updateMultiplayer(dt){
     const world=this.currentWorldId()
-    for(const r of this.remotePlayers.values()){
+    const now=Date.now()
+    for(const [id,r] of this.remotePlayers){
+      if(r.removeAt&&now>=r.removeAt){this.removeRemotePlayer(id);continue}
       r.g.visible=(r.data?.world||'open')===world
       if(!r.g.visible)continue
       const remoteDist=r.g.position.distanceTo(this.player.position);r.marker.visible=remoteDist<52;if(r.torso?.material?.color)r.torso.material.color.lerp(new THREE.Color(rankColor(r.data?.guildRank||'E')),.08)
@@ -2772,18 +2764,19 @@ applyEnemyNetworkState(st){
     this.saveGame()
   }
 
+  accountSaveKey(name){return this.accountId?`${name}:${this.accountId}`:name}
   saveGame(){
     try{
       const updatedAt=Date.now(),data={...this.profileSnapshot(),updatedAt}
       const raw=JSON.stringify(data)
-      localStorage.setItem('shadow-ascension-save-v08',raw)
-      localStorage.setItem('shadow-ascension-save-backup',raw)
+      localStorage.setItem(this.accountSaveKey('shadow-ascension-save-v08'),raw)
+      localStorage.setItem(this.accountSaveKey('shadow-ascension-save-backup'),raw)
       this.localUpdatedAt=updatedAt
       this.multiplayer?.saveProfile(data,updatedAt)
     }catch{}
   }
   exportSaveData(){
-    return localStorage.getItem('shadow-ascension-save-v08')||localStorage.getItem('shadow-ascension-save-backup')||''
+    return localStorage.getItem(this.accountSaveKey('shadow-ascension-save-v08'))||localStorage.getItem(this.accountSaveKey('shadow-ascension-save-backup'))||''
   }
   importSaveData(rawString){
     try{
@@ -2798,13 +2791,15 @@ applyEnemyNetworkState(st){
   }
   loadGame(){
     try{
-      let raw=localStorage.getItem('shadow-ascension-save-v08')||localStorage.getItem('shadow-ascension-save-backup');let data=raw?JSON.parse(raw):null
-      if(!data){const v7=localStorage.getItem('shadow-ascension-save-v07');if(v7)data=JSON.parse(v7)}
-      if(!data){const v6=localStorage.getItem('shadow-ascension-save-v06');if(v6)data=JSON.parse(v6)}
-      if(!data){const v5=localStorage.getItem('shadow-ascension-save-v05');if(v5)data=JSON.parse(v5)}
-      if(!data){const v4=localStorage.getItem('shadow-ascension-save-v04');if(v4)data=JSON.parse(v4)}
-      if(!data){const legacy=localStorage.getItem('shadow-ascension-save-v03');if(legacy){const old=JSON.parse(legacy);data={state:old.state,position:old.position}}}
-      if(!data)return;this.state=normalizeSaveState({...this.state,...data.state,version:8,target:null,dungeon:null,uiPanel:null,dialogue:null});this.state.needsNickname=true;this.state.party={id:null,leaderId:null,members:[],totalXP:0};this.savedPosition=data.position||this.savedPosition;this.settings={...this.settings,...(data.settings||data.state?.settings||{})};this.state.settings=this.settings;const rememberedRoom=localStorage.getItem('shadow-ascension-last-lobby')||data.multiplayerRoom||data.state?.multiplayer?.room||this.state.multiplayer?.room||'asterra-01';this.state.multiplayer={...this.state.multiplayer,room:rememberedRoom};localStorage.setItem('shadow-ascension-last-lobby',rememberedRoom);this.dayHours=data.dayHours??this.dayHours;this.savedDiscovered=data.discovered||[];this.localUpdatedAt=data.updatedAt||0;if(this.state.playerName){localStorage.setItem('shadow-ascension-nick',this.state.playerName)}
+      const primary=this.accountSaveKey('shadow-ascension-save-v08'),backup=this.accountSaveKey('shadow-ascension-save-backup')
+      let raw=localStorage.getItem(primary)||localStorage.getItem(backup),data=raw?JSON.parse(raw):null
+      if(!data&&this.accountId){const legacyRaw=localStorage.getItem('shadow-ascension-save-v08')||localStorage.getItem('shadow-ascension-save-backup'),legacy=legacyRaw?JSON.parse(legacyRaw):null;const expected=this.accountId.replace(/^acc_/,'').toLowerCase();if(legacy?.state?.playerName&&String(legacy.state.playerName).toLowerCase()===expected){raw=legacyRaw;data=legacy;localStorage.setItem(primary,raw);localStorage.setItem(backup,raw)}}
+      if(!data&&!this.accountId){const v7=localStorage.getItem('shadow-ascension-save-v07');if(v7)data=JSON.parse(v7)}
+      if(!data&&!this.accountId){const v6=localStorage.getItem('shadow-ascension-save-v06');if(v6)data=JSON.parse(v6)}
+      if(!data&&!this.accountId){const v5=localStorage.getItem('shadow-ascension-save-v05');if(v5)data=JSON.parse(v5)}
+      if(!data&&!this.accountId){const v4=localStorage.getItem('shadow-ascension-save-v04');if(v4)data=JSON.parse(v4)}
+      if(!data&&!this.accountId){const legacy=localStorage.getItem('shadow-ascension-save-v03');if(legacy){const old=JSON.parse(legacy);data={state:old.state,position:old.position}}}
+      if(!data)return;this.state=normalizeSaveState({...this.state,...data.state,version:8,target:null,dungeon:null,uiPanel:null,dialogue:null});this.state.needsNickname=true;this.state.party={id:null,leaderId:null,members:[],totalXP:0};this.savedPosition=data.position||this.savedPosition;this.settings={...this.settings,...(data.settings||data.state?.settings||{})};this.state.settings=this.settings;this.state.multiplayer={...this.state.multiplayer,room:DEFAULT_MULTIPLAYER_ROOM};localStorage.setItem('shadow-ascension-last-lobby',DEFAULT_MULTIPLAYER_ROOM);this.dayHours=data.dayHours??this.dayHours;this.savedDiscovered=data.discovered||[];this.localUpdatedAt=data.updatedAt||0;if(this.state.playerName){localStorage.setItem('shadow-ascension-nick',this.state.playerName)}
     }catch{}
   }
 

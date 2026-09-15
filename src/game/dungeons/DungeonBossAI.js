@@ -137,6 +137,7 @@ export class DungeonBossAI {
       const mx = boss.g.position.x + Math.cos(angle) * 4.0
       const mz = boss.g.position.z + Math.sin(angle) * 4.0
       const minion = this.game.makeEnemy(mx, mz, Math.max(1, boss.level - 2), `Sombra de ${boss.name}`, false, null, null, `minion_${Date.now()}_${i}`)
+      minion.isDungeonMob = true
       minion.hp = Math.round(minion.hp * 0.6)
       minion.maxHp = minion.hp
       this.game.enemies.push(minion)

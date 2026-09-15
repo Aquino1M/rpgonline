@@ -1,5 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 
+const DEFAULT_ROOM = 'asterra-global'
+
 const DEFAULT_ANON_KEY = 'sb_publishable_zB3YmZc3TNkKCHzHWQ-X5g_kKRvlkRI'
 const DEFAULT_PROJECT_URL = 'https://kfnlcrsnvckexzmhbyoy.supabase.co'
 
@@ -92,7 +94,7 @@ export async function loadCloudProfile(playerId) {
       name: data.name,
       level: data.level,
       guildRank: data.guild_rank,
-      lastLobby: data.last_lobby,
+      lastLobby: DEFAULT_ROOM,
       updatedAt: data.updated_at ? new Date(data.updated_at).getTime() : 0,
       game: data.game_data || null
     }
@@ -102,7 +104,7 @@ export async function loadCloudProfile(playerId) {
   }
 }
 
-export async function saveCloudProfile({ id, name, game, lastLobby = 'asterra-01', level = 1, guildRank = 'E', updatedAt = Date.now() }) {
+export async function saveCloudProfile({ id, name, game, lastLobby = DEFAULT_ROOM, level = 1, guildRank = 'E', updatedAt = Date.now() }) {
   const client = getSupabaseClient()
   if (!client || !id) return { ok: false, error: 'not_configured' }
 
@@ -122,7 +124,7 @@ export async function saveCloudProfile({ id, name, game, lastLobby = 'asterra-01
       name: String(name || 'Aventureiro').slice(0, 32),
       level: Number(level) || 1,
       guild_rank: String(guildRank || 'E').slice(0, 8),
-      last_lobby: String(lastLobby || 'asterra-01'),
+      last_lobby: DEFAULT_ROOM,
       game_data: gameDataPayload,
       updated_at: new Date(updatedAt || Date.now()).toISOString()
     }
@@ -163,16 +165,15 @@ export function getSavedAccountSession() {
 export function saveAccountSession(session) {
   if (typeof window === 'undefined') return
   try {
-    window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session))
-    if (session.accountId) {
-      window.localStorage.setItem('shadow-ascension-player-id', session.accountId)
+    const normalized = { ...session, server: DEFAULT_ROOM }
+    window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(normalized))
+    if (normalized.accountId) {
+      window.localStorage.setItem('shadow-ascension-player-id', normalized.accountId)
     }
-    if (session.username) {
-      window.localStorage.setItem('shadow-ascension-nick', session.username)
+    if (normalized.username) {
+      window.localStorage.setItem('shadow-ascension-nick', normalized.username)
     }
-    if (session.server) {
-      window.localStorage.setItem('shadow-ascension-last-lobby', session.server)
-    }
+    window.localStorage.setItem('shadow-ascension-last-lobby', DEFAULT_ROOM)
   } catch {}
 }
 
@@ -200,7 +201,7 @@ export async function hashPassword(password, salt = 'shadow_rpg_salt_2026') {
   return ('00000000' + (h >>> 0).toString(16)).slice(-8)
 }
 
-export async function registerAccount({ username, password, server = 'asterra-01' }) {
+export async function registerAccount({ username, password, server = DEFAULT_ROOM }) {
   const client = getSupabaseClient()
   if (!client) return { ok: false, error: 'Servidor Supabase não conectado. Verifique sua conexão.' }
 
@@ -231,7 +232,7 @@ export async function registerAccount({ username, password, server = 'asterra-01
       name: cleanUser,
       level: 1,
       guild_rank: 'E',
-      last_lobby: server || 'asterra-01',
+      last_lobby: DEFAULT_ROOM,
       game_data: {
         auth: {
           username: cleanUser,
@@ -253,7 +254,7 @@ export async function registerAccount({ username, password, server = 'asterra-01
     const session = {
       accountId,
       username: cleanUser,
-      server: server || 'asterra-01',
+      server: DEFAULT_ROOM,
       loginTime: Date.now()
     }
     saveAccountSession(session)
@@ -293,7 +294,7 @@ export async function loginAccount({ username, password = '', server = null }) {
         name: cleanUser,
         level: 1,
         guild_rank: 'E',
-        last_lobby: server || 'asterra-01',
+        last_lobby: DEFAULT_ROOM,
         game_data: {
           auth: {
             username: cleanUser,
@@ -308,7 +309,7 @@ export async function loginAccount({ username, password = '', server = null }) {
       const session = {
         accountId,
         username: cleanUser,
-        server: server || 'asterra-01',
+        server: DEFAULT_ROOM,
         loginTime: Date.now()
       }
       saveAccountSession(session)
@@ -321,7 +322,7 @@ export async function loginAccount({ username, password = '', server = null }) {
           name: cleanUser,
           level: 1,
           guildRank: 'E',
-          lastLobby: server || 'asterra-01',
+          lastLobby: DEFAULT_ROOM,
           updatedAt: Date.now(),
           game: null
         },
@@ -348,7 +349,7 @@ export async function loginAccount({ username, password = '', server = null }) {
       await client.from('player_profiles').update({ game_data: updatedGameData }).eq('id', accountId)
     }
 
-    const chosenServer = server || data.last_lobby || 'asterra-01'
+    const chosenServer = DEFAULT_ROOM
 
     const session = {
       accountId,
@@ -595,11 +596,6 @@ export class SupabaseRealtimeTransport {
       player: payload
     })
 
-    // Atualizar periodicamente o presence
-    if (!this._lastPresenceTrack || Date.now() - this._lastPresenceTrack > 3000) {
-      this._lastPresenceTrack = Date.now()
-      this.channel.track(payload).catch(() => {})
-    }
   }
 
   disconnect() {

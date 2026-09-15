@@ -1,4 +1,4 @@
-const DEFAULT_ROOM='asterra-01'
+const DEFAULT_ROOM='asterra-global'
 const PLAYER_TTL_MS=26000
 const EVENT_TTL_MS=120000
 
@@ -6,7 +6,7 @@ const redisUrl=()=>process.env.UPSTASH_REDIS_REST_URL||process.env.KV_REST_API_U
 const redisToken=()=>process.env.UPSTASH_REDIS_REST_TOKEN||process.env.KV_REST_API_TOKEN||''
 const configured=()=>!!(redisUrl()&&redisToken())
 
-function cleanRoom(v){return String(v||DEFAULT_ROOM).replace(/[^\w-]/g,'').slice(0,40)||DEFAULT_ROOM}
+function cleanRoom(){return DEFAULT_ROOM}
 function cleanId(v){return String(v||'').replace(/[^\w-]/g,'').slice(0,90)}
 function cleanName(v){return String(v||'Aventureiro').normalize('NFKC').replace(/[^\p{L}\p{N} _.\-]/gu,'').replace(/\s+/g,' ').trim().slice(0,24)||'Aventureiro'}
 function num(v,d,min,max){const n=Number(v);return Number.isFinite(n)?Math.max(min,Math.min(max,n)):d}

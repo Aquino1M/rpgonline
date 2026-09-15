@@ -29,7 +29,7 @@ Pronto! As tabelas `player_profiles` e `shared_enemies` e as políticas de segur
 ## 3. O que o Supabase gerencia no jogo
 
 1. **Multiplayer em Tempo Real (Supabase Realtime):**
-   - Rastreamento de jogadores conectados por sala (`asterra-01` a `asterra-06`).
+   - Rastreamento de jogadores conectados em `asterra-global`.
    - Sincronização contínua de posição, rotação, animações, HP e nível.
    - Propagação instantânea de ataques, habilidades, dano e morte de chefes e monstros.
    - Sistema de equipes (party) e troca de itens (trade) entre aventureiros online.

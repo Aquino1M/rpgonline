@@ -572,7 +572,26 @@ export class GateManager {
     this.createDungeonInstance(gate, { isSolo: false })
   }
 
-  createDungeonInstance(gate, { isSolo = true }) {
+  enterLegacyPortal(portal) {
+    if (!portal || this.activeInstance) return false
+    const themeKeys = Object.keys(DUNGEON_THEMES)
+    const themeKey = themeKeys[Math.abs(Math.floor((portal.x || 0) * 31 + (portal.z || 0) * 17)) % themeKeys.length] || 'cavern'
+    const rankConfig = GATE_RANKS.E
+    this.createDungeonInstance({
+      id: `legacy_${Math.round(portal.x || 0)}_${Math.round(portal.z || 0)}`,
+      seed: Math.abs(Math.floor((portal.x || 0) * 73856093 + (portal.z || 0) * 19349663)) || Date.now(),
+      rankKey: 'E',
+      rankConfig,
+      dungeonLevel: portal.level || 1,
+      totalRounds: Math.max(3, portal.floors || 3),
+      themeKey,
+      theme: DUNGEON_THEMES[themeKey],
+      name: portal.name || 'Masmorra'
+    }, { isSolo: true })
+    return true
+  }
+
+  createDungeonInstance(gate, { isSolo = true } = {}) {
     // Clean up open world entities and clear stale waypoint
     this.game.state.destinationMarker = null
     this.game.state.mount.active = false
@@ -591,9 +610,9 @@ export class GateManager {
       level: gate.dungeonLevel,
       themeKey: gate.themeKey,
       totalRounds,
-      currentRound: 1,
-      roundState: 'ACTIVE',
-      breakTimer: 0,
+      currentRound: 0,
+      roundState: 'BREAK',
+      breakTimer: 1.75,
       isBossRound: false,
       isSolo,
       startedAt: Date.now(),
@@ -615,8 +634,8 @@ export class GateManager {
       round: 1,
       totalRounds,
       enemiesAlive: 0,
-      roundState: 'ACTIVE',
-      breakTimer: 0,
+      roundState: 'BREAK',
+      breakTimer: 2,
       theme: gate.theme?.name || 'Masmorra Sombria',
       worldSeed: gate.seed,
       isSolo
@@ -629,10 +648,8 @@ export class GateManager {
     const inst = this.activeInstance
     if (!inst) return
 
-    if (inst.floorGroup) {
-      this.game.scene.remove(inst.floorGroup)
-    }
     this.game.clearEnemies()
+    this.game.dungeonArena.clear()
 
     // Generate grand dungeon arena
     const floorData = this.generator.generateFloor({
@@ -645,7 +662,9 @@ export class GateManager {
 
     inst.floorData = floorData
     inst.floorGroup = floorData.group
-    this.game.scene.add(floorData.group)
+    this.game.dungeonArena.add(floorData.group)
+    this.game.dungeonArena.visible = true
+    this.game.dungeonBounds = { playRadius: floorData.playRadius, cameraRadius: floorData.cameraRadius }
 
     // Teleport player to safe spawn
     this.game.player.position.set(floorData.spawnPos.x, 0, floorData.spawnPos.z)
@@ -653,13 +672,13 @@ export class GateManager {
     this.game.grounded = true
 
     // Set atmosphere
-    this.game.scene.background.set(floorData.theme.fogColor)
-    this.game.scene.fog.color.set(floorData.theme.fogColor)
-    this.game.scene.fog.near = 16
-    this.game.scene.fog.far = 52
+    const atmosphere = new THREE.Color(floorData.theme.fogColor).lerp(new THREE.Color(0x3b506b), 0.65)
+    this.game.scene.background.copy(atmosphere)
+    this.game.scene.fog.color.copy(atmosphere)
+    this.game.scene.fog.near = 38
+    this.game.scene.fog.far = 105
 
-    // Start wave 1
-    this.startRound(1)
+    this.game.toast?.('🏟️ Arena selada — primeira horda em 2s!')
   }
 
   startRound(roundNumber) {
@@ -697,17 +716,16 @@ export class GateManager {
     if (!inst || !inst.floorData) return
 
     const theme = inst.floorData.theme
-    const rooms = inst.floorData.rooms.filter(r => r.type !== 'spawn')
-    const activeRooms = rooms.length > 0 ? rooms : [inst.floorData.rooms[0]]
+    const spawnPoints = inst.floorData.spawnPoints || []
+    if (!spawnPoints.length) return
 
     // Total mobs scales with round (e.g. 5, 7, 9...)
     const totalMobs = 4 + roundNumber * 2
     for (let i = 0; i < totalMobs; i++) {
-      const room = activeRooms[i % activeRooms.length]
-      const angle = (i / totalMobs) * Math.PI * 2
-      const dist = 2.0 + Math.random() * Math.max(1, (room.w || 10) / 2 - 2)
-      const mx = room.x + Math.cos(angle) * dist
-      const mz = room.z + Math.sin(angle) * dist
+      const point = spawnPoints[i % spawnPoints.length]
+      const offset = Math.floor(i / spawnPoints.length) % 2 ? (i % 2 ? 1.4 : -1.4) : 0
+      const mx = point.x - Math.sin(point.angle) * offset
+      const mz = point.z + Math.cos(point.angle) * offset
 
       const mobName = theme.mobs[Math.floor(Math.random() * theme.mobs.length)]
       const isElite = roundNumber >= 2 && Math.random() < (0.15 + roundNumber * 0.08)
@@ -738,8 +756,7 @@ export class GateManager {
     const inst = this.activeInstance
     if (!inst || !inst.floorData) return
 
-    const rooms = inst.floorData.rooms
-    const bossRoom = rooms.find(r => r.type === 'boss') || rooms[rooms.length - 1]
+    const bossRoom = inst.floorData.bossSpawn || inst.floorData.rooms[0]
     const boss = this.bossAI.createBossEntity({
       x: bossRoom.x,
       z: bossRoom.z,
@@ -772,7 +789,7 @@ export class GateManager {
         const boss = this.game.enemies.find(e => e.isDungeonBoss && !e.dead)
         if (boss) {
           this.bossAI.update(boss, dt)
-        } else if (!inst.bossKilled) {
+        } else if (!inst.bossKilled && aliveEnemies === 0) {
           inst.bossKilled = true
           this.onBossDefeated()
         }
@@ -836,10 +853,10 @@ export class GateManager {
     const inst = this.activeInstance
     if (!inst) return
 
-    if (inst.floorGroup) {
-      this.game.scene.remove(inst.floorGroup)
-    }
     this.game.clearEnemies()
+    this.game.dungeonArena?.clear()
+    this.game.dungeonArena.visible = false
+    this.game.dungeonBounds = null
 
     // Restore open world
     this.activeInstance = null

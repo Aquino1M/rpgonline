@@ -3127,4 +3127,24 @@
   flex-direction: column;
 }
 
+/* Touch HUD keeps the complete player summary readable instead of hiding data. */
+@media (pointer: coarse), (max-width: 780px) {
+  .app.touch-ui .player-card { width: min(300px, 76vw) !important; max-height: none !important; height: auto !important; padding: 10px 11px !important; overflow: visible !important; }
+  .app.touch-ui .player-card .class-chip { display: inline-flex !important; max-width: 142px !important; font-size: 8px !important; padding: 4px 6px !important; }
+  .app.touch-ui .player-card .brand-row b { font-size: 10px !important; }
+  .app.touch-ui .player-card .brand-row small { font-size: 7px !important; }
+  .app.touch-ui .player-card .level-chip { font-size: 9px !important; padding: 4px 7px !important; }
+  .app.touch-ui .player-card .identity-line strong { font-size: 11px !important; }
+  .app.touch-ui .player-card .identity-line span { font-size: 8px !important; }
+  .app.touch-ui .player-card .zone-line { display: flex !important; }
+  .app.touch-ui .player-card .zone-line strong { font-size: 10px !important; }
+  .app.touch-ui .player-card .zone-line span { font-size: 8px !important; }
+  .app.touch-ui .player-card .bar-wrap { margin: 4px 0 !important; }
+  .app.touch-ui .player-card .bar-label { font-size: 8px !important; }
+  .app.touch-ui .player-card .bar { height: 7px !important; }
+  .app.touch-ui .player-card .currency-row { display: flex !important; flex-wrap: wrap !important; gap: 5px !important; font-size: 8px !important; margin-top: 6px !important; }
+  .app.touch-ui.is-mobile.is-portrait .player-card { width: min(306px, 76vw) !important; max-height: none !important; }
+  .app.touch-ui.is-mobile.is-portrait .player-card .zone-line, .app.touch-ui.is-mobile.is-portrait .player-card .currency-row { display: flex !important; }
+  .app.touch-ui.is-tablet .player-card { width: min(320px, 42vw) !important; max-height: none !important; }
+}
 

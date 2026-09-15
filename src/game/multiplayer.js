@@ -8,16 +8,10 @@ const makeId = () => {
   storage?.setItem('shadow-ascension-player-id', id)
   return id
 }
-const MULTIPLAYER_LOBBIES = ['asterra-01', 'asterra-02', 'asterra-03', 'asterra-04', 'asterra-05', 'asterra-06']
-const cleanRoom = room => {
-  const v = String(room || '').toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 40)
-  return MULTIPLAYER_LOBBIES.includes(v) ? v : ''
-}
-const defaultLobbyFor = id => {
-  let h = 0
-  for (const ch of String(id || '')) h = ((h * 31) + ch.charCodeAt(0)) >>> 0
-  return MULTIPLAYER_LOBBIES[h % MULTIPLAYER_LOBBIES.length]
-}
+export const DEFAULT_MULTIPLAYER_ROOM = 'asterra-global'
+const MULTIPLAYER_LOBBIES = [DEFAULT_MULTIPLAYER_ROOM]
+const cleanRoom = () => DEFAULT_MULTIPLAYER_ROOM
+const defaultLobbyFor = () => DEFAULT_MULTIPLAYER_ROOM
 export const multiplayerLobbies = () => [...MULTIPLAYER_LOBBIES]
 
 export function sameOriginMultiplayerUrl() {

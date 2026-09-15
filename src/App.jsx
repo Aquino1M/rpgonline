@@ -4,16 +4,16 @@ import { EQUIPMENT_SLOTS, GUILD_RANKS, ATTRIBUTE_DEFS, HORSE_BREEDS } from './ga
 import { CLASSES_LIST, CLASS_TIERS, CLASS_RANKS, getClassRankInfo } from './game/classesData.js'
 import { TRAVEL_NODES, calculateTravelCost } from './game/fastTravel.js'
 import { calculateGrimoireCost, getNextGrimoireLevel } from './game/rpgSystems.js'
-import { getSupabaseConfig, saveSupabaseConfig, getSavedAccountSession, registerAccount, loginAccount, clearAccountSession } from './game/supabaseService.js'
+import { getSupabaseConfig, saveSupabaseConfig, getSavedAccountSession, registerAccount, loginAccount } from './game/supabaseService.js'
 import { promptInstallApp, toggleFullScreen, subscribePWA, getPWAState } from './game/pwaService.js'
 import MiniMap from './ui/Minimap.jsx'
 import WorldMap from './ui/WorldMap.jsx'
 
-const initial={playerName:'',needsNickname:true,level:1,xp:0,nextXp:120,hp:120,maxHp:120,stamina:100,maxStamina:100,gold:220,atk:16,def:5,critChance:0,zone:'Vila Aurora',zoneId:'aurora',currentCity:'Cidadela Aurora',inventory:[],equipment:{},quests:[],guildMissions:[],guildRank:'E',guildRankIndex:0,guildPoints:0,attributePoints:0,attributes:{strength:0,vitality:0,agility:0,intellect:0},weather:'Céu limpo',time:'08:15',mount:{},abilities:[],combatMode:false,inCombat:false,combatTimer:0,multiplayer:{connected:false,url:'',room:'asterra-01',players:0,latencyMs:0,quality:'offline',reconnecting:false},settings:{renderDistance:2,pixelRatio:1,uiScale:1.2,invertCameraX:false,invertCameraY:false,invertCamera:false,multiplayerUrl:''},playerPosition:{x:0,z:0},stats:{kills:0,bosses:0,dungeons:0},ores:0,party:{id:null,leaderId:null,members:[],totalXP:0},onlinePlayers:[],economy:{label:'Mercado dos Despertos',description:'Itens iniciais',theme:'Aurora'}}
+const initial={playerName:'',needsNickname:true,level:1,xp:0,nextXp:120,hp:120,maxHp:120,stamina:100,maxStamina:100,gold:220,atk:16,def:5,critChance:0,zone:'Vila Aurora',zoneId:'aurora',currentCity:'Cidadela Aurora',inventory:[],equipment:{},quests:[],guildMissions:[],guildRank:'E',guildRankIndex:0,guildPoints:0,attributePoints:0,attributes:{strength:0,vitality:0,agility:0,intellect:0},weather:'Céu limpo',time:'08:15',mount:{},abilities:[],combatMode:false,inCombat:false,combatTimer:0,multiplayer:{connected:false,url:'',room:'asterra-global',players:0,latencyMs:0,quality:'offline',reconnecting:false},settings:{renderDistance:2,pixelRatio:1,uiScale:1.2,invertCameraX:false,invertCameraY:false,invertCamera:false,multiplayerUrl:''},playerPosition:{x:0,z:0},stats:{kills:0,bosses:0,dungeons:0},ores:0,party:{id:null,leaderId:null,members:[],totalXP:0},onlinePlayers:[],economy:{label:'Mercado dos Despertos',description:'Itens iniciais',theme:'Aurora'}}
 const slotNames={weapon:'Arma',armor:'Armadura',boots:'Botas',talisman:'Talismã'}
 const roleTitle={inventory:'Inventário & Equipamento',grimoire:'Grimório do Despertar (Roleta de Almas)',travel:'Moço Viajante (Rotas de Caravana)',quests:'Missões',guild:'Guilda de Aventureiros',townhall:'Prefeitura de Aurora (Juramento do Cavaleiro)',attributes:'Atributos',merchant:'Mercador',blacksmith:'Ferreiro Rúnico',stable:'Estábulos & Domação de Montarias',map:'Mapa de Asterra',settings:'Configurações',trade:'Troca entre Jogadores'}
 const fallbackAbilities=[{slot:1,name:'Corte Astral',short:'Corte',icon:'✦',cost:14,remaining:0,ready:true},{slot:2,name:'Onda Astral',short:'Onda',icon:'✹',cost:28,remaining:0,ready:true},{slot:3,name:'Passo Etéreo',short:'Passo',icon:'➠',cost:22,remaining:0,ready:true}]
-const multiplayerLobbies=[{id:'asterra-01',name:'Lobby Aurora'},{id:'asterra-02',name:'Lobby Lúmen'},{id:'asterra-03',name:'Lobby Cinéreo'},{id:'asterra-04',name:'Lobby Safira'},{id:'asterra-05',name:'Lobby Veyra'},{id:'asterra-06',name:'Lobby Noctis'}]
+const multiplayerLobbies=[{id:'asterra-global',name:'Asterra Global'}]
 
 function getViewportState(){
   if(typeof window==='undefined')return{w:1366,h:768,isCoarse:false,isMobile:false,isTablet:false,isDesktop:true,isTouch:false,isLandscape:true}
@@ -205,19 +205,19 @@ export default function App(){
     )}
     {hud.interactionPrompt&&!panel&&<div className="interaction">{hud.interactionPrompt}</div>}{hud.toast&&<div key={hud.toast.id} className="toast">{hud.toast.msg}</div>}
 
-    {!panel&&hud.combatMode&&<div className={`combat-crosshair ${hud.crosshairTarget?'locked':''}`} aria-label="Mira"><i/><i/><b/></div>}
-    {!panel&&<button className={`combat-mode-chip glass ${hud.combatMode?'active':''}`} onClick={()=>call('toggleCombatMode')}><kbd>Q</kbd><span>{hud.combatMode?'MODO COMBATE':'CURSOR LIVRE'}</span><small>{hud.combatMode?'Q libera o mouse':'Q trava a mira'}</small></button>}
+    {viewport.isDesktop&&!panel&&hud.combatMode&&<div className={`combat-crosshair ${hud.crosshairTarget?'locked':''}`} aria-label="Mira"><i/><i/><b/></div>}
+    {viewport.isDesktop&&!panel&&<button className={`combat-mode-chip glass ${hud.combatMode?'active':''}`} onClick={()=>call('toggleCombatMode')}><kbd>Q</kbd><span>{hud.combatMode?'MODO COMBATE':'CURSOR LIVRE'}</span><small>{hud.combatMode?'Q libera o mouse':'Q trava a mira'}</small></button>}
 
-    <div className="quickbar glass">
+    {viewport.isDesktop&&<div className="quickbar glass">
       <QuickButton hotkey="R" icon="🧪" label="Poção" badge={potionQty} onClick={()=>call('usePotion')} disabled={!potionQty}/>
       {abilities.map(a=><QuickButton key={a.slot} hotkey={String(a.slot)} icon={a.icon} label={a.name} badge={a.remaining>0?`${a.remaining.toFixed(1)}s`:''} cooldown={a.remaining} maxCooldown={a.cooldown} disabled={!a.ready} onClick={()=>call('castAbility',a.slot)} title={`${a.name} • ${a.cost} vigor • CD ${a.cooldown}s`}/>) }
       <QuickButton hotkey="Space" icon="↥" label="Pular" onClick={()=>call('jump')}/><QuickButton hotkey="Shift" icon="↯" label="Esquiva" onClick={()=>call('dash')}/><QuickButton hotkey="E" icon="☞" label="Interagir" onClick={()=>call('interact')}/><QuickButton hotkey="H" icon="♞" label="Montaria" onClick={()=>call('toggleMount')}/>
-    </div>
+    </div>}
 
-    <button className="help-button" onClick={()=>setHelp(v=>!v)}>?</button>
-    {help&&<div className="help glass"><b>CONTROLES</b><span>WASD — mover • Espaço — pular • Ctrl — correr</span><span>Fora do combate: segure o botão direito para girar a câmera</span><span><b>Q</b> — alterna Modo Combate / Cursor Livre</span><span>No combate: mouse move a câmera • mira centralizada</span><span>Mira + clique esquerdo — atacar/coletar</span><span>1 / 2 / 3 ou clique — poderes</span><span>Direito — bloquear • Shift — esquiva</span><span>E — interagir • R — poção • H — montaria</span><span>I/G/T/J/U/K/P/M/O — inventário, grimório, viajante, missões, guilda, atributos, troca, mapa, opções</span></div>}
+    {viewport.isDesktop&&<><button className="help-button" onClick={()=>setHelp(v=>!v)}>?</button>
+    {help&&<div className="help glass"><b>CONTROLES</b><span>WASD — mover • Espaço — pular • Ctrl — correr</span><span>Fora do combate: segure o botão direito para girar a câmera</span><span><b>Q</b> — alterna Modo Combate / Cursor Livre</span><span>No combate: mouse move a câmera • mira centralizada</span><span>Mira + clique esquerdo — atacar/coletar</span><span>1 / 2 / 3 ou clique — poderes</span><span>Direito — bloquear • Shift — esquiva</span><span>E — interagir • R — poção • H — montaria</span><span>I/G/T/J/U/K/P/M/O — inventário, grimório, viajante, missões, guilda, atributos, troca, mapa, opções</span></div>}</>}
 
-    <MobileControls hud={hud} abilities={abilities} call={call} touch={!viewport.isDesktop && viewport.isTouch} onHelp={()=>setHelp(v=>!v)}/>
+    <MobileControls hud={hud} abilities={abilities} call={call} touch={!viewport.isDesktop && viewport.isTouch}/>
 
     {panel&&<Overlay panelKey={panel} title={roleTitle[panel]||'Interação'} dialogue={hud.dialogue} mapMode={panel==='map'} onClose={()=>call('closePanel')}>
       {panel==='inventory'&&<Inventory hud={hud} equip={id=>call('equipItem',id)} unequip={s=>call('unequip',s)} call={call}/>} 
@@ -234,7 +234,7 @@ export default function App(){
       {panel==='map'&&<WorldMap hud={hud}/>} 
       {panel==='settings'&&<Settings hud={hud} apply={v=>call('applySettings',v)} connect={url=>call('connectMultiplayer',url)} setName={name=>call('setPlayerName',name)} call={call}/>} 
     </Overlay>}
-    {hud.needsNickname&&<AuthGate initialServer={hud.multiplayer?.room||'asterra-01'} onLogin={(session,profile)=>call('setPlayerAccount',session,profile)}/>}
+    {hud.needsNickname&&<AuthGate onLogin={(session,profile)=>call('setPlayerAccount',session,profile)}/>}
     
     {hud.dungeonModal && <GateModal modal={hud.dungeonModal} call={call} onClose={() => call('closeGateModal')} />}
     {hud.dungeonCompletion && <DungeonCompletionModal completion={hud.dungeonCompletion} onClose={() => call('closeDungeonCompletion')} />}
@@ -580,7 +580,7 @@ function Attributes({hud,allocate}){
   </div>
 }
 
-function MobileControls({hud,abilities,call,touch,onHelp}){
+function MobileControls({hud,abilities,call,touch}){
   const [stickCenter,setStickCenter]=useState(null)
   const [stickOffset,setStickOffset]=useState({x:0,y:0})
   const [menuOpen,setMenuOpen]=useState(false)
@@ -689,13 +689,9 @@ function MobileControls({hud,abilities,call,touch,onHelp}){
       </button>
       <button onClick={()=>closeAnd('map')}>🗺<small>Mapa</small></button>
       <button onClick={()=>closeAnd('settings')}>⚙<small>Opções</small></button>
-      <button onClick={()=>{setMenuOpen(false);call('toggleCombatMode')}}>
-        {hud.combatMode?'🎯':'👁'}<small>{hud.combatMode?'Mira Fixa':'Câm. Livre'}</small>
-      </button>
-      <button onClick={()=>{setMenuOpen(false);onHelp()}}>❔<small>Ajuda</small></button>
     </div>}
     {!hud.uiPanel&&<>
-      {hud.multiplayer?.connected&&<div className={`mobile-network-chip glass ${hud.multiplayer?.quality||''}`}><b>● ONLINE</b><span>{hud.multiplayer.players||0}</span><small>{String(hud.multiplayer?.room||'asterra-01').replace('asterra-','L')}</small>{hud.multiplayer.latencyMs>0&&<small>{Math.round(hud.multiplayer.latencyMs)} ms</small>}</div>}
+      {hud.multiplayer?.connected&&<div className={`mobile-network-chip glass ${hud.multiplayer?.quality||''}`}><b>● ONLINE</b><span>{hud.multiplayer.players||0}</span><small>{String(hud.multiplayer?.room||'asterra-global').replace('asterra-','L')}</small>{hud.multiplayer.latencyMs>0&&<small>{Math.round(hud.multiplayer.latencyMs)} ms</small>}</div>}
       {hud.actionButton&&<button disabled={hud.actionButton.blocked} className={`mobile-prominent-action ${hud.actionButton.type||''} ${hud.actionButton.blocked?'blocked':''}`} onClick={()=>call('interact')} aria-label={hud.actionButton.label}><span>{hud.actionButton.icon||'☞'}</span><div><b>{hud.actionButton.label}</b>{hud.actionButton.detail&&<small>{hud.actionButton.detail}</small>}</div><em>{hud.actionButton.blocked?'EQUIPE':'TOCAR'}</em></button>}
       
       {/* Dynamic Left Touch Zone for Movement Joystick */}
@@ -1397,7 +1393,7 @@ function Settings({hud,apply,connect,setName,call}){
   const [sbUrl, setSbUrl] = useState(supabaseCfg.url || '')
   const [sbKey, setSbKey] = useState(supabaseCfg.key || '')
   const [sbStatus, setSbStatus] = useState('')
-  const currentLobby=hud.multiplayer?.room||s.multiplayerRoom||'asterra-01'
+  const currentLobby='asterra-global'
 
   const handleSaveSupabase = () => {
     saveSupabaseConfig(sbUrl, sbKey)
@@ -1499,7 +1495,7 @@ function Settings({hud,apply,connect,setName,call}){
     </Setting>
     <p className="camera-setting-note">Controle normal: arrastar para os lados vira para os lados; arrastar para cima olha para cima. Ative a inversão de lados (horizontal) ou cima/baixo (vertical) conforme sua preferência.</p>
     <div className="lobby-setting glass">
-      <div><b>Lobbies multiplayer</b><small>Na primeira entrada o jogo escolhe um lobby e salva sua escolha. Ao voltar, você entra automaticamente no último lobby usado.</small></div>
+      <div><b>Mundo multiplayer</b><small>Todos os aventureiros entram em Asterra Global.</small></div>
       <div className="lobby-buttons">{multiplayerLobbies.map(l=><button key={l.id} className={currentLobby===l.id?'active':''} onClick={()=>call('setMultiplayerLobby',l.id)}>{l.name}{currentLobby===l.id?<small>ATUAL</small>:null}</button>)}</div>
     </div>
     <div className="save-backup-setting glass">
@@ -1552,15 +1548,12 @@ function Setting({label,value,children}){return <label className="setting"><span
 function formatRefresh(ms){if(ms==null)return '--:--';const s=Math.max(0,Math.ceil(ms/1000));return `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`}
 
 
-function AuthGate({ initialServer = 'asterra-01', onLogin }) {
+function AuthGate({ onLogin }) {
   const [mode, setMode] = useState('login')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const [selectedServer, setSelectedServer] = useState(() => {
-    const saved = getSavedAccountSession()
-    return saved?.server || initialServer || 'asterra-01'
-  })
+  const [selectedServer, setSelectedServer] = useState('asterra-global')
   const [loading, setLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
   const [savedNick, setSavedNick] = useState('')
@@ -1576,9 +1569,6 @@ function AuthGate({ initialServer = 'asterra-01', onLogin }) {
     if (lastNick) {
       setUsername(lastNick)
       setSavedNick(lastNick)
-    }
-    if (saved?.server) {
-      setSelectedServer(saved.server)
     }
   }, [])
 
