@@ -19,8 +19,9 @@ function getViewportState(){
   if(typeof window==='undefined')return{w:1366,h:768,isCoarse:false,isMobile:false,isTablet:false,isDesktop:true,isTouch:false,isLandscape:true}
   const w=window.innerWidth||1366,h=window.innerHeight||768
   const ua=navigator.userAgent||''
-  const isMobileUA=/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua)
+  const isMobileUA=/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua)||(/Macintosh/i.test(ua)&&navigator.maxTouchPoints>1)
   const hasFinePointer=window.matchMedia?.('(pointer: fine)').matches
+  const isCoarse=window.matchMedia?.('(pointer: coarse)').matches||navigator.maxTouchPoints>0
   const short=Math.min(w,h)
 
   // Real mobile phone: mobile UA and narrow/short screen, or explicit mobile emulation
@@ -30,9 +31,9 @@ function getViewportState(){
 
   const isMobile = isPhone
   // Touch mode is ONLY for actual phones and tablets, NEVER for desktop PC!
-  const isTouch = (isPhone || isTablet) && (isMobileUA || !hasFinePointer)
+  const isTouch = (isPhone || isTablet) && isCoarse
 
-  return { w, h, isCoarse: !hasFinePointer, isMobile, isTablet, isDesktop, isTouch, isLandscape: w >= h }
+  return { w, h, isCoarse, isMobile, isTablet, isDesktop, isTouch, isLandscape: w >= h }
 }
 function getAdaptiveScale(viewport,requested=1.2){
   const req=clampNum(Number(requested)||1.2,.85,2)
@@ -86,7 +87,7 @@ export default function App(){
   const menuScale=getMenuScale(viewport,requestedScale)
   const layoutClass=viewport.isDesktop?'is-desktop':viewport.isMobile?'is-mobile':'is-tablet'
   const orientationClass=viewport.isLandscape?'is-landscape':'is-portrait'
-  const touchClass=viewport.isDesktop?'mouse-ui':viewport.isTouch?'touch-ui':'mouse-ui'
+  const touchClass=viewport.isTouch?'touch-ui':'mouse-ui'
   const cssVars={
     '--ui-scale':hudScale,'--menu-scale':menuScale,'--viewport-h':`${viewport.h}px`,'--viewport-w':`${viewport.w}px`,
     '--safe-top':'max(10px, env(safe-area-inset-top))','--safe-right':'max(10px, env(safe-area-inset-right))','--safe-bottom':'max(10px, env(safe-area-inset-bottom))','--safe-left':'max(10px, env(safe-area-inset-left))',
@@ -665,7 +666,6 @@ function MobileControls({hud,abilities,call,touch}){
     }
   }
 
-  const toggleRun=()=>call('setMobileRun',!hud.mobileRunning)
   const closeAnd=(panel)=>{setMenuOpen(false);call('togglePanel',panel)}
 
   if(!touch)return null
@@ -728,10 +728,10 @@ function MobileControls({hud,abilities,call,touch}){
       <div className="mobile-actions">
         <button className="mobile-attack" onPointerDown={e=>{e.stopPropagation();e.currentTarget.setPointerCapture?.(e.pointerId);call('setAutoAttack',true)}} onPointerUp={e=>{e.stopPropagation();try{e.currentTarget.releasePointerCapture?.(e.pointerId)}catch{};call('setAutoAttack',false)}} onPointerCancel={e=>{e.stopPropagation();call('setAutoAttack',false)}}>⚔<small>ATACAR</small></button>
         <button className="mobile-block" onPointerDown={e=>{e.stopPropagation();e.currentTarget.setPointerCapture?.(e.pointerId);call('setMobileBlock',true)}} onPointerUp={e=>{e.stopPropagation();try{e.currentTarget.releasePointerCapture?.(e.pointerId)}catch{};call('setMobileBlock',false)}} onPointerCancel={e=>{e.stopPropagation();call('setMobileBlock',false)}}>🛡<small>DEFESA</small></button>
-        <button className="mobile-dash" onClick={(e)=>{e.stopPropagation();call('dash')}}>↯<small>ESQUIVA</small></button>
+        <button className="mobile-dash" onPointerDown={e=>{e.preventDefault();e.stopPropagation();call('dash')}}>↯<small>ESQUIVA</small></button>
         <button className={`mobile-use ${hud.actionButton?'has-context':''}`} onClick={(e)=>{e.stopPropagation();call('interact')}}>{hud.actionButton?.icon||'☞'}<small>USAR</small></button>
-        <button className={`mobile-run ${hud.mobileRunning?'active':''}`} onClick={(e)=>{e.stopPropagation();toggleRun()}}>🏃<small>{hud.mobileRunning?'CORRENDO':'CORRER'}</small></button>
-        <button className="mobile-jump" onClick={(e)=>{e.stopPropagation();call('setMobileJump')}}>↥<small>PULAR</small></button>
+        <button className={`mobile-run ${hud.mobileRunning?'active':''}`} onPointerDown={e=>{e.preventDefault();e.stopPropagation();e.currentTarget.setPointerCapture?.(e.pointerId);call('setMobileRun',true)}} onPointerUp={e=>{e.stopPropagation();try{e.currentTarget.releasePointerCapture?.(e.pointerId)}catch{};call('setMobileRun',false)}} onPointerCancel={e=>{e.stopPropagation();call('setMobileRun',false)}} onLostPointerCapture={()=>call('setMobileRun',false)}>🏃<small>{hud.mobileRunning?'CORRENDO':'CORRER'}</small></button>
+        <button className="mobile-jump" onPointerDown={e=>{e.preventDefault();e.stopPropagation();call('setMobileJump')}}>↥<small>PULAR</small></button>
       </div>
       <div className="mobile-powers-bottom">
         {abilities.map(a=><button key={a.slot} disabled={!a.ready||hud.stamina<a.cost} onClick={(e)=>{e.stopPropagation();call('castAbility',a.slot)}} title={`${a.name} • ${a.cost} vigor`}><span>{a.icon}</span><small>{a.short||a.name}</small>{a.remaining>0&&<em>{a.remaining.toFixed(1)}</em>}</button>)}
