@@ -534,12 +534,12 @@ function slotIcon(s, item){
     if(item?.subtype==='pickaxe') return '⛏️'
     return '🪓'
   }
-  return s==='armor'?'◈':s==='boots'?'⬒':s==='talisman'?'✦':'◆'
+  return s==='armor'?'🛡️':s==='boots'?'⬒':s==='talisman'?'✦':'◆'
 }
 
 function ItemCard({item,actions,compact=false,isSelected=false,onSelect}){
   const stats=item.stats||{}
-  const orbIcon=item.icon||(item.type==='tool'?(item.subtype==='pickaxe'?'⛏️':'🪓'):item.type==='weapon'?(item.subtype==='bow'?'🏹':item.subtype==='dagger'?'🗡':item.subtype==='spellbook'?'📖':item.subtype==='axe'?'🪓':item.subtype==='pickaxe'?'⛏️':'⚔'):item.type==='armor'?'◈':item.type==='boots'?'⬒':item.type==='material'||item.type==='resource'?'🪵':item.subtype==='potion'?'🧪':'✦')
+  const orbIcon=item.icon||(item.type==='tool'?(item.subtype==='pickaxe'?'⛏️':'🪓'):item.type==='weapon'?(item.subtype==='bow'?'🏹':item.subtype==='dagger'?'🗡':item.subtype==='spellbook'?'📖':item.subtype==='axe'?'🪓':item.subtype==='pickaxe'?'⛏️':'⚔'):item.type==='armor'?'🛡️':item.type==='boots'?'⬒':item.type==='material'||item.type==='resource'?'🪵':item.subtype==='potion'?'🧪':'✦')
   const qty=Math.max(1,Number(item.qty)||1),max=Number(item.maxDurability)||0,cur=Number.isFinite(Number(item.durability))?Number(item.durability):max,durPct=max?Math.max(0,Math.min(100,cur/max*100)):100
   return <article onClick={onSelect} className={`item-card ${compact?'compact':''} ${isSelected?'is-selected':''} ${item.broken||durPct<=0?'broken':''}`} style={{'--rarity':item.color||'#cbd5e1', cursor: onSelect ? 'pointer' : 'default'}} title={`${item.name} • Nv.${item.level||1}`}>
     {qty>1&&<strong className="stack-badge">×{qty}</strong>}
@@ -818,7 +818,7 @@ function MerchantCard({item,mode,hud,isSelected,onToggleSelect,onSell,onBuy,sell
   const max=Number(item.maxDurability)||0
   const cur=Number.isFinite(Number(item.durability))?Number(item.durability):max
   const durPct=max?Math.max(0,Math.min(100,cur/max*100)):100
-  const orbIcon=item.icon||(item.type==='tool'?(item.subtype==='pickaxe'?'⛏️':'🪓'):item.type==='weapon'?(item.subtype==='bow'?'🏹':item.subtype==='dagger'?'🗡':item.subtype==='spellbook'?'📖':item.subtype==='axe'?'🪓':item.subtype==='pickaxe'?'⛏️':'⚔'):item.type==='armor'?'◈':item.type==='boots'?'⬒':item.type==='material'||item.type==='resource'?'🪵':item.subtype==='potion'?'🧪':'✦')
+  const orbIcon=item.icon||(item.type==='tool'?(item.subtype==='pickaxe'?'⛏️':'🪓'):item.type==='weapon'?(item.subtype==='bow'?'🏹':item.subtype==='dagger'?'🗡':item.subtype==='spellbook'?'📖':item.subtype==='axe'?'🪓':item.subtype==='pickaxe'?'⛏️':'⚔'):item.type==='armor'?'🛡️':item.type==='boots'?'⬒':item.type==='material'||item.type==='resource'?'🪵':item.subtype==='potion'?'🧪':'✦')
   const statSummary=stats.attack?`+${Math.round(stats.attack)} ATK `:stats.defense?`+${Math.round(stats.defense)} DEF `:stats.speed?`+${stats.speed} SPD `:stats.range?`[${stats.range}m] `:item.harvestBonus?.tree?`Madeira ×${item.harvestBonus.tree} `:item.harvestBonus?.ore?`Minérios ×${item.harvestBonus.ore} `:item.power?`Poder ${item.power}`:(item.description||'')
   const canBuy=hud.gold>=item.value
 
