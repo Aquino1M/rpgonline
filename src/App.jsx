@@ -11,7 +11,7 @@ import WorldMap from './ui/WorldMap.jsx'
 
 const initial={playerName:'',needsNickname:true,level:1,xp:0,nextXp:120,hp:120,maxHp:120,stamina:100,maxStamina:100,gold:220,atk:16,def:5,critChance:0,zone:'Vila Aurora',zoneId:'aurora',currentCity:'Cidadela Aurora',inventory:[],inventoryCapacity:40,backpackLevel:0,equipment:{},quests:[],guildMissions:[],guildRank:'E',guildRankIndex:0,guildPoints:0,attributePoints:0,attributes:{strength:0,vitality:0,agility:0,intellect:0},weather:'Céu limpo',time:'08:15',mount:{},abilities:[],combatMode:false,inCombat:false,combatTimer:0,multiplayer:{connected:false,url:'',room:'asterra-global',players:0,latencyMs:0,quality:'offline',reconnecting:false},settings:{renderDistance:2,pixelRatio:1,uiScale:1.2,invertCameraX:false,invertCameraY:false,invertCamera:false,multiplayerUrl:''},playerPosition:{x:0,z:0},stats:{kills:0,bosses:0,dungeons:0},ores:0,party:{id:null,leaderId:null,members:[],totalXP:0},onlinePlayers:[],economy:{label:'Mercado dos Despertos',description:'Itens iniciais',theme:'Aurora'}}
 const slotNames={weapon:'Arma',armor:'Armadura',boots:'Botas',talisman:'Talismã'}
-const roleTitle={inventory:'Inventário & Equipamento',grimoire:'Grimório do Despertar (Roleta de Almas)',travel:'Moço Viajante (Rotas de Caravana)',quests:'Missões',guild:'Guilda de Aventureiros',townhall:'Prefeitura de Aurora (Juramento do Cavaleiro)',attributes:'Atributos',merchant:'Mercador',blacksmith:'Ferreiro Rúnico',stable:'Estábulos & Domação de Montarias',map:'Mapa de Asterra',settings:'Configurações',trade:'Troca entre Jogadores'}
+const roleTitle={inventory:'Inventário & Equipamento',grimoire:'Grimório do Despertar (Roleta de Almas)',travel:'Moço Viajante (Rotas de Caravana)',quests:'Missões',guild:'Guilda de Aventureiros',townhall:'Prefeitura de Aurora (Juramento do Cavaleiro)',attributes:'Atributos',merchant:'Mercador',blacksmith:'Ferreiro Rúnico',stable:'Estábulos & Domação de Montarias',pets:'Companheiros',map:'Mapa de Asterra',settings:'Configurações',trade:'Troca entre Jogadores'}
 const fallbackAbilities=[{slot:1,name:'Corte Astral',short:'Corte',icon:'✦',cost:14,remaining:0,ready:true},{slot:2,name:'Onda Astral',short:'Onda',icon:'✹',cost:28,remaining:0,ready:true},{slot:3,name:'Passo Etéreo',short:'Passo',icon:'➠',cost:22,remaining:0,ready:true}]
 const multiplayerLobbies=[{id:'asterra-global',name:'Asterra Global'}]
 const getRankHex=r=>{const rank=String(r||'E');if(rank.startsWith('ZZZ'))return'#ff4fd8';if(rank.startsWith('ZZ'))return'#c84fff';if(rank.startsWith('Z'))return'#9d62ff';if(rank.startsWith('EX'))return'#ff6b77';if(rank.startsWith('SSS'))return'#ffa233';if(rank.startsWith('SS'))return'#ffcf45';if(rank.startsWith('S'))return'#f5df71';if(rank==='A')return'#d18cff';if(rank==='B')return'#68b9ff';if(rank==='C')return'#72d89c';if(rank==='D')return'#a7bdcc';return'#94a3b8'}
@@ -155,6 +155,7 @@ export default function App(){
         </b>
       ) : null}
       {hud.multiplayer?.connected&&<b className="online-status">● ONLINE {hud.multiplayer.totalOnline || (hud.multiplayer.players ? hud.multiplayer.players + 1 : 1)} {hud.multiplayer.transport==='supabase'?'(SUPABASE)':hud.multiplayer.transport==='http'?'(VERCEL)':'(LAN)'}</b>}
+      {(hud.wantedLevel||0)>0&&<b className="combat-status" style={{color:'#fbbf24'}}>🚨 PROCURADO {hud.wantedLevel}/5</b>}
       {hud.mount?.active&&<b>♞ Montado</b>}
       <button type="button" className="hud-mini-btn" onClick={toggleFullScreen} title="Alternar Modo Tela Cheia">⛶ Tela Cheia</button>
       {!pwaState.isInstalled && (
@@ -227,7 +228,7 @@ export default function App(){
         </button>
       </div>
     )}
-    {hud.caravanModal && <CaravanModal modal={hud.caravanModal} onClose={() => call('closeCaravanModal')} />}
+    {hud.caravanModal && <CaravanModal modal={hud.caravanModal} onLoot={id=>call('lootCaravan',id)} onClose={() => call('closeCaravanModal')} />}
     {hud.levelUpCelebration && (
       <div className="level-up-modal" style={{position:'absolute',top:'35%',left:'50%',transform:'translate(-50%,-50%)',zIndex:30,textAlign:'center',pointerEvents:'none',animation:'toastin .4s cubic-bezier(0.16, 1, 0.3, 1)'}}>
         <div style={{fontSize:'36px',fontWeight:'900',letterSpacing:'.18em',color:'#facc15',textShadow:'0 0 35px #eab308, 0 4px 15px rgba(0,0,0,0.8)'}}>★ LEVEL UP! ★</div>
@@ -262,6 +263,7 @@ export default function App(){
       {panel==='merchant'&&<Merchant hud={hud} buy={id=>call('buyItem',id)} sell={id=>call('sellItem',id)} sellMultiple={ids=>call('sellMultipleItems',ids)}/>} 
       {panel==='blacksmith'&&<Blacksmith hud={hud} upgrade={s=>call('upgrade',s)} repair={s=>call('repairItem',s)} buy={id=>call('buyItem',id)} upgradeBackpack={()=>call('backpackUpgrade')}/>}
       {panel==='stable'&&<Stable hud={hud} horseBreeds={hud.horseBreeds||HORSE_BREEDS} onTame={id=>call('tameHorse',id)} onSelect={id=>call('selectHorse',id)} toggle={()=>call('toggleMount')} onOpenTownHall={()=>call('togglePanel','townhall')}/>} 
+      {panel==='pets'&&<Pets hud={hud} arm={()=>call('armPetTaming')} select={id=>call('selectPet',id)}/>}
       {panel==='trade'&&<TradeModal hud={hud} call={call} onClose={()=>call('closePanel')}/>}
       {panel==='map'&&<WorldMap hud={hud}/>} 
       {panel==='settings'&&<Settings hud={hud} apply={v=>call('applySettings',v)} connect={url=>call('connectMultiplayer',url)} setName={name=>call('setPlayerName',name)} call={call}/>} 
@@ -330,7 +332,7 @@ function Inventory({hud,equip,unequip,call}){
   const items=hud.inventory||[]
   const categories={
     all:()=>true,
-    equipment:it=>['weapon','armor','boots','talisman'].includes(it.type),
+    weapons:it=>it.type==='weapon',
     armor:it=>['armor','boots','talisman'].includes(it.type),
     tools:it=>it.type==='tool'||it.subtype==='axe'||it.subtype==='pickaxe',
     consumables:it=>it.type==='consumable'||it.subtype==='potion'||it.subtype==='grimoire',
@@ -473,7 +475,7 @@ function Inventory({hud,equip,unequip,call}){
           </div>
           <div className="bag-category-tabs inventory-tabs native-tab-row category-tab-wrap">
             <button className={tab==='all'?'active':''} onPointerUp={tabPointer(setTab,'all')} onClick={()=>setTab('all')}>Todos ({items.length})</button>
-            <button className={tab==='equipment'?'active':''} onPointerUp={tabPointer(setTab,'equipment')} onClick={()=>setTab('equipment')}>⚔ Equipamentos</button>
+            <button className={tab==='weapons'?'active':''} onPointerUp={tabPointer(setTab,'weapons')} onClick={()=>setTab('weapons')}>⚔ Armas</button>
             <button className={tab==='armor'?'active':''} onPointerUp={tabPointer(setTab,'armor')} onClick={()=>setTab('armor')}>🛡 Armaduras</button>
             <button className={tab==='tools'?'active':''} onPointerUp={tabPointer(setTab,'tools')} onClick={()=>setTab('tools')}>🪓 Ferramentas</button>
             <button className={tab==='consumables'?'active':''} onPointerUp={tabPointer(setTab,'consumables')} onClick={()=>setTab('consumables')}>🧪 Consumíveis</button>
@@ -893,9 +895,9 @@ function Merchant({hud,buy,sell,sellMultiple}){
   const eco=hud.economy||{}
   const [mode,setMode]=useState('buy'),[shopTab,setShopTab]=useState('all'),[sellTab,setSellTab]=useState('all'),[selectedIds,setSelectedIds]=useState(new Set())
   const stock=hud.merchant||[]
-  const filteredStock=stock.filter(it=>shopTab==='all'||shopTab==='tools'&&(it.type==='tool'||['axe','pickaxe'].includes(it.subtype))||shopTab==='equipment'&&['weapon','armor','boots','talisman'].includes(it.type)||shopTab==='consumables'&&(it.type==='consumable'||['potion','grimoire'].includes(it.subtype))).sort((a,b)=>itemRarityRank(b)-itemRarityRank(a))
+  const filteredStock=stock.filter(it=>shopTab==='all'||shopTab==='tools'&&(it.type==='tool'||['axe','pickaxe'].includes(it.subtype))||shopTab==='weapons'&&it.type==='weapon'||shopTab==='armor'&&['armor','boots','talisman'].includes(it.type)||shopTab==='consumables'&&(it.type==='consumable'||['potion','grimoire','pet_food'].includes(it.subtype))).sort((a,b)=>itemRarityRank(b)-itemRarityRank(a))
   const sellable=hud.inventory?.filter(x=>x.subtype!=='potion')||[]
-  const filteredSellable=sellable.filter(it=>sellTab==='all'||sellTab==='drops'&&(it.type==='material'||it.type==='resource'||['monster-drop','wood','coal','iron','fish'].includes(it.subtype))||sellTab==='equipment'&&['weapon','armor','boots','talisman'].includes(it.type)||sellTab==='tools'&&(it.type==='tool'||['axe','pickaxe'].includes(it.subtype))).sort((a,b)=>itemRarityRank(b)-itemRarityRank(a))
+  const filteredSellable=sellable.filter(it=>sellTab==='all'||sellTab==='drops'&&(it.type==='material'||it.type==='resource'||['monster-drop','wood','coal','iron','fish'].includes(it.subtype))||sellTab==='weapons'&&it.type==='weapon'||sellTab==='armor'&&['armor','boots','talisman'].includes(it.type)||sellTab==='tools'&&(it.type==='tool'||['axe','pickaxe'].includes(it.subtype))).sort((a,b)=>itemRarityRank(b)-itemRarityRank(a))
 
   const isDemanded = it => {
     if (!eco.demands || !Array.isArray(eco.demands)) return false
@@ -968,7 +970,8 @@ function Merchant({hud,buy,sell,sellMultiple}){
             <div className="shop-category-tabs native-tab-row category-tab-wrap">
               <button className={shopTab==='all'?'active':''} onPointerUp={tabPointer(setShopTab,'all')} onClick={()=>setShopTab('all')}>Todos</button>
               <button className={shopTab==='tools'?'active':''} onPointerUp={tabPointer(setShopTab,'tools')} onClick={()=>setShopTab('tools')}>🪓 Ferramentas</button>
-              <button className={shopTab==='equipment'?'active':''} onPointerUp={tabPointer(setShopTab,'equipment')} onClick={()=>setShopTab('equipment')}>⚔ Equipamentos</button>
+              <button className={shopTab==='weapons'?'active':''} onPointerUp={tabPointer(setShopTab,'weapons')} onClick={()=>setShopTab('weapons')}>⚔ Armas</button>
+              <button className={shopTab==='armor'?'active':''} onPointerUp={tabPointer(setShopTab,'armor')} onClick={()=>setShopTab('armor')}>🛡 Armaduras</button>
               <button className={shopTab==='consumables'?'active':''} onPointerUp={tabPointer(setShopTab,'consumables')} onClick={()=>setShopTab('consumables')}>🧪 Consumíveis</button>
             </div>
             <span className="shop-refresh-badge">⏱ {formatRefresh(hud.shopRefresh?.remainingMs)}</span>
@@ -993,7 +996,8 @@ function Merchant({hud,buy,sell,sellMultiple}){
             <div className="shop-category-tabs native-tab-row category-tab-wrap">
               <button className={sellTab==='all'?'active':''} onPointerUp={tabPointer(setSellTab,'all')} onClick={()=>setSellTab('all')}>Todos</button>
               <button className={sellTab==='drops'?'active':''} onPointerUp={tabPointer(setSellTab,'drops')} onClick={()=>setSellTab('drops')}>🐟 Drops</button>
-              <button className={sellTab==='equipment'?'active':''} onPointerUp={tabPointer(setSellTab,'equipment')} onClick={()=>setSellTab('equipment')}>⚔ Equipamentos</button>
+              <button className={sellTab==='weapons'?'active':''} onPointerUp={tabPointer(setSellTab,'weapons')} onClick={()=>setSellTab('weapons')}>⚔ Armas</button>
+              <button className={sellTab==='armor'?'active':''} onPointerUp={tabPointer(setSellTab,'armor')} onClick={()=>setSellTab('armor')}>🛡 Armaduras</button>
               <button className={sellTab==='tools'?'active':''} onPointerUp={tabPointer(setSellTab,'tools')} onClick={()=>setSellTab('tools')}>🪓 Ferramentas</button>
             </div>
 
@@ -1328,6 +1332,11 @@ function TownHall({ hud, accept, claim, onOpenStable }) {
       </div>
     </div>
   )
+}
+
+function Pets({hud,arm,select}){
+  const pets=hud.pets?.owned||[],activeId=hud.pets?.activeId,food=hud.inventory?.find(i=>i.subtype==='pet_food')?.qty||0
+  return <div className="stable-layout"><section className="tamed-horse-card glass"><div className="tamed-badge">🐾 DOMAÇÃO</div><div className="tamed-body"><div className="tamed-avatar">🐾</div><div className="tamed-info"><h3>Companheiros de Asterra</h3><p>Use uma Ração e ataque um monstro com menos de 55% de HP. Você pode guardar até cinco pets e equipar um.</p><div className="tamed-meta"><span>Rações: <b>{food}</b></span><span>Pets: <b>{pets.length}/5</b></span></div></div><div className="tamed-actions"><button type="button" disabled={!food||pets.length>=5} className={hud.pets?.tamingArmed?'tamed-toggle-btn active':'tamed-toggle-btn'} onClick={arm}>{hud.pets?.tamingArmed?'Ração equipada':'Usar ração'}</button></div></div></section><section className="stable-catalog-section"><div className="section-title"><div><small>GUARDIÃO DOS COMPANHEIROS</small><h3>Seus Pets</h3></div><span>{pets.length}/5</span></div><div className="horse-grid">{pets.length?pets.map(p=>{const recovering=p.recoverUntil>Date.now(),active=p.id===activeId;return <article className={`horse-card glass ${active?'current':''}`} key={p.id}><header><div><span className="horse-lvl-badge">Nv. {p.level}</span><h4>{p.name}</h4></div><span className="horse-tag">{recovering?`Recupera em ${Math.ceil((p.recoverUntil-Date.now())/1000)}s`:active?'★ Ativo':'Disponível'}</span></header><p>HP {Math.ceil(p.hp)}/{p.maxHp} • Dano {p.damage}<br/>{p.specialName||'Poder da criatura'}</p><button type="button" disabled={recovering||active} onClick={()=>select(p.id)}>{active?'Equipado':'Equipar para lutar'}</button></article>}):<p className="empty">Nenhum pet domado. Compre Ração de Domação no mercador.</p>}</div></section></div>
 }
 
 function Stable({ hud, horseBreeds = HORSE_BREEDS, onTame, onSelect, toggle, onOpenTownHall }) {
@@ -2294,9 +2303,9 @@ function WaypointArrow({ marker, playerPos, cameraYaw = 0, onClear }) {
   )
 }
 
-function CaravanModal({ modal, onClose }) {
+function CaravanModal({ modal, onClose, onLoot }) {
   if (!modal) return null
-  const { title, text, goods = [], type = 'info', onLoot, onHelp } = modal
+  const { title, text, goods = [], type = 'info', onHelp } = modal
 
   return (
     <div className="overlay-shell" style={{ zIndex: 45, background: 'rgba(2,6,15,0.85)', backdropFilter: 'blur(8px)' }}>
@@ -2342,7 +2351,7 @@ function CaravanModal({ modal, onClose }) {
             <button
               type="button"
               onClick={() => {
-                onLoot?.()
+                onLoot?.(modal.caravanId)
                 onClose()
               }}
               style={{

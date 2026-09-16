@@ -220,7 +220,7 @@ export class CaravanEscortAI {
 
       // AI Decision: Threat response vs marching in formation
       let threat = guard.target
-      if (threat && (threat.dead || threat.hp <= 0)) {
+      if (threat && (threat.dead || threat.hp <= 0 || threat === this.game.player && guard.mesh.position.distanceTo(this.game.player.position) > 30)) {
         threat = null
         guard.target = null
       }
@@ -312,8 +312,8 @@ export class CaravanEscortAI {
 
     if (threat === this.game.player) {
       // Hit player
-      this.game.state.hp = Math.max(0, (this.game.state.hp || 120) - guard.atk)
-      this.game.toast?.(`⚔️ ${guard.name} atingiu você por ${guard.atk} de dano!`)
+      const dealt=this.game.damagePlayer?.(guard.atk) ?? guard.atk
+      this.game.toast?.(`⚔️ ${guard.name} atingiu você por ${dealt} de dano!`)
       this.game.spawnAbilityRing?.(0xef4444, 1.6, 0.3)
       if (this.game.state.hp <= 0) {
         this.game.respawnPlayerAt?.(caravan.originCityId)

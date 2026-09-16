@@ -142,12 +142,16 @@ const dialogueForRole=(role,cityName)=>
   role==='merchant'?`Bem-vindo a ${cityName}. Eu compro os espólios dos monstros e vendo suprimentos.`
   :role==='blacksmith'?`A forja de ${cityName} transforma drops e minério em equipamentos dignos de um caçador.`
   :role==='stable'?'Cuide de sua montaria e ela levará você além das muralhas. Cavaleiros juramentados na Prefeitura podem domar cavalos aqui.'
+  :role==='pets'?'Traga Rações de Domação, enfraqueça uma criatura e ela poderá se tornar sua companheira. Você pode cuidar de até cinco pets e levar um por vez.'
   :role==='traveler'?'Minha caravana viaja entre os postos e cidadelas de Asterra. Para onde deseja viajar?'
   :role==='townhall'?'Bem-vindo à Prefeitura da Cidadela. Aqui são concedidos os decretos reais e o solene Juramento do Cavaleiro.'
   :role==='guild'?'Esta é a Guilda de Aventureiros. Contratos de caça, promoções de rank e equipes são gerenciados aqui.'
   :`As muralhas seguram as criaturas, mas os portais continuam surgindo do lado de fora.`
 
-export const NPC_DEFS = CITIES.flatMap(c=>c.services.map(s=>({...s,cityId:c.id,zoneId:c.zoneId,cityName:c.name,dialogue:dialogueForRole(s.role,c.name)})))
+export const NPC_DEFS = [
+  ...CITIES.flatMap(c=>c.services.map(s=>({...s,cityId:c.id,zoneId:c.zoneId,cityName:c.name,dialogue:dialogueForRole(s.role,c.name)}))),
+  {id:'aurora-pet-keeper',role:'pets',name:'Nala',title:'Guardião dos Companheiros',x:-15,z:8,color:0xf59e0b,cityId:'aurora-city',zoneId:'aurora',cityName:'Cidadela Aurora',dialogue:dialogueForRole('pets','Cidadela Aurora')}
+]
 
 export const HORSE_BREEDS = [
   { id: 'pony_aurora', name: 'Pônei de Aurora', level: 1, cost: 80, chance: 85, speedBonus: 2.2, color: 0x8b5a2b, icon: '🐴', desc: 'Dócil e resistente, ideal para os primeiros passos além da cidadela.' },

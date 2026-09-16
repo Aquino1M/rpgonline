@@ -373,6 +373,7 @@ export class CaravanManager {
     if (!threatsNearby && c.stateTimer > 8) {
       c.state = CARAVAN_STATES.TRAVELING
       c.attackedByPlayer = false
+      this.game.state.wantedLevel = Math.max(0, (this.game.state.wantedLevel || 0) - 1)
     }
   }
 
@@ -474,6 +475,7 @@ export class CaravanManager {
 
       // Crime alert toast
       this.game.toast?.(`🚨 CRIME! Você atacou a ${caravan.name}! Os guardas retaliarão!`)
+      this.game.state.wantedLevel = Math.min(5, (this.game.state.wantedLevel || 0) + 1)
       this.game.haptic?.(50)
     }
 
@@ -544,7 +546,7 @@ export class CaravanManager {
       if (this.game.addInventoryItem?.({
         id: `cargo_${Date.now()}_${Math.random()}`,
         name: item.name,
-        type: item.type,
+        type: item.type === 'potion' ? 'consumable' : item.type,
         subtype: item.type === 'potion' ? 'potion' : 'material',
         value: item.value,
         qty: item.qty || 5,
@@ -563,7 +565,11 @@ export class CaravanManager {
   openCaravanInfoModal(caravan) {
     if (!this.game.state) return
     this.game.state.caravanModal = {
-      caravan,
+      caravanId: caravan.id,
+      title: caravan.name,
+      type: caravan.lootAvailable ? 'loot' : 'info',
+      text: caravan.lootAvailable ? `A carga está desprotegida. Saqueie ${caravan.cargo.length} mercadorias e ${caravan.cargoGold} ouro.` : `${caravan.originCityName} → ${caravan.destCityName} • ${caravan.guards.filter(g => !g.dead).length}/${caravan.guards.length} guardas ativos. Ataque a carroça ou a escolta para iniciar o roubo.`,
+      goods: caravan.cargo.map(item => ({name:item.name,qty:item.qty||1})),
       origin: caravan.originCityName,
       destination: caravan.destCityName,
       category: caravan.category.name,
@@ -582,6 +588,14 @@ export class CaravanManager {
     if (this.game.state) {
       this.game.state.caravanModal = null
     }
+  }
+
+  lootCaravanById(id) {
+    const caravan=this.caravans.find(c=>c.id===id)
+    if (!caravan || !caravan.lootAvailable) return false
+    this.lootCaravan(caravan)
+    this.closeCaravanModal()
+    return true
   }
 
   onMonsterKilledNearCaravan(monster) {
@@ -694,7 +708,8 @@ export class CaravanManager {
         caravan.stateTimer = 0
         const currentRaids = this.routeRaidStats.get(caravan.routeKey) || 0
         this.routeRaidStats.set(caravan.routeKey, currentRaids + 1)
-        this.game.toast?.(`🚨 CRIME! Você atacou a escolta de ${caravan.name}!`)
+        this.game.state.wantedLevel = Math.min(5, (this.game.state.wantedLevel || 0) + 1)
+        this.game.toast?.(`🚨 PROCURADO ${this.game.state.wantedLevel}/5: você atacou a escolta de ${caravan.name}!`)
         this.game.haptic?.(40)
       }
 

@@ -29,7 +29,7 @@ export class ShadowGame {
     this.resourceNodes=[]; this.mobSpecialCooldowns=new Map()
     this.clock=new THREE.Clock(); this.yaw=Math.PI; this.pitch=0.14; this.cameraDistance=5.2; this.drag=false; this.pointerLocked=false
     this.weatherClock=0; this.weatherIndex=0; this.dayHours=8.25; this.lastHud=0; this.attackClock=0; this.specialClock=0; this.dashTime=0; this.invuln=0
-    this.abilityCooldowns=Object.fromEntries(ABILITIES.map(a=>[a.id,0])); this.raycaster=new THREE.Raycaster(); this.discovered=new Set(); this.savedDiscovered=[]; this.currentMerchantZoneMin=1; this.currentMerchantZoneMax=10; this.currentMerchantZoneId='aurora'; this.currentMerchantCityId='aurora-city'; this.localUpdatedAt=0; this.serverProfileTimestamp=0; this.accountId=''; this.cloudSaveInFlight=null; this.cloudSaveQueued=false; this.persistCloudProfile=saveCloudProfile
+    this.abilityCooldowns=Object.fromEntries(ABILITIES.map(a=>[a.id,0])); this.petVisual=null; this.petTarget=null; this.raycaster=new THREE.Raycaster(); this.discovered=new Set(); this.savedDiscovered=[]; this.currentMerchantZoneMin=1; this.currentMerchantZoneMax=10; this.currentMerchantZoneId='aurora'; this.currentMerchantCityId='aurora-city'; this.localUpdatedAt=0; this.serverProfileTimestamp=0; this.accountId=''; this.cloudSaveInFlight=null; this.cloudSaveQueued=false; this.persistCloudProfile=saveCloudProfile
     let savedSession = null
     try { savedSession = JSON.parse(localStorage.getItem('shadow_rpg_account_session') || 'null') } catch {}
     const savedNick = (savedSession?.username || localStorage.getItem('shadow-ascension-nick') || '').trim()
@@ -42,7 +42,7 @@ export class ShadowGame {
       version:8,playerName:savedNick,needsNickname:true,level:1,xp:0,nextXp:120,hp:120,maxHp:120,baseMaxHp:120,stamina:100,maxStamina:100,baseMaxStamina:100,gold:220,
       baseAtk:16,baseDef:5,atk:16,def:5,speed:7.1,zone:'Vila Aurora',zoneId:'aurora',target:null,dungeon:null,boss:null,
       inventory:starterInventory(),inventoryCapacity:40,backpackLevel:0,equipment:{weapon:null,armor:null,boots:null,talisman:null},quests:defaultQuestState(),
-      mount:{unlocked:false,active:false,oathCompleted:false,name:'Corcel de Aurora',currentHorseId:'horse_aurora',speedBonus:4.7,tamedHorses:[]},classState:defaultClassState(),travelState:defaultTravelState(),ambush:null,uiPanel:null,dialogue:null,interactionPrompt:null,
+      mount:{unlocked:false,active:false,oathCompleted:false,name:'Corcel de Aurora',currentHorseId:'horse_aurora',speedBonus:4.7,tamedHorses:[]},pets:{owned:[],activeId:null,tamingArmed:false},wantedLevel:0,classState:defaultClassState(),travelState:defaultTravelState(),ambush:null,uiPanel:null,dialogue:null,interactionPrompt:null,
       weather:'Céu limpo',time:'08:15',timeHours:8.25,portal:null,merchant:[],toast:null,settings:this.settings,
       worldMap:WORLD_MAP,playerPosition:{x:0,z:0},playerHeading:0,stats:{kills:0,dungeons:0,bosses:0},ores:2,
       abilities:ABILITIES.map(a=>({...a,remaining:0,ready:true})),currentCity:null,combatMode:false,inCombat:false,combatTimer:0,
@@ -1183,7 +1183,8 @@ export class ShadowGame {
     const incoming=Math.max(1,Math.round(amount)),blockCost=8
     const blocked=!!this.state.blocking&&this.state.stamina>=blockCost
     if(blocked)this.state.stamina=Math.max(0,this.state.stamina-blockCost)
-    const dealt=blocked?Math.max(1,Math.round(incoming*.45)):incoming
+    const barrier=performance.now()<(this.classBarrierUntil||0)
+    const dealt=barrier?Math.max(1,Math.round(incoming*.2)):blocked?Math.max(1,Math.round(incoming*.45)):incoming
     if(this.state.blocking&&!blocked&&(!this._lastBlockWarn||performance.now()-this._lastBlockWarn>1200)){
       this._lastBlockWarn=performance.now();this.toast('⚡ Sem vigor para defender!')
     }
@@ -1494,12 +1495,14 @@ export class ShadowGame {
     return best
   }
 
-  damageEnemy(e,amount,{knockback=.35,crit=false,network=true}={}){
+  damageEnemy(e,amount,{knockback=.35,crit=false,network=true,fromPet=false}={}){
     if(e?.isCaravanGuard||e?.isCaravanCart)return this.caravanManager?.onDamageCaravanEntity(e,amount,{knockback,crit})
     if(e?.adventurer)return this.damageBot(e,amount,{crit})
     if(!e||e.dead)return false;this.enterCombat(8);const dealt=Math.max(1,Math.round(amount*100/(100+(e.def||0)*5)));e.hp-=dealt
     this.state.target={name:e.name,level:e.level,hp:Math.max(0,e.hp),maxHp:e.maxHp,boss:e.boss,crit};if(network&&e.netId)this.multiplayer?.send({type:'enemy_damage',netId:e.netId,amount:dealt,hpAfter:Math.max(0,e.hp),maxHp:e.maxHp,world:this.currentWorldId(),respawnAt:Date.now()+5000});this.spawnDamageText(e.g.position,dealt,crit);this.flashEnemy(e,crit)
     if(knockback)e.g.position.addScaledVector(e.g.position.clone().sub(this.player.position).normalize(),knockback)
+    if(!fromPet&&this.tryTamePet(e))return true
+    if(!fromPet)this.petAttackTarget(e)
     if(e.hp<=0)this.kill(e);return true
   }
   flashEnemy(e,crit=false){const material=e?.body?.material;if(!material?.emissive)return;const old=material.emissive.clone(),oldIntensity=material.emissiveIntensity;material.emissive.set(crit?0xffd45b:0xffffff);material.emissiveIntensity=1.35;setTimeout(()=>{if(!e.dead&&material){material.emissive.copy(old);material.emissiveIntensity=oldIntensity}},90)}
@@ -1709,7 +1712,7 @@ export class ShadowGame {
     const aimed=this.getCrosshairTarget(6,.24);let best=aimed
     if(!best){let bd=4.15;const f=V3().set(Math.sin(this.player.rotation.y),0,Math.cos(this.player.rotation.y));for(const e of [...this.enemies,...this.bots]){if(e.dead||!e.g.visible)continue;const d=e.g.position.distanceTo(this.player.position);if(d<bd){const dir=e.g.position.clone().sub(this.player.position).normalize();if(dir.dot(f)>.05){best=e;bd=d}}}}
     if(best){
-      const dir=best.g.position.clone().sub(this.player.position);dir.y=0;if(dir.lengthSq())this.player.rotation.y=Math.atan2(dir.x,dir.z);let dmg=Math.floor(this.state.atk*(.72+Math.random()*.30));const crit=Math.random()<Math.min(.35,.08+(this.state.critChance||0)/100);if(crit)dmg=Math.round(dmg*1.5);this.damageEnemy(best,dmg,{knockback:.45,crit});this.haptic(crit?28:10);this.multiplayer?.send({type:'combat',action:'attack',world:this.currentWorldId()})
+      const dir=best.g.position.clone().sub(this.player.position);dir.y=0;if(dir.lengthSq())this.player.rotation.y=Math.atan2(dir.x,dir.z);let dmg=Math.round(this.state.atk*(.92+Math.random()*.16));const crit=Math.random()<Math.min(.35,.08+(this.state.critChance||0)/100);if(crit)dmg=Math.round(dmg*1.5);this.damageEnemy(best,dmg,{knockback:.45,crit});this.haptic(crit?28:10);this.multiplayer?.send({type:'combat',action:'attack',world:this.currentWorldId()})
       return
     }
 
@@ -1869,13 +1872,39 @@ export class ShadowGame {
     }
   }
 
+  activeAbilities(){
+    const cls=CLASSES_LIST.find(c=>c.id===(this.state.classState?.activeClassId||'mercenary_swordsman'))||CLASSES_LIST[0]
+    const skill=cls?.skill||{}
+    return ABILITIES.map(a=>a.slot===1?{...a,id:`class-${cls.id}`,name:skill.name||a.name,short:(skill.name||a.short).split(' ')[0],icon:'✦',cost:skill.stamina||a.cost,stamina:skill.stamina||a.stamina,cooldown:skill.cooldown||a.cooldown,description:skill.desc||a.description,type:skill.type||'melee_aoe',classAbility:true,color:cls.auraColor}:a)
+  }
   special(){return this.castAbility(2)}
   castAbility(slot=1){
-    const ability=ABILITIES.find(a=>a.slot===Number(slot));if(!ability||this.state.uiPanel)return false
+    const ability=this.activeAbilities().find(a=>a.slot===Number(slot));if(!ability||this.state.uiPanel)return false
     const remain=this.abilityCooldowns[ability.id]||0;if(remain>0||this.state.stamina<ability.cost)return false
     if(ability.slot===1||ability.slot===2)this.enterCombat(8)
     this.state.stamina-=ability.cost;this.abilityCooldowns[ability.id]=ability.cooldown;this.haptic(18);this.multiplayer?.send({type:'ability',slot:ability.slot,id:ability.id,world:this.currentWorldId()})
-    if(ability.slot===1){
+    if(ability.classAbility){
+      const type=ability.type||'melee_aoe',color=ability.color||0x76d9ff,range=/aoe|storm|burst|smite|summon|barrier/.test(type)?6.5:18
+      const target=this.getCrosshairTarget(range,.24)
+      if(type==='heal_burst'||type==='shield_barrier'){
+        const heal=Math.round(this.state.maxHp*(type==='heal_burst'?.45:.18));this.state.hp=Math.min(this.state.maxHp,this.state.hp+heal)
+        if(type==='shield_barrier')this.classBarrierUntil=performance.now()+3000
+        this.spawnAbilityRing(color,5.5,.55);this.toast(`${ability.name} • +${heal} HP`)
+      }else if(type==='dash_strike'||type==='teleport_backstab'){
+        this.dashTime=.36;this.invuln=.42;this.player.userData.motion='dash'
+        if(target)this.damageEnemy(target,Math.round(this.state.atk*2.15*(this.state.abilityDamageMult||1)),{knockback:.8,crit:type==='teleport_backstab'})
+        this.spawnAbilityRing(color,3.2,.35);this.toast(ability.name)
+      }else if(/aoe|storm|smite|summon/.test(type)){
+        const mult=type==='holy_smite'?2.6:type==='summon_beast'?1.65:2.2
+        this.specialAnim=.55;this.player.userData.motion='special';this.spawnAbilityRing(color,6.5,.55)
+        for(const e of [...this.enemies,...this.bots])if(!e.dead&&e.g.visible&&e.g.position.distanceTo(this.player.position)<6.5)this.damageEnemy(e,Math.round(this.state.atk*mult*(this.state.abilityDamageMult||1)),{knockback:.65})
+        this.toast(ability.name)
+      }else {
+        if(!target){this.abilityCooldowns[ability.id]=0;this.state.stamina+=ability.cost;this.toast('Mire em um inimigo para usar esta habilidade.');return false}
+        const mult=type==='multi_missile'?2.35:type==='projectile_line'?2.05:2.15
+        this.specialAnim=.42;this.player.userData.motion='special';this.spawnAbilityRing(color,2.4,.32);this.damageEnemy(target,Math.round(this.state.atk*mult*(this.state.abilityDamageMult||1)),{knockback:.7});this.toast(ability.name)
+      }
+    }else if(ability.slot===1){
       const target=this.getCrosshairTarget(ability.range,.22)
       if(!target){this.abilityCooldowns[ability.id]=0;this.state.stamina+=ability.cost;this.toast('Mire em um inimigo para usar Corte Astral.');return false}
       const dir=target.g.position.clone().sub(this.player.position);dir.y=0;if(dir.lengthSq())this.player.rotation.y=Math.atan2(dir.x,dir.z)
@@ -2068,7 +2097,7 @@ export class ShadowGame {
     this.toast(`🤝 Troca concluída: recebeu ${remoteOffer.items.length} item(ns)${remoteOffer.gold?` e ${remoteOffer.gold}◈`:''}.`)
     return true
   }
-  buyItem(shopId){const item=(this.state.merchant||[]).find(x=>x.id===shopId);if(!item||this.state.gold<item.value)return false;const stackable=item.subtype==='potion'&&this.state.inventory.some(x=>x.subtype==='potion');if(!stackable&&this.state.inventory.length>=this.inventoryCapacity()){this.toast('Mochila cheia.');return false}this.state.gold-=item.value;if(item.subtype==='potion'){const found=this.state.inventory.find(x=>x.subtype==='potion');if(found)found.qty=(found.qty||1)+1;else this.state.inventory.unshift({...item,id:`p-${Date.now()}`})}else{this.state.inventory.unshift({...item,id:`b-${Date.now()}-${Math.random()}`});this.state.merchant=this.state.merchant.filter(x=>x.id!==shopId)}this.toast('Compra realizada');return true}
+  buyItem(shopId){const item=(this.state.merchant||[]).find(x=>x.id===shopId);if(!item||this.state.gold<item.value)return false;const stackable=['potion','pet_food'].includes(item.subtype)&&this.state.inventory.some(x=>x.subtype===item.subtype);if(!stackable&&this.state.inventory.length>=this.inventoryCapacity()){this.toast('Mochila cheia.');return false}this.state.gold-=item.value;if(['potion','pet_food'].includes(item.subtype)){const found=this.state.inventory.find(x=>x.subtype===item.subtype);if(found)found.qty=(found.qty||1)+1;else this.state.inventory.unshift({...item,id:`p-${Date.now()}`})}else{this.state.inventory.unshift({...item,id:`b-${Date.now()}-${Math.random()}`});this.state.merchant=this.state.merchant.filter(x=>x.id!==shopId)}this.toast('Compra realizada');return true}
   upgrade(slot){const item=this.state.equipment[slot];if(!item)return false;const level=item.upgrade||0;if(level>=10)return false;const cost=Math.round(80+(level+1)*65+item.level*4),ore=1+Math.floor(level/3);if(this.state.gold<cost||this.state.ores<ore)return false;this.state.gold-=cost;this.state.ores-=ore;item.upgrade=level+1;progressQuest(this.state,'upgrade',slot,1);this.recalcStats();this.toast(`${item.name} +${item.upgrade}`);return true}
   usePotion(){const p=this.state.inventory.find(x=>x.subtype==='potion'&&(x.qty||1)>0);if(!p||this.state.hp>=this.state.maxHp)return;p.qty=(p.qty||1)-1;this.state.hp=Math.min(this.state.maxHp,this.state.hp+(p.power||50));if(p.qty<=0)this.state.inventory=this.state.inventory.filter(x=>x!==p);this.toast('Poção usada')}
 
@@ -2238,9 +2267,67 @@ export class ShadowGame {
   switchClass(classId){
     if(!this.state.classState.unlockedClassIds.includes(classId))return
     this.state.classState.activeClassId=classId
+    this.abilityCooldowns={}
     this.recalcStats()
     this.updateClassAura()
+    this.updateAbilityCooldowns(0)
+    const cls=CLASSES_LIST.find(c=>c.id===classId)
+    this.toast(`Classe ativa: ${cls?.name||'Desperto'} • habilidade atualizada`)
     this.saveGame()
+  }
+
+  activePet(){return (this.state.pets?.owned||[]).find(p=>p.id===this.state.pets?.activeId)||null}
+  armPetTaming(){
+    const food=this.state.inventory.find(i=>i.subtype==='pet_food'&&(i.qty||1)>0)
+    if(!food){this.toast('Compre uma Ração de Domação com o mercador.');return false}
+    this.state.pets={...this.state.pets,tamingArmed:true};this.toast('🐾 Ração equipada: ataque um monstro enfraquecido para tentar domar.');return true
+  }
+  selectPet(id){
+    const pet=(this.state.pets?.owned||[]).find(p=>p.id===id)
+    if(!pet)return false
+    if(pet.recoverUntil>Date.now()){this.toast(`${pet.name} ainda está se recuperando.`);return false}
+    this.state.pets.activeId=id;this.syncPetVisual();this.saveGame();return true
+  }
+  syncPetVisual(){
+    const pet=this.activePet(),root=this.state.dungeon?this.dungeonArena:this.worldRoot
+    if(!pet||pet.recoverUntil>Date.now()){if(this.petVisual){this.petVisual.parent?.remove(this.petVisual);this.petVisual=null}return}
+    if(!this.petVisual){
+      const g=new THREE.Group(),color=new THREE.Color(pet.color||'#60a5fa')
+      const body=mesh(new THREE.DodecahedronGeometry(.42,0),new THREE.MeshStandardMaterial({color,emissive:color,emissiveIntensity:.35,roughness:.55}))
+      const ear=mesh(new THREE.ConeGeometry(.16,.38,5),new THREE.MeshStandardMaterial({color:color.clone().multiplyScalar(.8)}));ear.position.set(0,.5,0)
+      g.add(body,ear);this.petVisual=g;root.add(g)
+    }else if(this.petVisual.parent!==root){this.petVisual.parent?.remove(this.petVisual);root.add(this.petVisual)}
+  }
+  tryTamePet(enemy){
+    if(!this.state.pets?.tamingArmed||enemy.boss||(this.state.pets.owned||[]).length>=5||enemy.dead)return false
+    const food=this.state.inventory.find(i=>i.subtype==='pet_food'&&(i.qty||1)>0)
+    if(!food){this.state.pets.tamingArmed=false;return false}
+    const hpPct=enemy.hp/Math.max(1,enemy.maxHp)
+    if(hpPct>.55)return false
+    food.qty=(food.qty||1)-1;if(food.qty<=0)this.state.inventory=this.state.inventory.filter(i=>i!==food)
+    const cls=CLASSES_LIST.find(c=>c.id===this.state.classState?.activeClassId)
+    const chance=Math.min(.72,.18+(1-hpPct)*.42+(cls?.passive?.tameChance||0))
+    if(Math.random()>chance){this.toast(`A domação de ${enemy.name} falhou (${Math.round(chance*100)}%).`);return false}
+    const pet={id:`pet-${Date.now()}-${Math.random().toString(36).slice(2,6)}`,name:enemy.name,level:Math.max(1,enemy.level),xp:0,nextXp:Math.max(50,Math.round(enemy.level*85)),hp:Math.round(enemy.maxHp*.55),maxHp:Math.round(enemy.maxHp*.55),damage:Math.max(4,Math.round(enemy.atk*.48)),color:'#60a5fa',specialName:`Poder de ${enemy.name}`,recoverUntil:0}
+    this.state.pets.owned=[...this.state.pets.owned,pet];this.state.pets.activeId=pet.id;this.state.pets.tamingArmed=false;enemy.dead=true;enemy.g.parent?.remove(enemy.g);this.enemies=this.enemies.filter(e=>e!==enemy);this.syncPetVisual();this.toast(`🐾 ${pet.name} foi domado! Agora luta ao seu lado.`);this.saveGame();return true
+  }
+  petAttackTarget(enemy){
+    const pet=this.activePet();if(!pet||pet.recoverUntil>Date.now()||enemy?.dead)return
+    const now=performance.now();if((pet.nextAttackAt||0)>now)return
+    pet.nextAttackAt=now+1050;this.petTarget=enemy
+    const damage=Math.max(1,Math.round(pet.damage*(.9+Math.random()*.2)));this.damageEnemy(enemy,damage,{knockback:.12,network:true,fromPet:true})
+    pet.xp=(pet.xp||0)+Math.max(1,Math.round(enemy.level*.7));if(pet.xp>=pet.nextXp){pet.xp-=pet.nextXp;pet.level++;pet.nextXp=Math.round(pet.nextXp*1.28);pet.maxHp+=Math.max(8,Math.round(enemy.level*2));pet.hp=pet.maxHp;pet.damage+=Math.max(2,Math.round(enemy.level*.28));this.toast(`🐾 ${pet.name} subiu para Nv.${pet.level}!`)}
+    if((pet.nextSpecialAt||0)<=now){pet.nextSpecialAt=now+5200;this.spawnAbilityRing(0x60a5fa,2.4,.35)}
+  }
+  updatePets(dt){
+    const pet=this.activePet();this.syncPetVisual();if(!pet||!this.petVisual)return
+    if(pet.recoverUntil>Date.now())return
+    const follow=this.player.position.clone().add(new THREE.Vector3(1.25,0,-1.05));const dir=follow.sub(this.petVisual.position);dir.y=0;if(dir.lengthSq()>.04)this.petVisual.position.addScaledVector(dir.normalize(),Math.min(dir.length(),dt*7.4));this.petVisual.position.y=.55+Math.sin(performance.now()*.004)*.08
+    const target=this.petTarget
+    if(target&&!target.dead&&target.g?.visible&&target.g.position.distanceTo(this.petVisual.position)<2.4&&(pet.nextHurtAt||0)<performance.now()){
+      pet.nextHurtAt=performance.now()+1500;pet.hp=Math.max(0,pet.hp-Math.max(2,Math.round(target.atk*.32)))
+      if(!pet.hp){pet.recoverUntil=Date.now()+45000;this.petTarget=null;this.toast(`🐾 ${pet.name} caiu e ficará recuperando por 45s.`);this.saveGame()}
+    }else if(!target&&!pet.recoverUntil)pet.hp=Math.min(pet.maxHp,pet.hp+pet.maxHp*dt*.04)
   }
   fastTravelTo(nodeId){
     const dest=TRAVEL_NODES.find(n=>n.id===nodeId)
@@ -2290,6 +2377,7 @@ export class ShadowGame {
   setDestinationMarker(gate){this.gateManager?.setDestinationMarker(gate)}
   clearDestinationMarker(){this.gateManager?.clearDestinationMarker()}
   closeCaravanModal(){this.caravanManager?.closeCaravanModal()}
+  lootCaravan(id){return this.caravanManager?.lootCaravanById(id)||false}
 
   interact(){
     if(this.state.uiPanel){this.closePanel();return}
@@ -2461,8 +2549,9 @@ export class ShadowGame {
   }
 
   updateAbilityCooldowns(dt){
-    for(const a of ABILITIES)this.abilityCooldowns[a.id]=Math.max(0,(this.abilityCooldowns[a.id]||0)-dt)
-    this.state.abilities=ABILITIES.map(a=>({...a,remaining:this.abilityCooldowns[a.id]||0,ready:(this.abilityCooldowns[a.id]||0)<=0&&this.state.stamina>=a.cost}))
+    const abilities=this.activeAbilities()
+    for(const a of abilities)this.abilityCooldowns[a.id]=Math.max(0,(this.abilityCooldowns[a.id]||0)-dt)
+    this.state.abilities=abilities.map(a=>({...a,remaining:this.abilityCooldowns[a.id]||0,ready:(this.abilityCooldowns[a.id]||0)<=0&&this.state.stamina>=a.cost}))
   }
 
   updateDiscovery(){
@@ -2592,7 +2681,7 @@ export class ShadowGame {
       let near=null,dist=4.3
       for(const n of this.npcs){const d=n.g.position.distanceTo(this.player.position);if(d<dist){near=n;dist=d}}
       if(near){
-        const roleIcon=near.def.role==='merchant'?'🛒':near.def.role==='blacksmith'?'⚒️':near.def.role==='traveler'?'🧭':near.def.role==='townhall'?'🏛️':near.def.role==='guild'?'⚔️':near.def.role==='stable'?'🐎':'📜'
+        const roleIcon=near.def.role==='merchant'?'🛒':near.def.role==='blacksmith'?'⚒️':near.def.role==='traveler'?'🧭':near.def.role==='townhall'?'🏛️':near.def.role==='guild'?'⚔️':near.def.role==='stable'?'🐎':near.def.role==='pets'?'🐾':'📜'
         prompt=`E — falar com ${near.def.name} (${near.def.title})`
         action={type:'npc',label:`Falar com ${near.def.name}`,icon:roleIcon}
       }
@@ -2804,7 +2893,7 @@ applyEnemyNetworkState(st){
   connectMultiplayer(url){const value=String(url||'').trim();this.settings.multiplayerUrl=value;this.state.multiplayer.url=value;localStorage.setItem('shadow-ascension-mp-url',value);if(value)this.multiplayer.connect(value);else this.multiplayer.disconnect();this.saveGame()}
   setMultiplayerLobby(room){const next=this.multiplayer?.setRoom?.(room)||String(room||'asterra-global');this.state.multiplayer.room=next;localStorage.setItem('shadow-ascension-last-lobby',next);this.toast(`Entrando no ${next.replace('asterra-','Lobby ')}...`);this.saveGame();return next}
   profileSnapshot(){const room=this.multiplayer?.room||this.state.multiplayer?.room||localStorage.getItem('shadow-ascension-last-lobby')||'asterra-global';return{state:{...this.state,version:8,target:null,dungeon:null,uiPanel:null,dialogue:null,portal:null,interactionPrompt:null,merchant:[],minimap:null,mapSnapshot:null,party:{id:null,leaderId:null,members:[],totalXP:0},onlinePlayers:[],trade:null,multiplayer:{connected:false,url:this.settings.multiplayerUrl,room,players:0}},position:{x:this.player?.position.x||0,z:this.player?.position.z||0},dayHours:this.dayHours,settings:this.settings,multiplayerRoom:room,discovered:[...this.discovered]}}
-  applyServerProfile(game,updatedAt=0){try{const incoming=normalizeSaveState({...this.state,...(game.state||{}),version:8,target:null,dungeon:null,uiPanel:null,dialogue:null,trade:null});this.state={...this.state,...incoming,needsNickname:!incoming.playerName,party:{id:null,leaderId:null,members:[],totalXP:0},trade:null};if(game.position){this.player.position.set(Number(game.position.x)||0,0,Number(game.position.z)||0)}this.dayHours=game.dayHours??this.dayHours;this.discovered=new Set(game.discovered||[]);const liveUrl=this.multiplayer?.url||this.settings.multiplayerUrl;this.settings={...this.settings,...(game.settings||{}),multiplayerUrl:liveUrl||game.settings?.multiplayerUrl||''};this.state.settings=this.settings;this.state.multiplayer.url=this.settings.multiplayerUrl;const liveRoom=this.multiplayer?.room||localStorage.getItem('shadow-ascension-last-lobby')||game.multiplayerRoom||this.state.multiplayer.room||'asterra-global';this.state.multiplayer.room=liveRoom;localStorage.setItem('shadow-ascension-last-lobby',liveRoom);this.localUpdatedAt=updatedAt;this.recalcStats();if(this.state.playerName)this.setPlayerName(this.state.playerName)}catch{}}
+  applyServerProfile(game,updatedAt=0){try{const incoming=normalizeSaveState({...this.state,...(game.state||{}),version:8,target:null,dungeon:null,uiPanel:null,dialogue:null,trade:null});this.state={...this.state,...incoming,needsNickname:!incoming.playerName,party:{id:null,leaderId:null,members:[],totalXP:0},trade:null};if(game.position){this.player.position.set(Number(game.position.x)||0,0,Number(game.position.z)||0)}this.dayHours=game.dayHours??this.dayHours;this.discovered=new Set(game.discovered||[]);const liveUrl=this.multiplayer?.url||this.settings.multiplayerUrl;this.settings={...this.settings,...(game.settings||{}),multiplayerUrl:liveUrl||game.settings?.multiplayerUrl||''};this.state.settings=this.settings;this.state.multiplayer.url=this.settings.multiplayerUrl;const liveRoom=this.multiplayer?.room||localStorage.getItem('shadow-ascension-last-lobby')||game.multiplayerRoom||this.state.multiplayer.room||'asterra-global';this.state.multiplayer.room=liveRoom;localStorage.setItem('shadow-ascension-last-lobby',liveRoom);this.localUpdatedAt=updatedAt;this.recalcStats();this.syncPetVisual();if(this.state.playerName)this.setPlayerName(this.state.playerName)}catch{}}
   updateMultiplayer(dt){
     const world=this.currentWorldId()
     for(const r of this.remotePlayers.values()){
@@ -2973,6 +3062,6 @@ applyEnemyNetworkState(st){
       this.renderer.render(this.scene,this.camera)
       return
     }
-    if(!this.state.dungeon)this.ensureChunks();this.updateDayNight(dt);this.updateWeather(dt,t);this.updatePlayer(dt,t);if(this.auraRoot)this.auraRoot.position.copy(this.player.position);this.updateEffects(dt);this.updateProjectiles(dt);this.updateCityVisibility();this.updateRespawns();this.updateBots(dt,t);this.updateCityGuards(dt,t);this.updateEnemies(dt,t);this.updatePortals(t);this.gateManager?.update(dt,t);this.caravanManager?.update(dt,t);this.updateWater(t);this.updateNPCs(t,dt);this.advanceDungeonIfClear();this.updateInteractions();this.cameraFollow(dt);this.updateMultiplayer(dt);this.emitHud();this.renderer.render(this.scene,this.camera)
+    if(!this.state.dungeon)this.ensureChunks();this.updateDayNight(dt);this.updateWeather(dt,t);this.updatePlayer(dt,t);this.updatePets(dt);if(this.auraRoot)this.auraRoot.position.copy(this.player.position);this.updateEffects(dt);this.updateProjectiles(dt);this.updateCityVisibility();this.updateRespawns();this.updateBots(dt,t);this.updateCityGuards(dt,t);this.updateEnemies(dt,t);this.updatePortals(t);this.gateManager?.update(dt,t);this.caravanManager?.update(dt,t);this.updateWater(t);this.updateNPCs(t,dt);this.advanceDungeonIfClear();this.updateInteractions();this.cameraFollow(dt);this.updateMultiplayer(dt);this.emitHud();this.renderer.render(this.scene,this.camera)
   }
 }

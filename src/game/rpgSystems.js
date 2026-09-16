@@ -72,10 +72,10 @@ export const QUESTS = [
   {id:'lumen_alpha', title:'Uivo na Pradaria', giver:'Lyra', type:'boss', target:'Alfa Lúmen', goal:1, minLevel:8, reward:{xp:900,gold:520,item:'Rara'}, text:'Derrote o Alfa Lúmen que domina a Pradaria.'},
   {id:'forge_trial', title:'Aço e Éter', giver:'Brann', type:'upgrade', target:'weapon', goal:1, minLevel:4, reward:{xp:420,gold:180}, text:'Melhore uma arma no ferreiro.'},
   {id:'rider_oath', title:'Juramento do Cavaleiro', giver:'Lorde Aldrich', role:'townhall', type:'kill', target:'any', goal:3, minLevel:1, reward:{xp:400,gold:350,mountPermission:true}, text:'Elimine 3 monstros invasores para prestar o Juramento na Prefeitura e obter a Permissão Real de Doma no Estábulo.'},
-  {id:'ascension_rank_2', title:'Ascensão Marcial: Grau II', giver:'Grimório', role:'grimoire', type:'kill', target:'any', goal:10, minLevel:20, reward:{xp:1200,gold:600}, text:'Elimine 10 monstros para provar sua perícia e desbloquear a evolução para o Grau II de classe.'},
-  {id:'ascension_rank_3', title:'Ascensão Marcial: Grau III', giver:'Grimório', role:'grimoire', type:'boss', target:'any', goal:1, minLevel:50, reward:{xp:3500,gold:1500}, text:'Derrote 1 Chefe de Área para demonstrar seu poder e desbloquear o Grau III de classe.'},
-  {id:'ascension_rank_4', title:'Ascensão Marcial: Grau IV', giver:'Grimório', role:'grimoire', type:'dungeon', target:'clear', goal:1, minLevel:90, reward:{xp:7000,gold:3500}, text:'Conclua uma Masmorra para desbloquear a maestria Grau IV de classe.'},
-  {id:'ascension_rank_5', title:'Ascensão Soberana: Grau V', giver:'Grimório', role:'grimoire', type:'boss', target:'any', goal:2, minLevel:150, reward:{xp:18000,gold:8000}, text:'Derrote 2 Chefes de Área para alcançar o Grau Divino/Soberano de classe.'},
+  {id:'ascension_rank_2', title:'Provação dos Chefes: Grau II', giver:'Grimório', role:'grimoire', type:'boss', target:'any', goal:5, minLevel:20, reward:{xp:1200,gold:600}, text:'Elimine 5 bosses do mapa para provar sua perícia e desbloquear o Grau II de classe.'},
+  {id:'ascension_rank_3', title:'Provação dos Chefes: Grau III', giver:'Grimório', role:'grimoire', type:'boss', target:'any', goal:5, minLevel:50, reward:{xp:3500,gold:1500}, text:'Elimine 5 bosses do mapa para demonstrar seu poder e desbloquear o Grau III de classe.'},
+  {id:'ascension_rank_4', title:'Provação dos Chefes: Grau IV', giver:'Grimório', role:'grimoire', type:'boss', target:'any', goal:5, minLevel:90, reward:{xp:7000,gold:3500}, text:'Elimine 5 bosses do mapa para desbloquear a maestria Grau IV de classe.'},
+  {id:'ascension_rank_5', title:'Provação dos Chefes: Grau V', giver:'Grimório', role:'grimoire', type:'boss', target:'any', goal:5, minLevel:150, reward:{xp:18000,gold:8000}, text:'Elimine 5 bosses do mapa para alcançar o Grau Divino/Soberano de classe.'},
   {id:'lumen_patrol', title:'Patrulha de Lúmen', giver:'Cael', type:'kill', target:'any', goal:8, minLevel:8, reward:{xp:720,gold:420}, text:'Elimine 8 criaturas nos arredores do Bastião Lúmen.'},
   {id:'forest_guard', title:'Raízes em Perigo', giver:'Eira', type:'boss', target:'Cervo Espectral', goal:1, minLevel:25, reward:{xp:1800,gold:900,item:'Rara'}, text:'Derrote o Cervo Espectral e proteja o Refúgio Cinéreo.'},
   {id:'coast_guard', title:'Maré Abissal', giver:'Neris', type:'boss', target:'Leviatã de Espuma', goal:1, minLevel:55, reward:{xp:3600,gold:1750,item:'Épica'}, text:'Enfrente o Leviatã de Espuma que ameaça Porto Safira.'},
@@ -155,10 +155,11 @@ export function makeItem(type, level, rarityName='Comum', customName=null, custo
 }
 
 export function makeMaterialDrop(level,source='Monstro',zoneId='aurora'){
-  const lv=Math.max(1,Math.round(level)),economy=Object.values(CITY_ECONOMIES).find(e=>e.zoneId===zoneId),regional=economy?.material
-  const tier=regional||(lv>=220?'Núcleo Ancestral':lv>=130?'Cristal de Éter':lv>=55?'Fragmento Rúnico':'Presa de Monstro')
-  const rarity=lv>=220?'Épica':lv>=130?'Rara':lv>=55?'Incomum':'Comum',color=lv>=220?'#c084fc':lv>=130?'#60a5fa':lv>=55?'#86efac':'#cbd5e1'
-  return {id:uid('drop'),name:`${tier} Nv.${lv}`,type:'material',subtype:'monster-drop',rarity,color,level:lv,source,zoneId,qty:1,value:Math.round((12+lv*2.2)*(economy?.sellMult||1))}
+  const lv=Math.max(1,Math.round(level)),economy=Object.values(CITY_ECONOMIES).find(e=>e.zoneId===zoneId)
+  const key=String(source).toLowerCase()
+  const family=key.includes('slime')?['Núcleo Gelatinoso','#34d399',1.0]:key.includes('goblin')||key.includes('javali')?['Presa Selvagem','#a3e635',1.08]:key.includes('esqueleto')||key.includes('espectro')?['Essência Espectral','#a78bfa',1.28]:key.includes('golem')||key.includes('colosso')||key.includes('gigante')?['Fragmento de Pedra Rúnica','#94a3b8',1.42]:key.includes('drag')||key.includes('soberano')||key.includes('arconte')?['Escama Primordial','#f59e0b',1.9]:[economy?.material||'Presa de Monstro','#cbd5e1',1.16]
+  const rarity=lv>=220?'Épica':lv>=130?'Rara':lv>=55?'Incomum':'Comum'
+  return {id:uid('drop'),name:`${family[0]} Nv.${lv}`,type:'material',subtype:'monster-drop',rarity,color:family[1],level:lv,source,zoneId,qty:1,value:Math.round((12+lv*2.2)*family[2]*(economy?.sellMult||1))}
 }
 
 export function rollLootRarity(level=1,boss=false,rnd=Math.random()){
@@ -201,6 +202,7 @@ export function merchantStock(level=1,zoneMin=1,cycle=Math.floor(Date.now()/6000
   const consumables=[
     {id:`shop-potion-${cycle}-${zoneId}`,name:`Poção ${economy?.theme||'Rubra'}`,type:'consumable',subtype:'potion',rarity:'Comum',color:'#cbd5e1',level:1,power:Math.round(55+lv*.38),qty:1,zoneId,value:Math.round((50+lv*.5)*(economy?.buyMult||1))},
     {id:`shop-grimoire-${cycle}-${zoneId}`,name:'Grimório do Despertar',type:'consumable',subtype:'grimoire',rarity:'Rara',color:'#a855f7',level:1,power:0,qty:1,zoneId,value:Math.round(220*(economy?.buyMult||1))},
+    {id:`shop-pet-food-${cycle}-${zoneId}`,name:'Ração de Domação',type:'consumable',subtype:'pet_food',rarity:'Incomum',color:'#fb923c',level:Math.max(1,Math.floor(lv*.65)),power:0,qty:1,zoneId,value:Math.round((95+lv*.7)*(economy?.buyMult||1)),description:'Equipe e ataque um monstro enfraquecido para tentar domá-lo.'},
   ]
   const tools=[
     {id:`shop-axe-${cycle}-${zoneId}`,name:'Machado do Lenhador',type:'tool',subtype:'axe',rarity:'Comum',color:'#cbd5e1',level:1,harvestBonus:{tree:2.8},icon:'🪓',description:'Corta árvores rapidamente para coletar Madeira.',zoneId,value:Math.round(65*(economy?.buyMult||1))},
@@ -247,7 +249,7 @@ export function refreshGuildBoard(state,cycle=Math.floor(Date.now()/600000)){
 }
 export function activateGuildMission(state,id){refreshGuildBoard(state);state.guildMissions=state.guildMissions.map(m=>m.id===id&&m.status==='available'&&state.level>=m.minLevel&&(state.guildRankIndex||0)>=m.rankIndex?{...m,status:'active',progress:0}:m)}
 export function progressGuildMissions(state,type,target='any',amount=1){refreshGuildBoard(state);state.guildMissions=state.guildMissions.map(m=>{if(m.status!=='active'||m.type!==type)return m;if(m.target!=='any'&&m.target!==target&&!(m.target==='boss'&&target!=='any'))return m;const progress=Math.min(m.goal,(m.progress||0)+amount);return {...m,progress,status:progress>=m.goal?'ready':'active'}})}
-export function claimGuildMission(state,id){refreshGuildBoard(state);const m=state.guildMissions.find(x=>x.id===id);if(!m||m.status!=='ready')return null;state.gold+=(m.reward.gold||0);state.guildPoints=(state.guildPoints||0)+(m.reward.guildPoints||0);const advanced=updateGuildRank(state);m.progress=0;m.status='available';m.completions=(m.completions||0)+1;return {...m.reward,advanced,rank:getGuildRank(state.guildRankIndex).id}}
+export function claimGuildMission(state,id){refreshGuildBoard(state);const m=state.guildMissions.find(x=>x.id===id);if(!m||m.status!=='ready')return null;state.gold+=(m.reward.gold||0);state.guildPoints=(state.guildPoints||0)+(m.reward.guildPoints||0);const advanced=updateGuildRank(state);m.progress=0;m.status='available';m.completions=(m.completions||0)+1;if(advanced){state.guildMissionCycle=null;refreshGuildBoard(state)}return {...m.reward,advanced,rank:getGuildRank(state.guildRankIndex).id}}
 
 export function levelDifferenceMultiplier(playerLevel,mobLevel){
   const diff=mobLevel-playerLevel,ad=Math.abs(diff)
@@ -299,6 +301,8 @@ export function normalizeSaveState(state){
   }
   const rawMount=state.mount||{}
   const initialTamed=Array.isArray(rawMount.tamedHorses)?rawMount.tamedHorses:(rawMount.unlocked?['horse_aurora']:[])
+  const rawPets=state.pets||{}
+  const ownedPets=(Array.isArray(rawPets.owned)?rawPets.owned:[]).filter(p=>p&&p.id).slice(0,5)
   return {
     ...state,
     inventory,
@@ -317,6 +321,8 @@ export function normalizeSaveState(state){
       ...rawMount,
       tamedHorses:initialTamed
     },
+    pets:{owned:ownedPets,activeId:ownedPets.some(p=>p.id===rawPets.activeId)?rawPets.activeId:null,tamingArmed:!!rawPets.tamingArmed},
+    wantedLevel:Math.max(0,Math.min(5,Math.round(Number(state.wantedLevel)||0))),
     classState:{...defaultClassState(),...(state.classState||{})},
     travelState:{...defaultTravelState(),...(state.travelState||{}),vipCost:5000},
     attributes:{strength:0,vitality:0,agility:0,intellect:0,...(state.attributes||{})},
