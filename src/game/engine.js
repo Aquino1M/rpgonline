@@ -29,7 +29,7 @@ export class ShadowGame {
     this.resourceNodes=[]; this.mobSpecialCooldowns=new Map()
     this.clock=new THREE.Clock(); this.yaw=Math.PI; this.pitch=0.14; this.cameraDistance=5.2; this.drag=false; this.pointerLocked=false
     this.weatherClock=0; this.weatherIndex=0; this.dayHours=8.25; this.lastHud=0; this.attackClock=0; this.specialClock=0; this.dashTime=0; this.invuln=0
-    this.abilityCooldowns=Object.fromEntries(ABILITIES.map(a=>[a.id,0])); this.petVisual=null; this.petTarget=null; this.raycaster=new THREE.Raycaster(); this.discovered=new Set(); this.savedDiscovered=[]; this.currentMerchantZoneMin=1; this.currentMerchantZoneMax=10; this.currentMerchantZoneId='aurora'; this.currentMerchantCityId='aurora-city'; this.localUpdatedAt=0; this.serverProfileTimestamp=0; this.accountId=''; this.cloudSaveInFlight=null; this.cloudSaveQueued=false; this.persistCloudProfile=saveCloudProfile
+    this.abilityCooldowns=Object.fromEntries(ABILITIES.map(a=>[a.id,0])); this.petVisual=null; this.petVisualKey=''; this.petTarget=null; this.raycaster=new THREE.Raycaster(); this.discovered=new Set(); this.savedDiscovered=[]; this.currentMerchantZoneMin=1; this.currentMerchantZoneMax=10; this.currentMerchantZoneId='aurora'; this.currentMerchantCityId='aurora-city'; this.localUpdatedAt=0; this.serverProfileTimestamp=0; this.accountId=''; this.cloudSaveInFlight=null; this.cloudSaveQueued=false; this.persistCloudProfile=saveCloudProfile
     let savedSession = null
     try { savedSession = JSON.parse(localStorage.getItem('shadow_rpg_account_session') || 'null') } catch {}
     const savedNick = (savedSession?.username || localStorage.getItem('shadow-ascension-nick') || '').trim()
@@ -2290,6 +2290,9 @@ export class ShadowGame {
   }
   syncPetVisual(){
     const pet=this.activePet(),root=this.state.dungeon?this.dungeonArena:this.worldRoot
+    const key=pet?`${pet.id}:${pet.recoverUntil>Date.now()?'recovering':'ready'}:${root===this.dungeonArena?'dungeon':'world'}`:'none'
+    if(key===this.petVisualKey)return
+    this.petVisualKey=key
     if(!pet||pet.recoverUntil>Date.now()){if(this.petVisual){this.petVisual.parent?.remove(this.petVisual);this.petVisual=null}return}
     if(!this.petVisual){
       const g=new THREE.Group(),color=new THREE.Color(pet.color||'#60a5fa')
