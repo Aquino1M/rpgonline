@@ -2098,7 +2098,25 @@ export class ShadowGame {
     this.toast(`🤝 Troca concluída: recebeu ${remoteOffer.items.length} item(ns)${remoteOffer.gold?` e ${remoteOffer.gold}◈`:''}.`)
     return true
   }
-  buyItem(shopId){const item=(this.state.merchant||[]).find(x=>x.id===shopId);if(!item||this.state.gold<item.value)return false;const stackable=['potion','pet_food'].includes(item.subtype)&&this.state.inventory.some(x=>x.subtype===item.subtype);if(!stackable&&this.state.inventory.length>=this.inventoryCapacity()){this.toast('Mochila cheia.');return false}this.state.gold-=item.value;if(['potion','pet_food'].includes(item.subtype)){const found=this.state.inventory.find(x=>x.subtype===item.subtype);if(found)found.qty=(found.qty||1)+1;else this.state.inventory.unshift({...item,id:`p-${Date.now()}`})}else{this.state.inventory.unshift({...item,id:`b-${Date.now()}-${Math.random()}`});this.state.merchant=this.state.merchant.filter(x=>x.id!==shopId)}this.toast('Compra realizada');return true}
+  buyItem(shopId){
+    const item=(this.state.merchant||[]).find(x=>x.id===shopId)
+    if(!item){this.toast('Item indisponível. Atualize a loja.');return false}
+    if(this.state.gold<item.value){this.toast('Ouro insuficiente.');return false}
+    const stackable=['potion','pet_food'].includes(item.subtype)
+    if(!stackable&&this.state.inventory.length>=this.inventoryCapacity()){this.toast('Mochila cheia.');return false}
+    this.state.gold-=item.value
+    if(stackable){
+      const found=this.state.inventory.find(x=>x.subtype===item.subtype)
+      if(found)found.qty=(found.qty||1)+1
+      else this.state.inventory.unshift({...item,id:`p-${Date.now()}`})
+    }else{
+      this.state.inventory.unshift({...item,id:`b-${Date.now()}-${Math.random()}`})
+      this.state.merchant=this.state.merchant.filter(x=>x.id!==shopId)
+    }
+    this.saveGame()
+    this.toast(`${item.name} comprado.`)
+    return true
+  }
   upgrade(slot){const item=this.state.equipment[slot];if(!item)return false;const level=item.upgrade||0;if(level>=10)return false;const cost=Math.round(80+(level+1)*65+item.level*4),ore=1+Math.floor(level/3);if(this.state.gold<cost||this.state.ores<ore)return false;this.state.gold-=cost;this.state.ores-=ore;item.upgrade=level+1;progressQuest(this.state,'upgrade',slot,1);this.recalcStats();this.toast(`${item.name} +${item.upgrade}`);return true}
   usePotion(){const p=this.state.inventory.find(x=>x.subtype==='potion'&&(x.qty||1)>0);if(!p||this.state.hp>=this.state.maxHp)return;p.qty=(p.qty||1)-1;this.state.hp=Math.min(this.state.maxHp,this.state.hp+(p.power||50));if(p.qty<=0)this.state.inventory=this.state.inventory.filter(x=>x!==p);this.toast('Poção usada')}
 
@@ -2287,7 +2305,7 @@ export class ShadowGame {
   armPetTaming(){
     const food=this.state.inventory.find(i=>i.subtype==='pet_food'&&(i.qty||1)>0)
     if(!food){this.toast('Compre uma Ração de Domação com o mercador.');return false}
-    this.state.pets={...this.state.pets,tamingArmed:true};this.toast('🐾 Ração equipada: ataque um monstro enfraquecido para tentar domar.');return true
+    this.state.pets={...(this.state.pets||{}),tamingArmed:true};this.saveGame();this.toast('🐾 Ração equipada: ataque um monstro enfraquecido para tentar domar.');return true
   }
   selectPet(id){
     const pet=(this.state.pets?.owned||[]).find(p=>p.id===id)

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { generateGuildMissions, makeMaterialDrop, normalizeSaveState } from '../src/game/rpgSystems.js'
-import { NPC_DEFS } from '../src/game/config.js'
+import { CITIES, NPC_DEFS } from '../src/game/config.js'
+import { ShadowGame } from '../src/game/engine.js'
 
 const rankE=generateGuildMissions({level:30,guildRankIndex:0},123)
 const rankC=generateGuildMissions({level:30,guildRankIndex:2},123)
@@ -15,6 +16,23 @@ const petKeeper=NPC_DEFS.find(n=>n.role==='pets')
 assert.equal(petKeeper?.cityId,'aurora-city')
 const nearestAuroraService=Math.min(...NPC_DEFS.filter(n=>n.cityId==='aurora-city'&&n.id!==petKeeper.id).map(n=>Math.hypot(n.x-petKeeper.x,n.z-petKeeper.z)))
 assert.ok(nearestAuroraService>=12,'Pet keeper must have clear space from Aurora services')
+const food={id:'shop-pet-food',name:'Ração de Domação',subtype:'pet_food',value:93,qty:1}
+const buyer={state:{merchant:[food],gold:100,inventory:[]},inventoryCapacity:()=>40,toast:()=>{},saveGame:()=>{buyer.saved=true}}
+assert.equal(ShadowGame.prototype.buyItem.call(buyer,food.id),true)
+assert.equal(buyer.state.gold,7)
+assert.equal(buyer.state.inventory[0].subtype,'pet_food')
+assert.equal(buyer.saved,true)
+buyer.state.pets={owned:[]}
+assert.equal(ShadowGame.prototype.armPetTaming.call(buyer),true)
+assert.equal(buyer.state.pets.tamingArmed,true)
+const aurora=CITIES.find(city=>city.id==='aurora-city')
+const cityHomes=[[-17,-10],[-17,11],[17,11],[18,-11],[-5,19],[6,-19]]
+for(const id of ['aurora-townhall','aurora-traveler']){
+  const service=aurora.services.find(entry=>entry.id===id)
+  const nearestHouse=Math.min(...cityHomes.map(([x,z])=>Math.hypot(service.x-aurora.x-x,service.z-aurora.z-z)))
+  assert.ok(nearestHouse>=7,`${id} must not overlap a city house`)
+}
+assert.ok(CITIES.every(city=>city.services.some(service=>service.role==='traveler')),'Every city must have a traveler')
 const reputation=normalizeSaveState({inventory:[],cityReputation:{'aurora-city':140,'lumen-city':-4}}).cityReputation
 assert.equal(reputation['aurora-city'],100)
 assert.equal(reputation['lumen-city'],0)

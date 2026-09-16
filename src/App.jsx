@@ -889,6 +889,7 @@ function MerchantCard({item,mode,hud,isSelected,onToggleSelect,onSell,onBuy,sell
   const orbIcon=item.icon||(item.type==='tool'?(item.subtype==='pickaxe'?'⛏️':'🪓'):item.type==='weapon'?(item.subtype==='bow'?'🏹':item.subtype==='dagger'?'🗡':item.subtype==='spellbook'?'📖':item.subtype==='axe'?'🪓':item.subtype==='pickaxe'?'⛏️':'⚔'):item.type==='armor'?'🛡️':item.type==='boots'?'⬒':item.type==='material'||item.type==='resource'?'🪵':item.subtype==='potion'?'🧪':'✦')
   const statSummary=stats.attack?`+${Math.round(stats.attack)} ATK `:stats.defense?`+${Math.round(stats.defense)} DEF `:stats.speed?`+${stats.speed} SPD `:stats.range?`[${stats.range}m] `:item.harvestBonus?.tree?`Madeira ×${item.harvestBonus.tree} `:item.harvestBonus?.ore?`Minérios ×${item.harvestBonus.ore} `:item.power?`Poder ${item.power}`:(item.description||'')
   const canBuy=hud.gold>=item.value
+  const buy=(e)=>{e.preventDefault();e.stopPropagation();onBuy(item.id)}
 
   return (
     <article
@@ -925,7 +926,8 @@ function MerchantCard({item,mode,hud,isSelected,onToggleSelect,onSell,onBuy,sell
             type="button"
             className="mc-buy-btn"
             disabled={!canBuy}
-            onClick={(e)=>{e.stopPropagation();onBuy(item.id)}}
+            onPointerUp={buy}
+            onClick={e=>{if(e.detail===0)buy(e)}}
             title={canBuy?`Comprar por ${item.value} ouro`:'Ouro insuficiente'}
           >
             <small>Comprar</small>

@@ -33,12 +33,12 @@ for(const zone of ZONES){zone.x0*=WORLD.worldScale;zone.x1*=WORLD.worldScale;zon
 export const CITIES = [
   {id:'aurora-city',zoneId:'aurora',name:'Cidadela Aurora',x:0,z:0,halfW:32,halfH:29,radius:34,wallRadius:34,style:'meadow',accent:'#f0d690',wall:0xa59b86,roof:0x8f4939,npcNames:['Lyra','Orin','Brann','Kaelan','Lorde Aldrich'],services:[
     {id:'aurora-quest',role:'quest',name:'Lyra',title:'Capitã dos Exploradores (Missões)',x:8,z:8,color:0x6d8fd6},
-    {id:'aurora-guild',role:'guild',name:'Kaelan',title:'Mestre da Guilda de Aventureiros',x:-14,z:6,color:0xeab308},
-    {id:'aurora-townhall',role:'townhall',name:'Lorde Aldrich',title:'Prefeito de Aurora (Prefeitura)',x:2,z:-14,color:0x60a5fa},
+    {id:'aurora-guild',role:'guild',name:'Kaelan',title:'Mestre da Guilda de Aventureiros',x:-21,z:0,color:0xeab308},
+    {id:'aurora-townhall',role:'townhall',name:'Lorde Aldrich',title:'Prefeito de Aurora (Prefeitura)',x:20,z:-2,color:0x60a5fa},
     {id:'aurora-merchant',role:'merchant',name:'Orin',title:'Mercador de Aurora',x:-8,z:5,color:0xd6a76d},
     {id:'aurora-blacksmith',role:'blacksmith',name:'Brann',title:'Ferreiro Rúnico',x:10,z:-9,color:0xb8654b},
     {id:'aurora-stable',role:'stable',name:'Mira',title:'Mestra dos Estábulos',x:-11,z:-10,color:0x83a65e},
-    {id:'aurora-traveler',role:'traveler',name:'Moço Viajante',title:'Caravaneiro de Asterra',x:-5,z:18,color:0x38bdf8},
+    {id:'aurora-traveler',role:'traveler',name:'Moço Viajante',title:'Caravaneiro de Asterra',x:-22,z:17,color:0x38bdf8},
     {id:'aurora-pet-keeper',role:'pets',name:'Nala',title:'Guardião dos Companheiros',x:-24,z:-17,color:0xf59e0b},
   ]},
   {id:'lumen-city',zoneId:'meadow',name:'Bastião Lúmen',x:152,z:18,halfW:27,halfH:25,radius:29,wallRadius:29,style:'meadow',accent:'#d8f58e',wall:0xc1ad72,roof:0xa66f35,services:[
