@@ -39,16 +39,6 @@ function powerColor(name='',boss=false){
   return 0x60a5fa
 }
 
-function nearestEnemy(game,max=6.5){
-  let best=null,bd=max
-  for(const e of [...(game.enemies||[]),...(game.bots||[])]){
-    if(!e||e.dead||!e.g?.visible)continue
-    const d=e.g.position.distanceTo(game.player.position)
-    if(d<bd){best=e;bd=d}
-  }
-  return best
-}
-
 if(!ShadowGame.prototype[PATCH_FLAG]){
   const proto=ShadowGame.prototype
   Object.defineProperty(proto,PATCH_FLAG,{value:true})
@@ -135,21 +125,6 @@ if(!ShadowGame.prototype[PATCH_FLAG]){
     return result
   }
 
-  proto.tryAutoAbility=function v095AutoAbility(){
-    if(this.state?.uiPanel||this.state?.autoSkills===false)return false
-    const now=performance.now();if(now<(this._v095NextAutoSkill||0))return false
-    const target=nearestEnemy(this,6.2);if(!target)return false
-    const nearby=[...(this.enemies||[]),...(this.bots||[])].filter(e=>!e.dead&&e.g?.visible&&e.g.position.distanceTo(this.player.position)<5.8).length
-    let slot=0
-    const abilities=this.state.abilities||[]
-    const a1=abilities.find(a=>a.slot===1),a2=abilities.find(a=>a.slot===2)
-    if((nearby>=2||target.boss)&&a2?.ready&&this.state.stamina>=a2.cost)slot=2
-    else if(a1?.ready&&this.state.stamina>=a1.cost&&this.getCrosshairTarget?.(a1.range||6,.34))slot=1
-    if(!slot)return false
-    this._v095NextAutoSkill=now+1050
-    return !!this.castAbility?.(slot)
-  }
-
   const prevDamageEnemy=proto.damageEnemy
   proto.damageEnemy=function v095DamageEnemy(enemy,amount,opts={}){
     let adjusted=amount
@@ -170,31 +145,14 @@ if(!ShadowGame.prototype[PATCH_FLAG]){
     try{out=prevAttack.call(this,force)}finally{this._v095BasicAttackActive=false}
     if((this.attackClock||0)>before){
       if(!this._v095ResourceHit&&weapon?.maxDurability)this.degradeEquipment('weapon',1,'ataque')
-      if(!this._v095ResourceHit)queueMicrotask(()=>this.tryAutoAbility?.())
     }
     return out
   }
-
-  proto.setAutoAttack=function v095SetAutoAttack(active){
-    this.state.autoAttacking=!!active
-    if(active){this.attack(true);this.haptic?.(10)}
-  }
-  proto.toggleAutoAttack=function v095ToggleAutoAttack(){
-    this.setAutoAttack(!this.state.autoAttacking)
-    return this.state.autoAttacking
-  }
-
-  const prevTogglePanel=proto.togglePanel
-  proto.togglePanel=function v095TogglePanel(...args){this.state.autoAttacking=false;return prevTogglePanel.apply(this,args)}
-  const prevClosePanel=proto.closePanel
-  proto.closePanel=function v095ClosePanel(...args){this.state.autoAttacking=false;return prevClosePanel.apply(this,args)}
 
   const prevUpdatePlayer=proto.updatePlayer
   proto.updatePlayer=function v095UpdatePlayer(dt,t){
     const beforeX=this.player?.position?.x||0,beforeZ=this.player?.position?.z||0
     const result=prevUpdatePlayer.apply(this,arguments)
-    if(this.state?.autoAttacking&&!this.state?.uiPanel&&(this.attackClock||0)<=0)this.attack(true)
-
     // Boots wear slowly while travelling so every durable equipment slot has
     // meaningful use. The cadence is intentionally low to avoid micromanagement.
     const boots=this.state?.equipment?.boots

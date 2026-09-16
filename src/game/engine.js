@@ -681,10 +681,10 @@ export class ShadowGame {
         this.freeLook=true;this.freeLookPointer=e.pointerId;this.freeLookLast={x:e.clientX,y:e.clientY};this.canvas.setPointerCapture?.(e.pointerId);e.preventDefault();return
       }
       if(!this.combatMode||this.state.uiPanel)return
-      if(e.button===0)this.toggleAutoAttack?.();if(e.button===2)this.state.blocking=true
+      if(e.button===0)this.attack();if(e.button===2)this.setBlocking(true)
     })
     on(window,'pointerup',e=>{
-      if(e.button===2){this.state.blocking=false;this.freeLook=false;this.freeLookPointer=null;this.freeLookLast=null}
+      if(e.button===2){this.setBlocking(false);this.freeLook=false;this.freeLookPointer=null;this.freeLookLast=null}
       if(this.lastTouch?.id===e.pointerId)this.lastTouch=null
     })
     on(window,'pointermove',e=>{
@@ -742,7 +742,8 @@ export class ShadowGame {
   setMobileJump(){this.haptic(8);this.jump()}
   jump(){if(this.state.uiPanel||this.state.mount.active||!this.grounded)return false;this.verticalVelocity=7.6;this.grounded=false;this.player.userData.motion='jump';return true}
   mobileAttack(){this.haptic(12);return this.attack(true)}
-  setMobileBlock(active){this.state.blocking=!!active;if(active)this.haptic(7)}
+  setBlocking(active){this.state.blocking=!!active&&!this.state.uiPanel;if(this.state.blocking)this.haptic(7);return this.state.blocking}
+  setMobileBlock(active){return this.setBlocking(active)}
   haptic(ms=10){try{navigator.vibrate?.(ms)}catch{}}
 
   resize(){
@@ -1177,8 +1178,13 @@ export class ShadowGame {
   }
 
   damagePlayer(amount){
-    const incoming=Math.max(1,Math.round(amount))
-    const dealt=this.state.blocking?Math.max(1,Math.round(incoming*.32)):incoming
+    const incoming=Math.max(1,Math.round(amount)),blockCost=8
+    const blocked=!!this.state.blocking&&this.state.stamina>=blockCost
+    if(blocked)this.state.stamina=Math.max(0,this.state.stamina-blockCost)
+    const dealt=blocked?Math.max(1,Math.round(incoming*.45)):incoming
+    if(this.state.blocking&&!blocked&&(!this._lastBlockWarn||performance.now()-this._lastBlockWarn>1200)){
+      this._lastBlockWarn=performance.now();this.toast('⚡ Sem vigor para defender!')
+    }
     this.state.hp=Math.max(0,this.state.hp-dealt)
     this.enterCombat(8)
     return dealt
@@ -1816,9 +1822,7 @@ export class ShadowGame {
           if(p.pos.distanceTo(playerCenter) <= 1.25){
             hit = true
             if(this.invuln <= 0 && !this.isInsideCitySafeZone(this.player.position.x, this.player.position.z, 1)){
-              let dealt = Math.max(2, Math.round(p.dmg - this.state.def * 0.38))
-              if(this.state.blocking) dealt = Math.max(1, Math.round(dealt * 0.3))
-              this.damagePlayer(dealt)
+              const dealt = this.damagePlayer(Math.max(2, Math.round(p.dmg - this.state.def * 0.38)))
               this.spawnDamageText(this.player.position, dealt, false)
               this.spawnAbilityRing(p.color||0x22c55e, 2.0, 0.5)
               this.haptic(35)

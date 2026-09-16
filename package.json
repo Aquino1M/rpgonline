@@ -14,7 +14,8 @@
     "import:packs": "node tools/import-packs.mjs PACK PACK2",
     "test:multiplayer": "node tools/test-supabase-multiplayer-2players.mjs",
     "test:trade": "node tools/test-trade-confirmation.mjs",
-    "test:systems": "node tools/test-shared-systems.mjs"
+    "test:systems": "node tools/test-shared-systems.mjs",
+    "test:combat": "node tools/test-combat-defense.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.116.0",

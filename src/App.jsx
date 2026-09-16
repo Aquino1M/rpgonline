@@ -796,7 +796,7 @@ function MobileControls({hud,abilities,call,touch}){
       />
 
       <div className="mobile-actions">
-        <button className={`mobile-attack ${hud.autoAttacking?'active':''}`} onPointerDown={press('toggleAutoAttack')} onTouchStart={touchFallback(press('toggleAutoAttack'))}>⚔<small>{hud.autoAttacking?'PARAR':'ATACAR'}</small></button>
+        <button className="mobile-attack" onPointerDown={press('mobileAttack')} onTouchStart={touchFallback(press('mobileAttack'))}>⚔<small>ATACAR</small></button>
         <button className="mobile-block" onPointerDown={startHold('setMobileBlock')} onPointerUp={stopHold('setMobileBlock')} onPointerCancel={stopHold('setMobileBlock')} onTouchStart={touchFallback(startHold('setMobileBlock'))} onTouchEnd={touchFallback(stopHold('setMobileBlock'))}>🛡<small>DEFESA</small></button>
         <button className="mobile-dash" onPointerDown={press('dash')} onTouchStart={touchFallback(press('dash'))}>↯<small>ESQUIVA</small></button>
         <button className={`mobile-use ${hud.actionButton?'has-context':''}`} onClick={(e)=>{e.stopPropagation();call('interact')}}>{hud.actionButton?.icon||'☞'}<small>USAR</small></button>
