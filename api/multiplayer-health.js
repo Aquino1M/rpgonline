@@ -1,5 +1,8 @@
 // Vercel diagnostics endpoint for Shadow Ascension multiplayer.
 // It never returns keys/secrets. GET /api/multiplayer-health
+const DEFAULT_SUPABASE_URL = 'https://kfnlcrsnvckexzmhbyoy.supabase.co'
+const DEFAULT_SUPABASE_PUBLIC_KEY = 'sb_publishable_zB3YmZc3TNkKCHzHWQ-X5g_kKRvlkRI'
+
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store')
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -9,14 +12,14 @@ export default async function handler(req, res) {
     process.env.VITE_SUPABASE_URL ||
     process.env.SUPABASE_URL ||
     process.env.NEXT_PUBLIC_SUPABASE_URL ||
-    ''
+    DEFAULT_SUPABASE_URL
   ).trim()
   const key = String(
     process.env.VITE_SUPABASE_ANON_KEY ||
     process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
     process.env.SUPABASE_ANON_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-    ''
+    DEFAULT_SUPABASE_PUBLIC_KEY
   ).trim()
 
   const result = {

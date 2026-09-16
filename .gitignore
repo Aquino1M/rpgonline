@@ -10,3 +10,6 @@ ShadowAscension_Web3D_V0.8.4/
 *.rar
 /PACK/
 /PACK2/
+
+.vercel
+.env*
