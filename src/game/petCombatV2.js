@@ -1,0 +1,388 @@
+// Pet combat V2: real target chasing/attacking plus overhead HP/level/name UI.
+// Loaded after requestedGameplayFixes.js so it replaces the older instant-damage pet flow.
+
+import * as THREE from 'three'
+import { petPowerProfile } from './requestedGameplayFixes.js'
+
+const nowMs = () => (typeof performance !== 'undefined' ? performance.now() : Date.now())
+
+function activePet(game) {
+  return game?.activePet?.() || null
+}
+
+function ensurePetStats(pet) {
+  if (!pet) return null
+  pet.level = Math.max(1, Math.round(Number(pet.level) || 1))
+  pet.maxHp = Math.max(1, Math.round(Number(pet.maxHp) || Number(pet.hp) || 30))
+  pet.hp = Math.max(0, Math.min(pet.maxHp, Math.round(Number(pet.hp) || pet.maxHp)))
+  pet.damage = Math.max(1, Math.round(Number(pet.damage) || 4))
+  pet.xp = Math.max(0, Math.round(Number(pet.xp) || 0))
+  pet.nextXp = Math.max(20, Math.round(Number(pet.nextXp) || pet.level * 85))
+  pet.recoverUntil = Math.max(0, Number(pet.recoverUntil) || 0)
+  const power = petPowerProfile(pet.name)
+  pet.specialName = power.name
+  pet.specialType = power.type
+  pet.specialMultiplier = power.multiplier
+  pet.specialRadius = power.radius
+  pet.specialColor = power.color
+  return pet
+}
+
+export function petNameplateSnapshot(pet = {}) {
+  const safe = ensurePetStats({ ...pet })
+  return {
+    name: String(safe?.name || 'Companheiro'),
+    level: Math.max(1, Number(safe?.level) || 1),
+    hp: Math.max(0, Number(safe?.hp) || 0),
+    maxHp: Math.max(1, Number(safe?.maxHp) || 1),
+    xp: Math.max(0, Number(safe?.xp) || 0),
+    nextXp: Math.max(1, Number(safe?.nextXp) || 1),
+  }
+}
+
+export function isPetCombatTarget(game, target) {
+  if (!game || !target || target.dead) return false
+  if (!target.g?.position) return false
+  if (target.g.visible === false) return false
+  if (target.hp !== undefined && Number(target.hp) <= 0) return false
+  if (!game.player?.position) return false
+  return target.g.position.distanceTo(game.player.position) <= 38
+}
+
+function createPetNameplate() {
+  if (typeof document === 'undefined') return null
+  const canvas = document.createElement('canvas')
+  canvas.width = 460
+  canvas.height = 128
+  const texture = new THREE.CanvasTexture(canvas)
+  texture.minFilter = THREE.LinearFilter
+  texture.generateMipmaps = false
+  const material = new THREE.SpriteMaterial({
+    map: texture,
+    transparent: true,
+    depthTest: false,
+    depthWrite: false,
+  })
+  const sprite = new THREE.Sprite(material)
+  sprite.name = 'PetCombatNameplate'
+  sprite.position.set(0, 1.62, 0)
+  sprite.scale.set(4.25, 1.18, 1)
+  sprite.renderOrder = 80
+  sprite.userData.petCanvas = canvas
+  sprite.userData.petTexture = texture
+  sprite.userData.signature = ''
+  return sprite
+}
+
+function drawPetNameplate(sprite, pet) {
+  if (!sprite || !pet) return
+  const snap = petNameplateSnapshot(pet)
+  const recovering = Number(pet.recoverUntil) > Date.now()
+  const signature = `${snap.name}|${snap.level}|${Math.round(snap.hp)}|${Math.round(snap.maxHp)}|${snap.xp}|${snap.nextXp}|${recovering}`
+  if (sprite.userData.signature === signature) return
+  sprite.userData.signature = signature
+
+  const canvas = sprite.userData.petCanvas
+  const texture = sprite.userData.petTexture
+  const ctx = canvas?.getContext?.('2d')
+  if (!ctx || !texture) return
+
+  const hpPct = Math.max(0, Math.min(1, snap.hp / Math.max(1, snap.maxHp)))
+  const xpPct = Math.max(0, Math.min(1, snap.xp / Math.max(1, snap.nextXp)))
+  ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+  ctx.fillStyle = 'rgba(4, 10, 18, 0.92)'
+  ctx.fillRect(8, 8, 444, 112)
+  ctx.strokeStyle = recovering ? '#94a3b8' : '#60a5fa'
+  ctx.lineWidth = 4
+  ctx.strokeRect(8, 8, 444, 112)
+
+  ctx.textAlign = 'center'
+  ctx.font = '900 24px Inter, Arial'
+  ctx.fillStyle = recovering ? '#cbd5e1' : '#ffffff'
+  ctx.fillText(`🐾 ${snap.name}  •  Nv.${snap.level}`, 230, 38)
+
+  ctx.font = '800 15px Inter, Arial'
+  ctx.fillStyle = recovering ? '#cbd5e1' : '#f8fafc'
+  ctx.fillText(recovering ? 'RECUPERANDO' : `HP ${Math.ceil(snap.hp)} / ${Math.ceil(snap.maxHp)}`, 230, 61)
+
+  ctx.fillStyle = '#172033'
+  ctx.fillRect(34, 70, 392, 18)
+  ctx.fillStyle = recovering ? '#64748b' : hpPct > 0.55 ? '#22c55e' : hpPct > 0.25 ? '#f59e0b' : '#ef4444'
+  ctx.fillRect(34, 70, 392 * hpPct, 18)
+  ctx.strokeStyle = 'rgba(255,255,255,.45)'
+  ctx.lineWidth = 1
+  ctx.strokeRect(34, 70, 392, 18)
+
+  ctx.fillStyle = '#101827'
+  ctx.fillRect(34, 96, 392, 10)
+  ctx.fillStyle = '#38bdf8'
+  ctx.fillRect(34, 96, 392 * xpPct, 10)
+  ctx.font = '700 11px Inter, Arial'
+  ctx.fillStyle = '#cbd5e1'
+  ctx.fillText(`XP ${snap.xp}/${snap.nextXp}`, 230, 117)
+
+  texture.needsUpdate = true
+}
+
+function ensurePetNameplate(game, pet) {
+  if (!game?.petVisual || !pet) return null
+  let label = game.petNameplate
+  if (!label || label.parent !== game.petVisual) {
+    label = createPetNameplate()
+    if (!label) return null
+    game.petVisual.add(label)
+    game.petNameplate = label
+  }
+  drawPetNameplate(label, pet)
+  return label
+}
+
+function cleanupDetachedNameplate(game) {
+  const label = game?.petNameplate
+  if (!label) return
+  if (label.parent) return
+  label.userData?.petTexture?.dispose?.()
+  label.material?.dispose?.()
+  game.petNameplate = null
+}
+
+function followPoint(game) {
+  const heading = Number(game?.player?.rotation?.y) || 0
+  const side = new THREE.Vector3(Math.cos(heading), 0, -Math.sin(heading)).multiplyScalar(1.35)
+  const back = new THREE.Vector3(-Math.sin(heading), 0, -Math.cos(heading)).multiplyScalar(1.15)
+  return game.player.position.clone().add(side).add(back)
+}
+
+function moveVisualToward(game, point, speed, dt) {
+  const visual = game?.petVisual
+  if (!visual || !point) return 0
+  const dx = point.x - visual.position.x
+  const dz = point.z - visual.position.z
+  const distance = Math.hypot(dx, dz)
+  if (distance > 0.03) {
+    const step = Math.min(distance, Math.max(0, speed * dt))
+    visual.position.x += (dx / distance) * step
+    visual.position.z += (dz / distance) * step
+    visual.rotation.y = Math.atan2(dx, dz)
+  }
+  return distance
+}
+
+function gainPetAttackXp(game, pet, target) {
+  const gain = Math.max(1, Math.round((Number(target?.level) || 1) * 0.7))
+  pet.xp += gain
+  let leveled = false
+  while (pet.xp >= pet.nextXp) {
+    pet.xp -= pet.nextXp
+    pet.level += 1
+    pet.nextXp = Math.max(20, Math.round(pet.nextXp * 1.28))
+    pet.maxHp += Math.max(8, Math.round((Number(target?.level) || pet.level) * 2))
+    pet.hp = pet.maxHp
+    pet.damage += Math.max(2, Math.round((Number(target?.level) || pet.level) * 0.28))
+    leveled = true
+  }
+  if (leveled) {
+    game.toast?.(`🐾 ${pet.name} subiu para Nv.${pet.level}!`)
+    game.saveGame?.()
+    game.saveCloudGame?.()
+  }
+}
+
+function pulsePetAttack(game, color = 0x60a5fa) {
+  const visual = game?.petVisual
+  if (!visual) return
+  const original = visual.scale.clone()
+  visual.scale.copy(original).multiplyScalar(1.16)
+  const body = visual.children?.find?.(child => child?.material?.emissive)
+  const oldEmissive = body?.material?.emissive?.clone?.()
+  const oldIntensity = body?.material?.emissiveIntensity
+  if (body?.material?.emissive) {
+    body.material.emissive.setHex(color)
+    body.material.emissiveIntensity = 1.15
+  }
+  window.setTimeout(() => {
+    if (visual) visual.scale.copy(original)
+    if (body?.material?.emissive && oldEmissive) {
+      body.material.emissive.copy(oldEmissive)
+      body.material.emissiveIntensity = oldIntensity ?? 0
+    }
+  }, 120)
+}
+
+function doPetSpecial(game, pet, target, profile, now) {
+  if (!target || target.dead || Number(target.hp) <= 0) return
+  pet.nextSpecialAt = now + 5200
+  const specialDamage = Math.max(1, Math.round(pet.damage * profile.multiplier))
+  const center = target.g?.position
+  const enemies = profile.radius > 2.5 && center
+    ? (game.enemies || []).filter(enemy => isPetCombatTarget(game, enemy) && enemy.g.position.distanceTo(center) <= profile.radius)
+    : [target]
+  const targets = enemies.length ? enemies : [target]
+  const seen = new Set()
+  for (const enemy of targets) {
+    if (!enemy || enemy.dead || seen.has(enemy)) continue
+    seen.add(enemy)
+    game.damageEnemy?.(enemy, specialDamage, { knockback: 0.22, fromPet: true })
+  }
+  pulsePetAttack(game, profile.color)
+  game.toast?.(`🐾 ${pet.name}: ${profile.name}!`)
+}
+
+function performPetAttack(game, pet, target, now) {
+  if (!isPetCombatTarget(game, target)) return false
+  if ((Number(pet.nextAttackAt) || 0) > now) return false
+  pet.nextAttackAt = now + 920
+
+  const damage = Math.max(1, Math.round(pet.damage * (0.9 + Math.random() * 0.2)))
+  const hit = game.damageEnemy?.(target, damage, { knockback: 0.12, fromPet: true })
+  if (hit === false) return false
+
+  pulsePetAttack(game, pet.specialColor || 0x60a5fa)
+  gainPetAttackXp(game, pet, target)
+
+  if (!target.dead && Number(target.hp) > 0 && (Number(pet.nextSpecialAt) || 0) <= now) {
+    doPetSpecial(game, pet, target, petPowerProfile(pet.name), now)
+  }
+  return true
+}
+
+function recoverPetIfReady(game, pet) {
+  if (!pet || !pet.recoverUntil) return false
+  if (pet.recoverUntil > Date.now()) return false
+  pet.recoverUntil = 0
+  pet.hp = pet.maxHp
+  pet.nextHurtAt = 0
+  pet.nextAttackAt = 0
+  game.petTarget = null
+  game.petVisualKey = ''
+  game.toast?.(`🐾 ${pet.name} se recuperou e voltou com a vida cheia!`)
+  game.saveGame?.()
+  return true
+}
+
+function damagePetFromTarget(game, pet, target, now) {
+  if (!target || !pet || (Number(pet.nextHurtAt) || 0) > now) return
+  pet.nextHurtAt = now + 1500
+  const enemyAttack = Math.max(6, Number(target.atk) || Number(target.damage) || 8)
+  const received = Math.max(2, Math.round(enemyAttack * 0.32))
+  pet.hp = Math.max(0, pet.hp - received)
+  drawPetNameplate(game.petNameplate, pet)
+
+  if (pet.hp <= 0) {
+    pet.recoverUntil = Date.now() + 45000
+    game.petTarget = null
+    game.petVisualKey = ''
+    game.toast?.(`🐾 ${pet.name} caiu! Ficará se recuperando por 45s.`)
+    game.saveGame?.()
+    game.syncPetVisual?.()
+  }
+}
+
+export function installPetCombatV2(game) {
+  if (!game || game.__petCombatV2Installed) return false
+  game.__petCombatV2Installed = true
+
+  const oldSyncPetVisual = game.syncPetVisual?.bind(game)
+  if (oldSyncPetVisual) {
+    game.syncPetVisual = () => {
+      const previous = game.petVisual
+      const result = oldSyncPetVisual()
+      if (previous && previous !== game.petVisual && game.petNameplate?.parent === previous) {
+        game.petNameplate = null
+      }
+      const pet = ensurePetStats(activePet(game))
+      if (pet && game.petVisual && pet.recoverUntil <= Date.now()) ensurePetNameplate(game, pet)
+      else cleanupDetachedNameplate(game)
+      return result
+    }
+  }
+
+  // Player hits now only COMMAND the pet. The actual pet hit happens when it reaches melee range.
+  game.petAttackTarget = enemy => {
+    const pet = ensurePetStats(activePet(game))
+    if (!pet || pet.recoverUntil > Date.now() || !isPetCombatTarget(game, enemy)) return false
+    game.petTarget = enemy
+    pet.lastCommandAt = Date.now()
+    game.syncPetVisual?.()
+    return true
+  }
+
+  game.updatePets = dt => {
+    const pet = ensurePetStats(activePet(game))
+    if (!pet) {
+      game.petTarget = null
+      game.syncPetVisual?.()
+      return
+    }
+
+    recoverPetIfReady(game, pet)
+    game.syncPetVisual?.()
+    if (!game.petVisual || pet.recoverUntil > Date.now()) return
+
+    const now = nowMs()
+    const visual = game.petVisual
+    const home = followPoint(game)
+
+    // Prevent a newly created pet mesh from travelling across the whole map from world origin.
+    if (visual.position.distanceTo(game.player.position) > 28) {
+      visual.position.copy(home)
+      visual.position.y = 0.55
+    }
+
+    let target = game.petTarget
+    if (!isPetCombatTarget(game, target)) {
+      target = null
+      game.petTarget = null
+    }
+
+    if (target) {
+      const targetPos = target.g.position
+      const distance = Math.hypot(targetPos.x - visual.position.x, targetPos.z - visual.position.z)
+      if (distance > 1.85) {
+        moveVisualToward(game, targetPos, 8.8, dt)
+      } else {
+        const dx = targetPos.x - visual.position.x
+        const dz = targetPos.z - visual.position.z
+        if (Math.hypot(dx, dz) > 0.01) visual.rotation.y = Math.atan2(dx, dz)
+        performPetAttack(game, pet, target, now)
+        if (!target.dead && Number(target.hp) > 0) damagePetFromTarget(game, pet, target, now)
+      }
+
+      if (target.dead || Number(target.hp) <= 0) {
+        game.petTarget = null
+      }
+    } else {
+      moveVisualToward(game, home, 7.6, dt)
+      pet.hp = Math.min(pet.maxHp, pet.hp + pet.maxHp * Math.max(0, dt) * 0.04)
+    }
+
+    visual.position.y = 0.55 + Math.sin(now * 0.004) * 0.08
+    ensurePetNameplate(game, pet)
+  }
+
+  for (const pet of game.state?.pets?.owned || []) ensurePetStats(pet)
+  game.petVisualKey = ''
+  game.syncPetVisual?.()
+  game.saveGame?.()
+  return true
+}
+
+function installWhenReady() {
+  if (typeof window === 'undefined') return
+  const tryInstall = () => {
+    const game = window.game
+    if (!game) return false
+    // requestedGameplayFixes also patches pet methods. Install this one a moment later so V2 wins.
+    window.setTimeout(() => installPetCombatV2(game), 180)
+    return true
+  }
+  if (tryInstall()) return
+  const timer = window.setInterval(() => {
+    if (!tryInstall()) return
+    window.clearInterval(timer)
+  }, 100)
+  window.setTimeout(() => window.clearInterval(timer), 60000)
+}
+
+installWhenReady()
