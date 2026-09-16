@@ -263,6 +263,10 @@ export async function signOutAccount() {
 export async function loadClosedWorldGates(cycle) {
   const client = getSupabaseClient()
   if (!client || !Number.isInteger(cycle)) return []
+  // Gate state is protected by RLS; the auth screen can boot the engine before
+  // a session exists, so avoid a noisy/expected permission error in that phase.
+  const { data: sessionData } = await client.auth.getSession()
+  if (!sessionData?.session?.user) return []
   const { data, error } = await client
     .from('world_gate_cycles')
     .select('closed_gate_ids')
