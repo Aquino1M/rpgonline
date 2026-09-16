@@ -13,7 +13,7 @@ assert.equal(updateGuildRank(guild), true, 'Guild XP and player level must advan
 assert.equal(guild.guildRank, 'D')
 
 const gateManager = await readFile(new URL('../src/game/dungeons/GateManager.js', import.meta.url), 'utf8')
-assert.match(gateManager, /this\.removeGate\(inst\.gateId\)/, 'Completed dungeon must consume its gate')
+assert.match(gateManager, /this\.removeGate\(inst\.gateId(?:,\s*\{[^}]*\})?\)/, 'Completed dungeon must consume its gate')
 assert.match(gateManager, /dungeon\.transition = true/, 'Modern completion must block the legacy dungeon loop')
 
 console.log('Dungeon progression checks passed.')

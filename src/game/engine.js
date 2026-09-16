@@ -37,7 +37,7 @@ export class ShadowGame {
     const hasValidLogin = Boolean(savedSession?.accountId && savedSession?.username)
     this.accountId=savedSession?.accountId||''
     if (savedSession?.accountId) localStorage.setItem('shadow-ascension-player-id', savedSession.accountId)
-    this.settings={renderDistance:2,pixelRatio:Math.min(window.devicePixelRatio||1,1.5),uiScale:1.2,shadows:true,invertCameraX:false,invertCameraY:false,invertCamera:false,multiplayerUrl:localStorage.getItem('shadow-ascension-mp-url')||''}
+    this.settings={renderDistance:2,pixelRatio:Math.min(window.devicePixelRatio||1,1.5),uiScale:1.2,visualQuality:'equilibrado',shadows:true,invertCameraX:false,invertCameraY:false,invertCamera:false,multiplayerUrl:localStorage.getItem('shadow-ascension-mp-url')||''}
     this.state={
       version:8,playerName:savedNick,needsNickname:true,level:1,xp:0,nextXp:120,hp:120,maxHp:120,baseMaxHp:120,stamina:100,maxStamina:100,baseMaxStamina:100,gold:220,
       baseAtk:16,baseDef:5,atk:16,def:5,speed:7.1,zone:'Vila Aurora',zoneId:'aurora',target:null,dungeon:null,boss:null,
@@ -57,7 +57,7 @@ export class ShadowGame {
   init(){
     const maxPr = this.isTouchDevice ? 1.15 : 1.5
     this.renderer=new THREE.WebGLRenderer({canvas:this.canvas,antialias:!this.isTouchDevice,powerPreference:'high-performance',alpha:false})
-    this.renderer.setPixelRatio(Math.min(this.settings.pixelRatio, maxPr)); this.renderer.shadowMap.enabled=this.settings.shadows; this.renderer.shadowMap.type=THREE.PCFSoftShadowMap
+    this.renderer.setPixelRatio(Math.min(this.settings.pixelRatio, maxPr)); this.renderer.shadowMap.enabled=this.settings.shadows; this.renderer.shadowMap.type=THREE.PCFShadowMap
     this.renderer.outputColorSpace=THREE.SRGBColorSpace; this.renderer.toneMapping=THREE.ACESFilmicToneMapping; this.renderer.toneMappingExposure=1.05
     this.scene=new THREE.Scene(); this.scene.background=new THREE.Color(0x8bc8ee); this.scene.fog=new THREE.Fog(0x8bc8ee,65,155)
     this.camera=new THREE.PerspectiveCamera(60,1,.1,650)

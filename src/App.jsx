@@ -9,7 +9,7 @@ import { promptInstallApp, toggleFullScreen, subscribePWA, getPWAState } from '.
 import MiniMap from './ui/Minimap.jsx'
 import WorldMap from './ui/WorldMap.jsx'
 
-const initial={playerName:'',needsNickname:true,level:1,xp:0,nextXp:120,hp:120,maxHp:120,stamina:100,maxStamina:100,gold:220,atk:16,def:5,critChance:0,zone:'Vila Aurora',zoneId:'aurora',currentCity:'Cidadela Aurora',inventory:[],inventoryCapacity:40,backpackLevel:0,equipment:{},quests:[],guildMissions:[],guildRank:'E',guildRankIndex:0,guildPoints:0,attributePoints:0,attributes:{strength:0,vitality:0,agility:0,intellect:0},weather:'Céu limpo',time:'08:15',mount:{},abilities:[],combatMode:false,inCombat:false,combatTimer:0,multiplayer:{connected:false,url:'',room:'asterra-global',players:0,latencyMs:0,quality:'offline',reconnecting:false},settings:{renderDistance:2,pixelRatio:1,uiScale:1.2,invertCameraX:false,invertCameraY:false,invertCamera:false,multiplayerUrl:''},playerPosition:{x:0,z:0},stats:{kills:0,bosses:0,dungeons:0},ores:0,party:{id:null,leaderId:null,members:[],totalXP:0},onlinePlayers:[],economy:{label:'Mercado dos Despertos',description:'Itens iniciais',theme:'Aurora'}}
+const initial={playerName:'',needsNickname:true,level:1,xp:0,nextXp:120,hp:120,maxHp:120,stamina:100,maxStamina:100,gold:220,atk:16,def:5,critChance:0,zone:'Vila Aurora',zoneId:'aurora',currentCity:'Cidadela Aurora',inventory:[],inventoryCapacity:40,backpackLevel:0,equipment:{},quests:[],guildMissions:[],guildRank:'E',guildRankIndex:0,guildPoints:0,attributePoints:0,attributes:{strength:0,vitality:0,agility:0,intellect:0},weather:'Céu limpo',time:'08:15',mount:{},abilities:[],combatMode:false,inCombat:false,combatTimer:0,multiplayer:{connected:false,url:'',room:'asterra-global',players:0,latencyMs:0,quality:'offline',reconnecting:false},settings:{renderDistance:2,pixelRatio:1,uiScale:1.2,visualQuality:'equilibrado',invertCameraX:false,invertCameraY:false,invertCamera:false,multiplayerUrl:''},playerPosition:{x:0,z:0},stats:{kills:0,bosses:0,dungeons:0},ores:0,party:{id:null,leaderId:null,members:[],totalXP:0},onlinePlayers:[],economy:{label:'Mercado dos Despertos',description:'Itens iniciais',theme:'Aurora'}}
 const slotNames={weapon:'Arma',armor:'Armadura',boots:'Botas',talisman:'Talismã'}
 const roleTitle={inventory:'Inventário & Equipamento',grimoire:'Grimório do Despertar (Roleta de Almas)',travel:'Moço Viajante (Rotas de Caravana)',quests:'Missões',guild:'Guilda de Aventureiros',townhall:'Prefeitura de Aurora (Juramento do Cavaleiro)',attributes:'Atributos',merchant:'Mercador',blacksmith:'Ferreiro Rúnico',stable:'Estábulos & Domação de Montarias',pets:'Companheiros',map:'Mapa de Asterra',settings:'Configurações',trade:'Troca entre Jogadores'}
 const fallbackAbilities=[{slot:1,name:'Corte Astral',short:'Corte',icon:'✦',cost:14,cooldown:2.6,remaining:0,ready:true},{slot:2,name:'Onda Astral',short:'Onda',icon:'✹',cost:28,cooldown:4.8,remaining:0,ready:true},{slot:3,name:'Passo Etéreo',short:'Passo',icon:'➠',cost:22,cooldown:3.2,remaining:0,ready:true}]
@@ -1506,7 +1506,7 @@ function Settings({hud,apply,connect,setName,call}){
 
   const update=(k,v)=>{const n={...s,[k]:v};setS(n);apply(n)}
   const qualityPreset=(mode)=>{
-    const presets={leve:{renderDistance:2,pixelRatio:.75,shadows:false},equilibrado:{renderDistance:3,pixelRatio:1,shadows:true},bonito:{renderDistance:4,pixelRatio:1.25,shadows:true}}
+    const presets={leve:{renderDistance:2,pixelRatio:.75,visualQuality:'leve',shadows:false},equilibrado:{renderDistance:3,pixelRatio:1,visualQuality:'equilibrado',shadows:true},bonito:{renderDistance:4,pixelRatio:1.25,visualQuality:'bonito',shadows:true}}
     const n={...s,...presets[mode]};setS(n);apply(n)
   }
 
@@ -1575,6 +1575,13 @@ function Settings({hud,apply,connect,setName,call}){
       <button onClick={()=>qualityPreset('equilibrado')}>⚖ Equilibrado</button>
       <button onClick={()=>qualityPreset('bonito')}>✨ Bonito</button>
     </div>
+    <Setting label="Perfil gráfico do remake" value={{leve:'Leve (tablet/celular)',equilibrado:'Equilibrado',bonito:'Bonito (PC)'}[s.visualQuality||'equilibrado']}>
+      <select value={s.visualQuality||'equilibrado'} onChange={e=>qualityPreset(e.target.value)}>
+        <option value="leve">Leve</option>
+        <option value="equilibrado">Equilibrado</option>
+        <option value="bonito">Bonito</option>
+      </select>
+    </Setting>
     <Setting label="Distância de renderização" value={`${s.renderDistance||3} chunks`}>
       <input type="range" min="1" max="4" step="1" value={s.renderDistance||3} onChange={e=>update('renderDistance',Number(e.target.value))}/>
     </Setting>
