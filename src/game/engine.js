@@ -10,7 +10,7 @@ import { GateManager } from './dungeons/GateManager.js'
 import { XPFeedbackManager } from './dungeons/XPFeedbackManager.js'
 import { CaravanManager } from './caravans/CaravanManager.js'
 import { WorldEnvironment } from './world/WorldEnvironment.js'
-import { signOutAccount } from './supabaseService.js'
+import { saveCloudProfile, signOutAccount } from './supabaseService.js'
 
 const V3=()=>new THREE.Vector3()
 const mat=(color,extra={})=>new THREE.MeshStandardMaterial({color,roughness:.72,...extra})
@@ -29,12 +29,13 @@ export class ShadowGame {
     this.resourceNodes=[]; this.mobSpecialCooldowns=new Map()
     this.clock=new THREE.Clock(); this.yaw=Math.PI; this.pitch=0.14; this.cameraDistance=5.2; this.drag=false; this.pointerLocked=false
     this.weatherClock=0; this.weatherIndex=0; this.dayHours=8.25; this.lastHud=0; this.attackClock=0; this.specialClock=0; this.dashTime=0; this.invuln=0
-    this.abilityCooldowns=Object.fromEntries(ABILITIES.map(a=>[a.id,0])); this.raycaster=new THREE.Raycaster(); this.discovered=new Set(); this.savedDiscovered=[]; this.currentMerchantZoneMin=1; this.currentMerchantZoneMax=10; this.currentMerchantZoneId='aurora'; this.currentMerchantCityId='aurora-city'; this.localUpdatedAt=0; this.serverProfileTimestamp=0
+    this.abilityCooldowns=Object.fromEntries(ABILITIES.map(a=>[a.id,0])); this.raycaster=new THREE.Raycaster(); this.discovered=new Set(); this.savedDiscovered=[]; this.currentMerchantZoneMin=1; this.currentMerchantZoneMax=10; this.currentMerchantZoneId='aurora'; this.currentMerchantCityId='aurora-city'; this.localUpdatedAt=0; this.serverProfileTimestamp=0; this.accountId=''; this.cloudSaveInFlight=null; this.cloudSaveQueued=false; this.persistCloudProfile=saveCloudProfile
     let savedSession = null
     try { savedSession = JSON.parse(localStorage.getItem('shadow_rpg_account_session') || 'null') } catch {}
     const savedNick = (savedSession?.username || localStorage.getItem('shadow-ascension-nick') || '').trim()
     const savedLobby = (savedSession?.server || localStorage.getItem('shadow-ascension-last-lobby') || '').trim() || 'asterra-global'
     const hasValidLogin = Boolean(savedSession?.accountId && savedSession?.username)
+    this.accountId=savedSession?.accountId||''
     if (savedSession?.accountId) localStorage.setItem('shadow-ascension-player-id', savedSession.accountId)
     this.settings={renderDistance:2,pixelRatio:Math.min(window.devicePixelRatio||1,1.5),uiScale:1.2,shadows:true,invertCameraX:false,invertCameraY:false,invertCamera:false,multiplayerUrl:localStorage.getItem('shadow-ascension-mp-url')||''}
     this.state={
@@ -78,6 +79,7 @@ export class ShadowGame {
     this.caravanManager=new CaravanManager(this); this.caravanManager.init()
     this.resizeObserver=new ResizeObserver(()=>this.resize()); this.resizeObserver.observe(this.canvas)
     this.autoSave=setInterval(()=>this.saveGame(),10000)
+    this.cloudSave=setInterval(()=>this.saveCloudGame(),5*60*1000)
     this.multiplayer=new MultiplayerClient({room:'asterra-global',name:this.state.playerName||'Aventureiro',onEvent:e=>this.onMultiplayerEvent(e)});this.settings.multiplayerUrl=this.multiplayer.url||this.settings.multiplayerUrl;this.state.settings=this.settings;this.state.multiplayer.url=this.settings.multiplayerUrl;this.state.multiplayer.room=this.multiplayer.room;if(this.multiplayer.url)this.multiplayer.connect()
     if(this.isTouchDevice)this.setTouchDeviceMode(true)
     if(typeof window!=='undefined')window.game=this
@@ -85,7 +87,7 @@ export class ShadowGame {
   }
 
   destroy(){
-    cancelAnimationFrame(this.raf); clearInterval(this.autoSave); this.resizeObserver?.disconnect(); this.multiplayer?.disconnect();
+    this.saveCloudGame({force:true}); cancelAnimationFrame(this.raf); clearInterval(this.autoSave); clearInterval(this.cloudSave); this.resizeObserver?.disconnect(); this.multiplayer?.disconnect();
     this._unbind?.forEach(([t,n,f,o])=>t.removeEventListener(n,f,o)); this.renderer?.dispose()
   }
 
@@ -695,8 +697,8 @@ export class ShadowGame {
     on(this.canvas,'wheel',e=>{this.cameraDistance=clamp(this.cameraDistance+e.deltaY*.008,4.8,12.5)},{passive:true})
     on(document,'pointerlockchange',()=>{this.pointerLocked=document.pointerLockElement===this.canvas;if(!this.isTouchDevice&&this.combatMode&&!this.pointerLocked&&document.visibilityState==='visible'){this.combatMode=false;this.state.combatMode=false}})
     on(this.canvas,'contextmenu',e=>e.preventDefault())
-    on(window,'beforeunload',()=>{try{this.saveGame()}catch{}})
-    on(document,'visibilitychange',()=>{if(document.visibilityState==='hidden')this.saveGame();else this.multiplayer?.ensureConnected?.()})
+    on(window,'beforeunload',()=>{try{this.saveGame();this.saveCloudGame({force:true})}catch{}})
+    on(document,'visibilitychange',()=>{if(document.visibilityState==='hidden'){this.saveGame();this.saveCloudGame({force:true})}else this.multiplayer?.ensureConnected?.()})
     on(window,'online',()=>this.multiplayer?.ensureConnected?.())
   }
 
@@ -1917,6 +1919,7 @@ export class ShadowGame {
       this.xpFeedback.awardXP(amount, { isPartyBonus: !!partyTag, bonusText: partyTag || '' })
     }
     this.state.xp += amount
+    let leveledUp=false
     while(this.state.xp >= this.state.nextXp && this.state.level < 300) {
       this.state.xp -= this.state.nextXp
       this.state.level++
@@ -1925,6 +1928,7 @@ export class ShadowGame {
       this.state.baseAtk += 2
       this.state.baseDef += 1
       this.state.attributePoints = (this.state.attributePoints || 0) + 1
+      leveledUp=true
       progressQuest(this.state, 'level', 'level', 1)
       if (this.xpFeedback) {
         this.xpFeedback.triggerLevelUp(this.state.level)
@@ -1935,6 +1939,7 @@ export class ShadowGame {
     updateGuildRank(this.state)
     this.recalcStats()
     this.state.hp = this.state.maxHp
+    if(leveledUp){this.saveGame();this.saveCloudGame({force:true})}
   }
 
   inventoryCapacity(){return Math.max(40,Math.min(100,Math.round(Number(this.state.inventoryCapacity)||40)))}
@@ -2744,6 +2749,7 @@ applyEnemyNetworkState(st){
     localStorage.setItem('shadow-ascension-nick', username)
     localStorage.setItem('shadow-ascension-last-lobby', server)
     if(session.accountId){
+      this.accountId=session.accountId
       localStorage.setItem('shadow-ascension-player-id', session.accountId)
       try { sessionStorage.setItem('shadow-ascension-player-id', session.accountId) } catch {}
       if(this.multiplayer) {
@@ -2761,17 +2767,19 @@ applyEnemyNetworkState(st){
       maxHp: this.state.maxHp,
       guildRank: this.state.guildRank
     }, true)
-    if(profile?.game){
+    if(profile?.game&&(profile.updatedAt||0)>=(this.localUpdatedAt||0)){
       this.applyServerProfile(profile.game, profile.updatedAt || Date.now())
     }
     this.saveGame()
+    this.saveCloudGame({force:true})
     this.multiplayer?.connect()
     this.gateManager?.hydrateSharedGateState?.()
     this.toast(`Bem-vindo, ${username}! Conectado ao ${server.replace('asterra-','Servidor ')}.`)
     return true
   }
-  logoutAccount(){
-    signOutAccount().catch(()=>{})
+  async logoutAccount(){
+    await this.saveCloudGame({force:true})
+    await signOutAccount().catch(()=>{})
     try {
       localStorage.removeItem('shadow_rpg_account_session')
       localStorage.removeItem('shadow-ascension-nick')
@@ -2781,6 +2789,7 @@ applyEnemyNetworkState(st){
       localStorage.removeItem('rpg_player_nick')
     } catch {}
     this.state.playerName = ''
+    this.accountId=''
     this.state.needsNickname = true
     this.state.uiPanel = null
     this.multiplayer?.disconnect()
@@ -2856,6 +2865,18 @@ applyEnemyNetworkState(st){
       this.localUpdatedAt=updatedAt
       this.multiplayer?.saveProfile(data,updatedAt)
     }catch{}
+  }
+  saveCloudGame({force=false}={}){
+    if(!this.accountId||this.state.needsNickname)return Promise.resolve({ok:false,error:'no_account'})
+    if(this.cloudSaveInFlight){this.cloudSaveQueued=this.cloudSaveQueued||force;return this.cloudSaveInFlight}
+    this.saveGame()
+    const updatedAt=this.localUpdatedAt||Date.now(), snapshot=this.profileSnapshot()
+    const payload={id:this.accountId,name:this.state.playerName,game:snapshot,lastLobby:snapshot.multiplayerRoom,level:this.state.level,guildRank:this.state.guildRank,updatedAt}
+    this.cloudSaveInFlight=Promise.resolve(this.persistCloudProfile(payload))
+      .then(result=>{this.state.multiplayer.serverSave=!!result?.ok;if(result?.ok)this.serverProfileTimestamp=updatedAt;return result})
+      .catch(error=>{this.state.multiplayer.serverSave=false;return {ok:false,error:String(error?.message||error)}})
+      .finally(()=>{this.cloudSaveInFlight=null;if(this.cloudSaveQueued){this.cloudSaveQueued=false;this.saveCloudGame()}})
+    return this.cloudSaveInFlight
   }
   exportSaveData(){
     return localStorage.getItem('shadow-ascension-save-v08')||localStorage.getItem('shadow-ascension-save-backup')||''

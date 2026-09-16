@@ -15,7 +15,8 @@
     "test:multiplayer": "node tools/test-supabase-multiplayer-2players.mjs",
     "test:trade": "node tools/test-trade-confirmation.mjs",
     "test:systems": "node tools/test-shared-systems.mjs",
-    "test:combat": "node tools/test-combat-defense.mjs"
+    "test:combat": "node tools/test-combat-defense.mjs",
+    "test:cloud-save": "node tools/test-cloud-save.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.116.0",
