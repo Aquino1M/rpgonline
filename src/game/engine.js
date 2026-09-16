@@ -27,7 +27,7 @@ export class ShadowGame {
     const isMobUA = typeof navigator !== 'undefined' && /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent || '');
     this.keys={}; this.enemies=[]; this.bots=[]; this.guards=[]; this.respawnQueue=[]; this.respawnLocks=new Map(); this.chunks=new Map(); this.portals=[]; this.projectiles=[]; this.npcs=[]; this.remotePlayers=new Map(); this.effects=[]; this.virtualMove={x:0,z:0}; this.combatMode=false; this.specialAnim=0; this.lastTouch=null; this.freeLook=false; this.freeLookPointer=null; this.freeLookLast=null; this.uiSuspendedCombat=false; this.isTouchDevice=isMobUA && !window.matchMedia?.('(pointer: fine)').matches; this.verticalVelocity=0; this.grounded=true; this.aimNdcX=0; this.combatCooldown=0; this.inCombat=false;
     this.resourceNodes=[]; this.mobSpecialCooldowns=new Map()
-    this.clock=new THREE.Clock(); this.yaw=Math.PI; this.pitch=0.14; this.cameraDistance=5.2; this.drag=false; this.pointerLocked=false
+    this.clock=new THREE.Timer(); if(typeof document!=='undefined') this.clock.connect(document); this.yaw=Math.PI; this.pitch=0.14; this.cameraDistance=5.2; this.drag=false; this.pointerLocked=false
     this.weatherClock=0; this.weatherIndex=0; this.dayHours=8.25; this.lastHud=0; this.attackClock=0; this.specialClock=0; this.dashTime=0; this.invuln=0
     this.abilityCooldowns=Object.fromEntries(ABILITIES.map(a=>[a.id,0])); this.petVisual=null; this.petVisualKey=''; this.petTarget=null; this.raycaster=new THREE.Raycaster(); this.discovered=new Set(); this.savedDiscovered=[]; this.currentMerchantZoneMin=1; this.currentMerchantZoneMax=10; this.currentMerchantZoneId='aurora'; this.currentMerchantCityId='aurora-city'; this.localUpdatedAt=0; this.serverProfileTimestamp=0; this.accountId=''; this.cloudSaveInFlight=null; this.cloudSaveQueued=false; this.persistCloudProfile=saveCloudProfile
     let savedSession = null
@@ -87,7 +87,7 @@ export class ShadowGame {
   }
 
   destroy(){
-    this.saveCloudGame({force:true}); cancelAnimationFrame(this.raf); clearInterval(this.autoSave); clearInterval(this.cloudSave); this.resizeObserver?.disconnect(); this.multiplayer?.disconnect();
+    this.saveCloudGame({force:true}); cancelAnimationFrame(this.raf); clearInterval(this.autoSave); clearInterval(this.cloudSave); this.resizeObserver?.disconnect(); this.multiplayer?.disconnect(); this.clock?.disconnect?.();
     this._unbind?.forEach(([t,n,f,o])=>t.removeEventListener(n,f,o)); this.renderer?.dispose()
   }
 
@@ -3058,8 +3058,8 @@ applyEnemyNetworkState(st){
     }
   }
 
-  loop=()=>{
-    this.raf=requestAnimationFrame(this.loop);const dt=Math.min(this.clock.getDelta(),.05),t=this.clock.elapsedTime
+  loop=(timestamp)=>{
+    this.raf=requestAnimationFrame(this.loop);this.clock.update(timestamp);const dt=Math.min(this.clock.getDelta(),.05),t=this.clock.getElapsed()
     if(this.state.needsNickname){
       this.cameraFollow(dt)
       this.renderer.render(this.scene,this.camera)
