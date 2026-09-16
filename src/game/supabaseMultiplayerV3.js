@@ -27,6 +27,8 @@ const SUPABASE_KEY = String(
   env.VITE_SUPABASE_PUBLISHABLE_KEY ||
   DEFAULT_SUPABASE_PUBLIC_KEY
 ).trim()
+// Enable only after the matching realtime.messages policies migration is live.
+const SUPABASE_PRIVATE_REALTIME = env.VITE_SUPABASE_PRIVATE_REALTIME === 'true'
 
 const hasSupabase = () => /^https:\/\/.+\.supabase\.co\/?$/i.test(SUPABASE_URL) && SUPABASE_KEY.length > 20
 const realtimeAccessToken = async () => {
@@ -173,7 +175,7 @@ class NativeSupabaseRealtime {
               broadcast:{ack:false,self:false},
               presence:{key:this.playerId},
               postgres_changes:[],
-              private:true
+              private:SUPABASE_PRIVATE_REALTIME
             },
             access_token:accessToken
           },
