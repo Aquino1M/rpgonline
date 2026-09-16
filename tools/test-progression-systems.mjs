@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict'
-import { generateGuildMissions, makeMaterialDrop, normalizeSaveState } from '../src/game/rpgSystems.js'
+import { generateGuildMissions, makeMaterialDrop, normalizeSaveState, guildRankRequirement } from '../src/game/rpgSystems.js'
 import { CITIES, NPC_DEFS } from '../src/game/config.js'
 import { ShadowGame } from '../src/game/engine.js'
+import { applyUniqueMobDrop, balancedAttackInput, earlyGuildPromotionStatus, petPowerProfile } from '../src/game/requestedGameplayFixes.js'
 
 const rankE=generateGuildMissions({level:30,guildRankIndex:0},123)
 const rankC=generateGuildMissions({level:30,guildRankIndex:2},123)
@@ -9,6 +10,27 @@ assert.ok(Math.max(...rankC.map(m=>m.reward.xp))>Math.max(...rankE.map(m=>m.rewa
 assert.ok(rankC.some(m=>m.rankIndex>=2))
 assert.match(makeMaterialDrop(20,'Slime Verde').name,/Gelatinoso/)
 assert.match(makeMaterialDrop(20,'Golem de Xisto').name,/Pedra Rúnica/)
+
+const earlyD=earlyGuildPromotionStatus({level:7,guildRankIndex:0,guildPoints:guildRankRequirement(1)})
+assert.equal(earlyD.eligible,true)
+assert.equal(earlyD.next.id,'D')
+assert.ok(earlyD.bonusXp>0&&earlyD.bonusGold>0)
+const tooEarly=earlyGuildPromotionStatus({level:6,guildRankIndex:0,guildPoints:guildRankRequirement(1)})
+assert.equal(tooEarly.eligible,false)
+
+const adjusted=balancedAttackInput(64,{def:8})
+const effective=Math.round(adjusted*100/(100+8*5))
+assert.ok(effective>=60&&effective<=64,`Displayed 64 DAMAGE should stay close to actual hit, got ${effective}`)
+
+const slimeDrop=applyUniqueMobDrop({...makeMaterialDrop(12,'Slime Lúmen'),source:'Slime Lúmen',subtype:'monster-drop',level:12})
+const golemDrop=applyUniqueMobDrop({...makeMaterialDrop(75,'Golem de Xisto'),source:'Golem de Xisto',subtype:'monster-drop',level:75})
+assert.match(slimeDrop.name,/Núcleo Lúmen Viscoso/)
+assert.match(golemDrop.name,/Núcleo de Xisto/)
+assert.notEqual(slimeDrop.value,golemDrop.value)
+assert.equal(petPowerProfile('Lagarto de Brasa').type,'fire')
+assert.equal(petPowerProfile('Serpente de Maré').type,'water')
+assert.equal(petPowerProfile('Sentinela Umbral').type,'shadow')
+
 const saved=normalizeSaveState({inventory:[],pets:{owned:Array.from({length:7},(_,i)=>({id:`p${i}`})),activeId:'p4'}})
 assert.equal(saved.pets.owned.length,5)
 assert.equal(saved.pets.activeId,'p4')
@@ -37,4 +59,4 @@ const reputation=normalizeSaveState({inventory:[],cityReputation:{'aurora-city':
 assert.equal(reputation['aurora-city'],100)
 assert.equal(reputation['lumen-city'],0)
 
-console.log('guild contracts, mob drops, pet NPC and city reputation: ok')
+console.log('guild contracts, early rank promotion, damage balance, unique drops, pet powers and city systems: ok')
