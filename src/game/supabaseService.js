@@ -6,11 +6,8 @@ const DEFAULT_PROJECT_URL = 'https://kfnlcrsnvckexzmhbyoy.supabase.co'
 export function getSupabaseConfig() {
   const envUrl = typeof import.meta !== 'undefined' && import.meta.env ? (import.meta.env.VITE_SUPABASE_URL || '') : ''
   const envKey = typeof import.meta !== 'undefined' && import.meta.env ? (import.meta.env.VITE_SUPABASE_ANON_KEY || '') : ''
-  const localUrl = typeof window !== 'undefined' ? (window.localStorage.getItem('shadow-ascension-supabase-url') || '') : ''
-  const localKey = typeof window !== 'undefined' ? (window.localStorage.getItem('shadow-ascension-supabase-key') || '') : ''
-
-  const url = (localUrl || envUrl || DEFAULT_PROJECT_URL).trim()
-  const key = (localKey || envKey || DEFAULT_ANON_KEY).trim()
+  const url = (envUrl || DEFAULT_PROJECT_URL).trim()
+  const key = (envKey || DEFAULT_ANON_KEY).trim()
 
   return { url, key }
 }
@@ -21,15 +18,10 @@ export function isSupabaseConfigured() {
 }
 
 export function saveSupabaseConfig(url, key) {
-  if (typeof window === 'undefined') return
-  if (url !== undefined) {
-    if (url) window.localStorage.setItem('shadow-ascension-supabase-url', url.trim())
-    else window.localStorage.removeItem('shadow-ascension-supabase-url')
-  }
-  if (key !== undefined) {
-    if (key) window.localStorage.setItem('shadow-ascension-supabase-key', key.trim())
-    else window.localStorage.removeItem('shadow-ascension-supabase-key')
-  }
+  // The live world deliberately uses one fixed project. Browser storage must not
+  // redirect a player to a different endpoint or replace the public project key.
+  void url
+  void key
 }
 
 let cachedClient = null

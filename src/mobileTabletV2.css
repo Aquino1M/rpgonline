@@ -438,3 +438,50 @@
 .app.touch-ui .window-inventory .inventory-rpg-container.mobile-tab-character .item-compare-panel{
   max-width:620px!important;margin-left:auto!important;margin-right:auto!important;
 }
+
+/* V4.5: quest board follows the Guilda visual language and exposes the city
+   reputation plus the physical NPC/board where contracts are accepted. */
+.quest-guild-layout{align-items:stretch}
+.quest-reputation-card{border-color:rgba(56,189,248,.28)!important;background:radial-gradient(circle at 50% 24%,rgba(37,99,145,.28),rgba(5,15,25,.76))!important}
+.quest-reputation-card>strong{color:#67e8f9!important;text-shadow:0 0 28px rgba(34,211,238,.28)!important}
+.quest-reputation-card .reputationbar{background:linear-gradient(90deg,#0ea5e9,#67e8f9)}
+.quest-reputation-card .bar{height:10px;margin-top:12px}
+.quest-city-facts{display:grid;gap:7px;margin-top:16px;text-align:left}
+.quest-city-facts span{display:flex;flex-direction:column;gap:2px;padding:8px 9px;border-radius:9px;background:rgba(8,24,39,.62);border:1px solid rgba(129,211,255,.12);font-size:10px;color:#d9effb}
+.quest-city-facts b{font-size:11px;color:#f5fbff}
+.quest-city-facts small{font-size:8px;color:#8da6b7}
+.quest-location-panel{padding:13px 15px;margin-bottom:12px;border-color:rgba(56,189,248,.18)}
+.quest-location-panel p{margin:7px 0 0;color:#a9bfce;font-size:10px;line-height:1.45}
+.quest-board-title{margin:2px 0 0}
+.quest-guild-grid{margin-top:10px}
+.quest-mission{min-height:174px;display:flex;flex-direction:column}
+.quest-mission .quest-mission-meta{margin:0 0 8px;font-size:9px;color:#91bfd5}
+.quest-mission .bar-wrap{margin-top:auto;margin-bottom:8px}
+.quest-mission.done{opacity:.62}
+.quest-empty-panel{grid-column:1/-1;display:flex;flex-direction:column;gap:6px;align-items:center;justify-content:center;min-height:150px;border:1px dashed rgba(129,211,255,.2);border-radius:13px;color:#aac0ce;background:rgba(8,22,35,.45)}
+.quest-empty-panel b{font-size:14px;color:#e5f6ff}
+.quest-empty-panel span{font-size:10px}
+
+@media (pointer: coarse) and (min-width: 700px){
+  .app.touch-ui .window-quests .quest-guild-layout{grid-template-columns:minmax(230px,.72fr) minmax(0,1.28fr)!important;gap:14px!important;height:auto!important}
+  .app.touch-ui .window-quests .quest-reputation-card{padding:14px!important;min-height:0!important}
+  .app.touch-ui .window-quests .quest-reputation-card>strong{font-size:54px!important;margin:12px 0 3px!important}
+  .app.touch-ui .window-quests .quest-reputation-card h3{font-size:18px!important}
+  .app.touch-ui .window-quests .quest-reputation-card p,.app.touch-ui .window-quests .quest-reputation-card em{font-size:11px!important;line-height:1.4!important}
+  .app.touch-ui .window-quests .quest-city-facts span{font-size:11px!important;padding:9px!important}
+  .app.touch-ui .window-quests .quest-city-facts b{font-size:12px!important}
+  .app.touch-ui .window-quests .quest-city-facts small{font-size:9px!important}
+  .app.touch-ui .window-quests .quest-location-panel p{font-size:12px!important}
+  .app.touch-ui .window-quests .quest-mission{min-height:190px!important;padding:12px!important}
+  .app.touch-ui .window-quests .quest-mission h4{font-size:15px!important}
+  .app.touch-ui .window-quests .quest-mission p{font-size:11px!important;line-height:1.4!important}
+  .app.touch-ui .window-quests .quest-mission-meta{font-size:10px!important}
+  .app.touch-ui .window-quests .quest-mission footer span{font-size:10px!important}
+  .app.touch-ui .window-quests .quest-mission footer button{min-height:40px!important;font-size:11px!important}
+  .app.touch-ui .window-quests .quest-guild-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:10px!important}
+}
+
+@media (pointer: coarse) and (orientation: portrait){
+  .app.touch-ui .window-quests .quest-guild-layout{grid-template-columns:1fr!important}
+  .app.touch-ui .window-quests .quest-guild-grid{grid-template-columns:1fr!important}
+}

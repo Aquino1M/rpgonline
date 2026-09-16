@@ -1,0 +1,12 @@
+// One explicit, tested patch order. Keep compatibility patches out of the entry
+// point so the login screen can load before the WebGL runtime and Three.js.
+import './runtimeVisualFixes.js'
+import './removeBrokenGiants.js'
+import './visualPolishV090.js'
+import './gameplayV093.js'
+import './mobileOnlineV094.js'
+import './mobileGameplayV095.js'
+import './mobileTabletDungeonV2.js'
+import './encounterCamps.js'
+import './accountInventoryHotfixV4.js'
+import './visualRemakeV100.js'

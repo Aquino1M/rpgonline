@@ -905,26 +905,16 @@ export class GateManager {
           for (const id of closedGateIds) this.removeGate(id, { broadcast:false })
         })
         .catch(error => console.warn('[Gates] Não foi possível salvar fechamento global:', error?.message || error))
-      this.game.multiplayer?.send({type:'gate_closed', gateId:gate.id, cycle:this.globalCycle})
     }
     return gate
   }
 
   requestSharedGateState() {
     this.hydrateSharedGateState()
-    this.game.multiplayer?.send({type:'gate_sync_request', cycle:this.globalCycle})
   }
 
   handleMultiplayerEvent(event = {}) {
-    if (event.type === 'gate_sync_request' && event.from && event.cycle === this.globalCycle) {
-      this.game.multiplayer?.send({type:'gate_sync_state', to:event.from, cycle:this.globalCycle, closedGateIds:[...this.closedGateIds]})
-      return
-    }
-    if (event.type === 'gate_sync_state' && event.to === this.game.multiplayer?.playerId && event.cycle === this.globalCycle) {
-      for (const id of event.closedGateIds || []) this.removeGate(String(id), { broadcast:false })
-      return
-    }
-    if (event.type === 'gate_closed' && event.cycle === this.globalCycle) this.removeGate(String(event.gateId || ''), { broadcast:false })
+    if (event.type === 'gate_closed' || event.type === 'gate_sync_state' || event.type === 'gate_sync_request') this.hydrateSharedGateState()
   }
 
   leaveDungeon() {

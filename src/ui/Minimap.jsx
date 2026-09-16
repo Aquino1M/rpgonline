@@ -46,7 +46,7 @@ export default function MiniMap({hud,onOpenMap}){
     }
 
     // Services / quests.
-    for(const n of data.npcs||[]){if(!visible(n.x,n.z))continue;const [x,y]=toMap(n.x,n.z),col=n.role==='merchant'?'#6ff0aa':n.role==='blacksmith'?'#ff805e':n.role==='stable'?'#7dd3fc':'#ffd85e';marker(ctx,x,y,col,n.quest==='ready'?'!':n.role==='merchant'?'$':n.role==='blacksmith'?'⚒':n.role==='stable'?'♞':'!')}
+    for(const n of data.npcs||[]){if(!visible(n.x,n.z))continue;const [x,y]=toMap(n.x,n.z),col=n.role==='merchant'?'#6ff0aa':n.role==='blacksmith'?'#ff805e':n.role==='stable'?'#7dd3fc':n.role==='pets'?'#f59e0b':'#ffd85e';marker(ctx,x,y,col,n.quest==='ready'?'!':n.role==='merchant'?'$':n.role==='blacksmith'?'⚒':n.role==='stable'?'♞':n.role==='pets'?'🐾':'!')}
 
     // Bosses & Mobs: Prominent pulsating red radar beacon for all active bosses
     const bossesList = (data.activeBosses || []).length > 0 ? data.activeBosses : (data.enemies || []).filter(e => e.boss)

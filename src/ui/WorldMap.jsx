@@ -54,9 +54,9 @@ export default function WorldMap({hud}){
 
     for(const s of data.services||[]){
       const [x,y]=toMap(s.x,s.z);if(!inside(x,y))continue;
-      const col=s.role==='merchant'?'#67e8a7':s.role==='blacksmith'?'#ff805e':s.role==='stable'?'#76d3ff':s.role==='traveler'?'#38bdf8':'#ffd85e',label=s.role==='merchant'?'Loja':s.role==='blacksmith'?'Ferreiro':s.role==='stable'?'Estábulo':s.role==='traveler'?'Viagem':'Guilda';
+      const col=s.role==='merchant'?'#67e8a7':s.role==='blacksmith'?'#ff805e':s.role==='stable'?'#76d3ff':s.role==='traveler'?'#38bdf8':s.role==='pets'?'#f59e0b':'#ffd85e',label=s.role==='merchant'?'Loja':s.role==='blacksmith'?'Ferreiro':s.role==='stable'?'Estábulo':s.role==='traveler'?'Viagem':s.role==='pets'?'Pets':'Guilda';
       ctx.fillStyle='rgba(4,10,14,.88)';ctx.strokeStyle=col;ctx.lineWidth=1.3;ctx.beginPath();ctx.arc(x,y,5.1,0,Math.PI*2);ctx.fill();ctx.stroke();
-      ctx.fillStyle=col;ctx.font='900 7px Inter,sans-serif';ctx.fillText(s.role==='merchant'?'$':s.role==='blacksmith'?'⚒':s.role==='stable'?'♞':s.role==='traveler'?'⇄':'!',x,y+.4);
+      ctx.fillStyle=col;ctx.font='900 7px Inter,sans-serif';ctx.fillText(s.role==='merchant'?'$':s.role==='blacksmith'?'⚒':s.role==='stable'?'♞':s.role==='traveler'?'⇄':s.role==='pets'?'🐾':'!',x,y+.4);
       if(zoom>=1.5){
         ctx.font='700 6.5px Inter,sans-serif';ctx.strokeStyle='rgba(0,0,0,.72)';ctx.lineWidth=2;ctx.strokeText(label,x,y+10);ctx.fillStyle='rgba(244,248,239,.9)';ctx.fillText(label,x,y+10);
       }
@@ -258,6 +258,7 @@ export default function WorldMap({hud}){
         <span><i className="legend-forge">⚒</i>Ferreiro</span>
         <span><i className="legend-quest">!</i>Guilda</span>
         <span><i className="legend-shop">⇄</i>Viagem</span>
+        <span><i className="legend-shop">🐾</i>Pets</span>
         <span><i className="legend-portal"/>Fenda</span>
         <span><i className="legend-boss"/>Boss</span>
         <span><i className="legend-landmark">✦</i>Local</span>
@@ -273,7 +274,7 @@ export default function WorldMap({hud}){
             <span>
               <b>{c.name}</b>
               <small><strong>Nv.{zone?.min||1}–{zone?.max||1}</strong> • {zone?.name} • {eco?.material||'Mercado regional'}</small>
-              <em>{services.map(s=>s.role==='merchant'?'$':s.role==='blacksmith'?'⚒':s.role==='stable'?'♞':'!').join('  ')}</em>
+              <em>{services.map(s=>s.role==='merchant'?'$':s.role==='blacksmith'?'⚒':s.role==='stable'?'♞':s.role==='traveler'?'⇄':s.role==='pets'?'🐾':'!').join('  ')}</em>
             </span>
           </div>
         })}

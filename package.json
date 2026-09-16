@@ -17,7 +17,8 @@
     "test:systems": "node tools/test-shared-systems.mjs",
     "test:combat": "node tools/test-combat-defense.mjs",
     "test:cloud-save": "node tools/test-cloud-save.mjs",
-    "test:progression": "node tools/test-progression-systems.mjs"
+    "test:progression": "node tools/test-progression-systems.mjs",
+    "test:security": "node tools/test-multiplayer-security-contract.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.116.0",

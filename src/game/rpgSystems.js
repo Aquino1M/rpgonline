@@ -1,4 +1,4 @@
-import { RARITIES, EQUIPMENT_SLOTS, GUILD_RANKS, ENTITY_LEVEL_OVERRIDES, CITY_ECONOMIES } from './config.js'
+import { RARITIES, EQUIPMENT_SLOTS, GUILD_RANKS, ENTITY_LEVEL_OVERRIDES, CITY_ECONOMIES, CITIES } from './config.js'
 import { uid } from './utils.js'
 import { defaultTravelState } from './fastTravel.js'
 
@@ -303,6 +303,8 @@ export function normalizeSaveState(state){
   const initialTamed=Array.isArray(rawMount.tamedHorses)?rawMount.tamedHorses:(rawMount.unlocked?['horse_aurora']:[])
   const rawPets=state.pets||{}
   const ownedPets=(Array.isArray(rawPets.owned)?rawPets.owned:[]).filter(p=>p&&p.id).slice(0,5)
+  const rawReputation=state.cityReputation&&typeof state.cityReputation==='object'?state.cityReputation:{}
+  const cityReputation=Object.fromEntries(CITIES.map(city=>[city.id,Math.max(0,Math.min(100,Math.round(Number(rawReputation[city.id])||0)))]))
   return {
     ...state,
     inventory,
@@ -322,6 +324,7 @@ export function normalizeSaveState(state){
       tamedHorses:initialTamed
     },
     pets:{owned:ownedPets,activeId:ownedPets.some(p=>p.id===rawPets.activeId)?rawPets.activeId:null,tamingArmed:!!rawPets.tamingArmed},
+    cityReputation,
     wantedLevel:Math.max(0,Math.min(5,Math.round(Number(state.wantedLevel)||0))),
     classState:{...defaultClassState(),...(state.classState||{})},
     travelState:{...defaultTravelState(),...(state.travelState||{}),vipCost:5000},

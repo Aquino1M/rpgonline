@@ -1,7 +1,6 @@
 // Shadow Ascension Multiplayer Hotfix V3
-// ONE global lobby + native Supabase Realtime Presence/Broadcast.
+// One authenticated global lobby + native Supabase Realtime Presence/Broadcast.
 // No new npm dependency: uses the Supabase Realtime Phoenix WebSocket protocol directly.
-// Keeps the legacy multiplayer transport as fallback for LAN / older Vercel setups.
 //
 // Required Vercel build env:
 //   VITE_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
@@ -9,11 +8,7 @@
 //
 // NEVER expose SUPABASE_SERVICE_ROLE_KEY in this client file.
 
-import {
-  MultiplayerClient as LegacyMultiplayerClient,
-  sameOriginMultiplayerUrl as legacyWsUrl,
-  sameOriginHttpMultiplayerUrl as legacyHttpUrl
-} from './multiplayer.js'
+import { getSupabaseClient } from './supabaseService.js'
 
 export const GLOBAL_MULTIPLAYER_ROOM = 'asterra-global'
 const REMOTE_LEAVE_GRACE_MS = 15_000
@@ -34,6 +29,14 @@ const SUPABASE_KEY = String(
 ).trim()
 
 const hasSupabase = () => /^https:\/\/.+\.supabase\.co\/?$/i.test(SUPABASE_URL) && SUPABASE_KEY.length > 20
+const realtimeAccessToken = async () => {
+  try {
+    const { data } = await getSupabaseClient()?.auth.getSession()
+    return String(data?.session?.access_token || '')
+  } catch {
+    return ''
+  }
+}
 const makeId = () => {
   if (typeof window !== 'undefined') {
     let tabId = null
@@ -117,6 +120,7 @@ class NativeSupabaseRealtime {
     this.reconnectTimer = null
     this.wanted = false
     this.reconnectAttempts = 0
+    this.openVersion = 0
   }
 
   connect() {
@@ -140,11 +144,19 @@ class NativeSupabaseRealtime {
     return msgRef
   }
 
-  _open() {
+  async _open() {
     if (!this.wanted) return
+    const openVersion = ++this.openVersion
     const url = supabaseWsUrl()
     if (!url) {
       this.onClosed?.('supabase_env_missing')
+      return
+    }
+    const accessToken = await realtimeAccessToken()
+    if (!this.wanted || openVersion !== this.openVersion) return
+    if (!accessToken) {
+      this.onClosed?.('authentication_required')
+      this._scheduleReconnect(4000)
       return
     }
     try {
@@ -161,9 +173,9 @@ class NativeSupabaseRealtime {
               broadcast:{ack:false,self:false},
               presence:{key:this.playerId},
               postgres_changes:[],
-              private:false
+              private:true
             },
-            access_token:SUPABASE_KEY
+            access_token:accessToken
           },
           ref,
           join_ref:null
@@ -331,6 +343,7 @@ class NativeSupabaseRealtime {
 
   close() {
     this.wanted = false
+    this.openVersion++
     clearTimeout(this.reconnectTimer)
     this._stopHeartbeat()
     try {
@@ -345,12 +358,8 @@ class NativeSupabaseRealtime {
 }
 
 export const multiplayerLobbies = () => [GLOBAL_MULTIPLAYER_ROOM]
-export const sameOriginMultiplayerUrl = () => legacyWsUrl()
-export function sameOriginHttpMultiplayerUrl() {
-  if (typeof window === 'undefined') return ''
-  if (hasSupabase()) return 'supabase://realtime'
-  return legacyHttpUrl()
-}
+export const sameOriginMultiplayerUrl = () => ''
+export const sameOriginHttpMultiplayerUrl = () => hasSupabase() ? 'supabase://realtime' : ''
 
 export class MultiplayerClient {
   constructor({url='', room='', name='Aventureiro', onEvent=()=>{}}={}) {
@@ -359,7 +368,7 @@ export class MultiplayerClient {
     this.room = GLOBAL_MULTIPLAYER_ROOM
     this.name = cleanName(name)
     this.onEvent = onEvent
-    this.url = url || (hasSupabase() ? 'supabase://realtime' : legacyWsUrl() || legacyHttpUrl())
+    this.url = hasSupabase() ? 'supabase://realtime' : ''
     this.connected = false
     this.wanted = false
     this.transport = 'offline'
@@ -374,8 +383,8 @@ export class MultiplayerClient {
     this.pendingRemoteLeaves = new Map()
     this.seenEventIds = new Set()
     this.party = null
+    this.authoritativeEconomy = false
     this.rt = null
-    this.legacy = null
     this._connectToken = 0
     storage?.setItem('shadow-ascension-last-lobby', GLOBAL_MULTIPLAYER_ROOM)
   }
@@ -384,13 +393,12 @@ export class MultiplayerClient {
     this.name = cleanName(name)
     this.lastState.name = this.name
     if (this.transport === 'supabase' && this.connected) this._trackPresence(true)
-    else this.legacy?.setIdentity?.(this.name)
   }
 
   setRoom(_room, {reconnect=true}={}) {
     this.room = GLOBAL_MULTIPLAYER_ROOM
     storage?.setItem('shadow-ascension-last-lobby', GLOBAL_MULTIPLAYER_ROOM)
-    if (this.legacy?.setRoom) this.legacy.setRoom('asterra-01', {reconnect})
+    if (reconnect && this.wanted && !this.connected) this.connect()
     this.onEvent({type:'lobby', room:GLOBAL_MULTIPLAYER_ROOM})
     return GLOBAL_MULTIPLAYER_ROOM
   }
@@ -406,57 +414,19 @@ export class MultiplayerClient {
     }
   }
 
-  connect(url=this.url) {
+  connect() {
     this.wanted = true
     this.room = GLOBAL_MULTIPLAYER_ROOM
     storage?.setItem('shadow-ascension-last-lobby', GLOBAL_MULTIPLAYER_ROOM)
-    this.url = url || this.url || ''
+    this.url = hasSupabase() ? 'supabase://realtime' : ''
     const token = ++this._connectToken
     this._teardown()
 
-    const explicitLegacy = (this.url && (/^wss?:\/\//i.test(this.url) || /^https?:\/\//i.test(this.url) || this.url.startsWith('/api/'))) && !this.url.startsWith('supabase://')
-    if (explicitLegacy) {
-      this._connectLegacy(this.url, token)
-      return
-    }
     if (hasSupabase()) {
       this._connectSupabase(token)
       return
     }
-    const localWs = legacyWsUrl()
-    if (localWs) {
-      this._connectLegacy(localWs, token)
-      return
-    }
-    const http = legacyHttpUrl()
-    if (http) {
-      this._connectLegacy(http, token)
-      return
-    }
     this._emitConnection(false, 'Nenhum transporte multiplayer configurado.')
-  }
-
-  _connectLegacy(url, token) {
-    this.transport = 'legacy'
-    this.legacy = new LegacyMultiplayerClient({
-      url,
-      room:'asterra-01',
-      name:this.name,
-      onEvent:e => {
-        if (token !== this._connectToken) return
-        const mapped = {...e}
-        if (mapped.room) mapped.room = GLOBAL_MULTIPLAYER_ROOM
-        if (mapped.type === 'connection') {
-          this.connected = !!mapped.connected
-          this.transport = mapped.transport === 'ws' ? 'ws' : 'http'
-          this.url = mapped.url || url
-        }
-        if (mapped.type === 'welcome') this.id = mapped.id || this.playerId
-        this.onEvent(mapped)
-      }
-    })
-    this.url = url
-    this.legacy.connect(url)
   }
 
   _connectSupabase(token) {
@@ -616,10 +586,6 @@ export class MultiplayerClient {
   }
 
   send(message={}) {
-    if (this.legacy) {
-      this.legacy.send(message)
-      return
-    }
     if (!this.connected || this.transport !== 'supabase') return
     const m = {...message}
 
@@ -644,27 +610,6 @@ export class MultiplayerClient {
       this.onEvent({type:'party_state', party:null})
       return
     }
-    if (m.type === 'party_xp') {
-      const world = String(m.world || this.lastState?.world || 'open')
-      const members = (this.party?.members?.length ? this.party.members : [this.playerId])
-        .filter(id => id === this.playerId || this.remoteState.get(id)?.world === world)
-      const amount = Math.max(0, Math.round(Number(m.amount) || 0))
-      const each = Math.floor(amount / Math.max(1, members.length))
-      const rem = amount - each * members.length
-      members.forEach((to, i) => {
-        const award = {type:'party_xp_award', amount:each + (i < rem ? 1 : 0), source:this.name}
-        if (to === this.playerId) this.onEvent(award)
-        else this._broadcast('game', {...award, eventId:uid(), from:this.playerId, to})
-      })
-      return
-    }
-    if (m.type === 'player_trade') {
-      const payload = {...m, type:'player_trade', eventId:uid(), from:this.playerId, fromName:this.name, to:String(m.targetId || '')}
-      if (!payload.to) return
-      this._broadcast('game', payload)
-      this.onEvent({type:'trade_sent', tradeId:m.tradeId, targetId:payload.to, itemCount:(m.items||[]).length, gold:m.gold||0})
-      return
-    }
     if (m.type === 'rename') {
       this.setIdentity(m.name)
       this.onEvent({type:'renamed', name:this.name})
@@ -674,15 +619,13 @@ export class MultiplayerClient {
       this.onEvent({type:'pong', clientTime:m.clientTime, serverTime:now()})
       return
     }
+    // Realtime is for presence and animation only. It must never carry a value
+    // that changes inventory, currency, XP, enemy HP, or global world state.
+    if (!['combat', 'ability', 'dungeon_ready_check'].includes(m.type)) return
     this._broadcast('game', {...m, eventId:m.eventId || uid(), from:this.playerId, fromName:this.name, room:GLOBAL_MULTIPLAYER_ROOM})
   }
 
   sync(state, timestamp=performance.now()) {
-    if (this.legacy) {
-      this.legacy.sync(state, timestamp)
-      this.connected = !!this.legacy.connected
-      return
-    }
     if (!this.connected || this.transport !== 'supabase') return
     this._pruneRemoteLeaves()
     const hidden = typeof document !== 'undefined' && document.hidden
@@ -697,10 +640,6 @@ export class MultiplayerClient {
   }
 
   saveProfile(game, updatedAt=Date.now(), force=false) {
-    if (this.legacy) {
-      this.legacy.saveProfile(game, updatedAt, force)
-      return
-    }
     // Realtime Presence/Broadcast is not a durable database.
     // Preserve local cache but keep serverSave=false so the HUD never lies.
     try { storage?.setItem('shadow-ascension-profile-cache-v3', JSON.stringify({updatedAt, game})) } catch {}
@@ -731,8 +670,6 @@ export class MultiplayerClient {
   }
 
   _teardown() {
-    try { this.legacy?.disconnect?.() } catch {}
-    this.legacy = null
     try { this.rt?.close?.() } catch {}
     this.rt = null
     this.presenceIds.clear()

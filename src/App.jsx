@@ -1,15 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { ShadowGame } from './game/engine.js'
-import { EQUIPMENT_SLOTS, GUILD_RANKS, ATTRIBUTE_DEFS, HORSE_BREEDS } from './game/config.js'
+import { EQUIPMENT_SLOTS, GUILD_RANKS, ATTRIBUTE_DEFS, HORSE_BREEDS, CITIES } from './game/config.js'
 import { CLASSES_LIST, CLASS_TIERS, CLASS_RANKS, getClassRankInfo } from './game/classesData.js'
 import { TRAVEL_NODES, calculateTravelCost } from './game/fastTravel.js'
 import { calculateGrimoireCost, getNextGrimoireLevel } from './game/rpgSystems.js'
-import { getSupabaseConfig, saveSupabaseConfig, getSavedAccountSession, registerAccount, loginAccount, restoreAccountSession } from './game/supabaseService.js'
 import { promptInstallApp, toggleFullScreen, subscribePWA, getPWAState } from './game/pwaService.js'
 import MiniMap from './ui/Minimap.jsx'
 import WorldMap from './ui/WorldMap.jsx'
 
-const initial={playerName:'',needsNickname:true,level:1,xp:0,nextXp:120,hp:120,maxHp:120,stamina:100,maxStamina:100,gold:220,atk:16,def:5,critChance:0,zone:'Vila Aurora',zoneId:'aurora',currentCity:'Cidadela Aurora',inventory:[],inventoryCapacity:40,backpackLevel:0,equipment:{},quests:[],guildMissions:[],guildRank:'E',guildRankIndex:0,guildPoints:0,attributePoints:0,attributes:{strength:0,vitality:0,agility:0,intellect:0},weather:'Céu limpo',time:'08:15',mount:{},abilities:[],combatMode:false,inCombat:false,combatTimer:0,multiplayer:{connected:false,url:'',room:'asterra-global',players:0,latencyMs:0,quality:'offline',reconnecting:false},settings:{renderDistance:2,pixelRatio:1,uiScale:1.2,visualQuality:'equilibrado',invertCameraX:false,invertCameraY:false,invertCamera:false,multiplayerUrl:''},playerPosition:{x:0,z:0},stats:{kills:0,bosses:0,dungeons:0},ores:0,party:{id:null,leaderId:null,members:[],totalXP:0},onlinePlayers:[],economy:{label:'Mercado dos Despertos',description:'Itens iniciais',theme:'Aurora'}}
+const initial={playerName:'',needsNickname:true,level:1,xp:0,nextXp:120,hp:120,maxHp:120,stamina:100,maxStamina:100,gold:220,atk:16,def:5,critChance:0,zone:'Vila Aurora',zoneId:'aurora',currentCity:'Cidadela Aurora',currentCityId:'aurora-city',cityReputation:{},inventory:[],inventoryCapacity:40,backpackLevel:0,equipment:{},quests:[],pets:{owned:[],activeId:null,tamingArmed:false},guildMissions:[],guildRank:'E',guildRankIndex:0,guildPoints:0,attributePoints:0,attributes:{strength:0,vitality:0,agility:0,intellect:0},weather:'Céu limpo',time:'08:15',mount:{},abilities:[],combatMode:false,inCombat:false,combatTimer:0,multiplayer:{connected:false,url:'',room:'asterra-global',players:0,latencyMs:0,quality:'offline',reconnecting:false},settings:{renderDistance:2,pixelRatio:1,uiScale:1.2,visualQuality:'equilibrado',invertCameraX:false,invertCameraY:false,invertCamera:false,multiplayerUrl:''},playerPosition:{x:0,z:0},stats:{kills:0,bosses:0,dungeons:0},ores:0,party:{id:null,leaderId:null,members:[],totalXP:0},onlinePlayers:[],economy:{label:'Mercado dos Despertos',description:'Itens iniciais',theme:'Aurora'}}
 const slotNames={weapon:'Arma',armor:'Armadura',boots:'Botas',talisman:'Talismã'}
 const roleTitle={inventory:'Inventário & Equipamento',grimoire:'Grimório do Despertar (Roleta de Almas)',travel:'Moço Viajante (Rotas de Caravana)',quests:'Missões',guild:'Guilda de Aventureiros',townhall:'Prefeitura de Aurora (Juramento do Cavaleiro)',attributes:'Atributos',merchant:'Mercador',blacksmith:'Ferreiro Rúnico',stable:'Estábulos & Domação de Montarias',pets:'Companheiros',map:'Mapa de Asterra',settings:'Configurações',trade:'Troca entre Jogadores'}
 const fallbackAbilities=[{slot:1,name:'Corte Astral',short:'Corte',icon:'✦',cost:14,cooldown:2.6,remaining:0,ready:true},{slot:2,name:'Onda Astral',short:'Onda',icon:'✹',cost:28,cooldown:4.8,remaining:0,ready:true},{slot:3,name:'Passo Etéreo',short:'Passo',icon:'➠',cost:22,cooldown:3.2,remaining:0,ready:true}]
@@ -61,19 +59,36 @@ function getMenuScale(viewport,requested=1.2){
 function clampNum(v,min,max){return Math.max(min,Math.min(max,v))}
 
 export default function App(){
-  const canvas=useRef(null),game=useRef(null)
+  const canvas=useRef(null),game=useRef(null),pendingAccount=useRef(null),bootingGame=useRef(false),mounted=useRef(true)
   const [hud,setHud]=useState(initial)
   const [help,setHelp]=useState(false)
   const [viewport,setViewport]=useState(()=>getViewportState())
   const [pwaState,setPwaState]=useState(getPWAState)
 
   useEffect(()=>subscribePWA(setPwaState),[])
-  useEffect(()=>{game.current=new ShadowGame(canvas.current,setHud);return()=>game.current?.destroy?.()},[])
+  const startGame=(session,profile)=>{
+    pendingAccount.current={session,profile}
+    if(game.current){game.current.setPlayerAccount(session,profile);return}
+    if(bootingGame.current)return
+    bootingGame.current=true
+    Promise.all([import('./game/runtimePatches.js'),import('./game/engine.js')])
+      .then(([,module])=>{
+        if(!mounted.current)return
+        const instance=new module.ShadowGame(canvas.current,setHud)
+        game.current=instance
+        instance.setTouchDeviceMode?.(!!getViewportState().isTouch)
+        const account=pendingAccount.current
+        if(account)instance.setPlayerAccount(account.session,account.profile)
+      })
+      .catch(error=>console.error('[Game] Falha ao carregar o mundo:',error))
+      .finally(()=>{bootingGame.current=false})
+  }
+  useEffect(()=>()=>{mounted.current=false;game.current?.destroy?.()},[])
   useEffect(()=>{
     let active=true
-    restoreAccountSession().then(result=>{
-      if(active&&result.ok) game.current?.setPlayerAccount(result.session,result.profile)
-    })
+    import('./game/supabaseService.js').then(({restoreAccountSession})=>restoreAccountSession()).then(result=>{
+      if(active&&result?.ok) startGame(result.session,result.profile)
+    }).catch(()=>{})
     return()=>{active=false}
   },[])
   useEffect(()=>{
@@ -268,7 +283,7 @@ export default function App(){
       {panel==='map'&&<WorldMap hud={hud}/>} 
       {panel==='settings'&&<Settings hud={hud} apply={v=>call('applySettings',v)} connect={url=>call('connectMultiplayer',url)} setName={name=>call('setPlayerName',name)} call={call}/>} 
     </Overlay>}
-    {hud.needsNickname&&<AuthGate onLogin={(session,profile)=>call('setPlayerAccount',session,profile)}/>}
+    {hud.needsNickname&&<AuthGate onLogin={startGame}/>}
     
     {hud.dungeonModal && <GateModal modal={hud.dungeonModal} call={call} onClose={() => call('closeGateModal')} />}
     {hud.dungeonCompletion && <DungeonCompletionModal completion={hud.dungeonCompletion} onClose={() => call('closeDungeonCompletion')} />}
@@ -554,8 +569,59 @@ function ItemCard({item,actions,compact=false,isSelected=false,onSelect}){
   </article>
 }
 
-function Quests({hud,accept,claim}){const groups={active:hud.quests?.filter(q=>q.status==='active'||q.status==='ready')||[],available:hud.quests?.filter(q=>q.status==='available')||[],done:hud.quests?.filter(q=>q.status==='done')||[]},titles={active:'Em andamento',available:'Disponíveis',done:'Concluídas'},[tab,setTab]=useState(groups.active.length?'active':'available');return <div className="quest-board"><nav className="quest-tabs" aria-label="Categorias de missões">{Object.keys(groups).map(key=><button key={key} className={tab===key?'active':''} onClick={()=>setTab(key)}>{titles[key]} <b>{groups[key].length}</b></button>)}</nav><div className="quest-layout"><QuestList title={titles[tab]} list={groups[tab]} hud={hud} accept={accept} claim={claim}/></div></div>}
-function QuestList({title,list,hud,accept,claim}){return <section className="quest-group"><h3>{title}</h3>{!list.length&&<p className="empty">Nenhuma missão.</p>}{list.map(q=><article className={`quest ${q.status}`} key={q.id}><div><b>{q.title}</b><small>{q.giver} • Nv.{q.minLevel}+</small></div><p>{q.text}</p>{q.status!=='available'&&q.status!=='done'&&<Bar value={Math.min(100,(q.progress||0)/q.goal*100)} cls="questbar"/>}<footer><span>{q.status==='active'||q.status==='ready'?`${q.progress||0}/${q.goal}`:`XP ${q.reward.xp} • ◈ ${q.reward.gold}`}</span>{q.status==='available'&&<button disabled={hud.level<q.minLevel} onClick={()=>accept(q.id)}>Aceitar</button>}{q.status==='ready'&&<button onClick={()=>claim(q.id)}>Receber</button>}</footer></article>)}</section>}
+function questLocationFor(quest,hud){
+  const city=CITIES.find(c=>c.id===hud.currentCityId)||CITIES.find(c=>c.zoneId===hud.zoneId)||CITIES[0]
+  const giverCity=CITIES.find(c=>c.services?.some(s=>s.name===quest?.giver))||city
+  const npc=giverCity?.services?.find(s=>s.name===quest?.giver)
+  return {city:giverCity,npc}
+}
+
+function reputationTitle(value){if(value>=80)return 'Aliado da cidade';if(value>=50)return 'Respeitado';if(value>=20)return 'Conhecido';return 'Recém-chegado'}
+
+function Quests({hud,accept,claim}){
+  const groups={active:hud.quests?.filter(q=>q.status==='active'||q.status==='ready')||[],available:hud.quests?.filter(q=>q.status==='available')||[],done:hud.quests?.filter(q=>q.status==='done')||[]}
+  const titles={active:'Em andamento',available:'Disponíveis',done:'Concluídas'}
+  const [tab,setTab]=useState(groups.active.length?'active':'available')
+  const currentCity=CITIES.find(c=>c.id===hud.currentCityId)||CITIES.find(c=>c.zoneId===hud.zoneId)||CITIES[0]
+  const reputation=Math.max(0,Math.min(100,Number(hud.cityReputation?.[currentCity.id])||0))
+  const list=groups[tab]||[]
+  const focus= list.find(q=>q.status==='active'||q.status==='ready')||list[0]
+  const focusLocation=questLocationFor(focus,hud)
+  return <div className="guild-layout quest-guild-layout">
+    <aside className="guild-rank-card quest-reputation-card">
+      <small>REPUTAÇÃO DA CIDADE</small>
+      <strong>{reputation}</strong>
+      <h3>{currentCity.name}</h3>
+      <p>{reputationTitle(reputation)} • {reputation}/100 pontos</p>
+      <Bar value={reputation} cls="reputationbar"/>
+      <em>Complete missões locais para ganhar reputação e desbloquear contratos melhores.</em>
+      <div className="quest-city-facts"><span>📍 <b>{focusLocation.city?.name||currentCity.name}</b><small>cidade do contrato</small></span><span>📜 <b>{focusLocation.npc?.name||'Quadro local'}</b><small>posto de aceitação</small></span></div>
+    </aside>
+    <section className="guild-missions quest-missions">
+      <div className="party-panel quest-location-panel">
+        <div className="section-title"><div><small>POSTO DE MISSÕES</small><h3>{focusLocation.npc?.name||'Quadro de Missões'}</h3></div><span>{focusLocation.city?.name||currentCity.name}</span></div>
+        <p>Fale com o NPC indicado na cidade para aceitar novos contratos. A reputação acompanha cada cidade separadamente.</p>
+      </div>
+      <div className="section-title quest-board-title"><div><small>DIÁRIO DO AVENTUREIRO</small><h3>Quadro de Missões</h3></div><span>{hud.quests?.length||0} contratos registrados</span></div>
+      <nav className="quest-tabs guild-tabs" aria-label="Categorias de missões">{Object.keys(groups).map(key=><button type="button" key={key} className={tab===key?'active':''} onClick={()=>setTab(key)}>{titles[key]} <b>{groups[key].length}</b></button>)}</nav>
+      <div className="guild-grid quest-guild-grid">{!list.length&&<div className="quest-empty-panel"><b>{titles[tab]}</b><span>Nenhuma missão nesta categoria.</span></div>}{list.map(q=><QuestMissionCard key={q.id} quest={q} hud={hud} accept={accept} claim={claim}/>)}</div>
+    </section>
+  </div>
+}
+
+function QuestMissionCard({quest:q,hud,accept,claim}){
+  const location=questLocationFor(q,hud),locked=q.status==='available'&&hud.level<q.minLevel
+  const statusLabel=q.status==='ready'?'PRONTA':q.status==='active'?'EM ANDAMENTO':q.status==='done'?'CONCLUÍDA':'DISPONÍVEL'
+  const reward=q.reward||{}
+  return <article className={`guild-mission quest-mission ${q.status} ${locked?'locked':''}`}>
+    <header><b>{statusLabel}</b><span>Nv.{q.minLevel}+</span></header>
+    <h4>{q.title}</h4>
+    <p>{q.text}</p>
+    <div className="quest-mission-meta">📍 {location.city?.name||'Asterra'} • {location.npc?.name||q.giver}</div>
+    {(q.status==='active'||q.status==='ready')&&<Bar value={Math.min(100,(q.progress||0)/Math.max(1,q.goal||1)*100)} cls="questbar"/>}
+    <footer><span>{q.status==='active'||q.status==='ready'?`${q.progress||0}/${q.goal}`:`XP ${reward.xp||0} • ◈ ${reward.gold||0}`}</span>{q.status==='available'&&<button type="button" disabled={locked} onClick={()=>accept(q.id)}>{locked?`Requer Nv.${q.minLevel}`:'Aceitar'}</button>}{q.status==='ready'&&<button type="button" onClick={()=>claim(q.id)}>Receber</button>}</footer>
+  </article>
+}
 
 
 function Guild({hud,accept,claim,createParty,joinParty,leaveParty}){
@@ -1044,6 +1110,7 @@ function Merchant({hud,buy,sell,sellMultiple}){
 }
 
 function TradeModal({hud,call,onClose}){
+  if(!hud.multiplayer?.tradeEnabled)return <div className="trade-modal-layout"><section className="trade-box their-offer"><h4>Trocas protegidas</h4><div className="trade-standby-box"><span className="standby-icon">🛡️</span><b>Transferências entre jogadores estão pausadas.</b><p>Itens, ouro e confirmações não são mais aceitos pelo Realtime. A troca volta quando a validação transacional no servidor for publicada.</p></div></section><div className="trade-actions-footer"><button className="trade-cancel-btn" onClick={onClose}>Fechar</button></div></div>
   const online=(hud.onlinePlayers||[]).filter(p=>p.name!==hud.playerName)
   const trade=hud.trade||null
   const [partner,setPartner]=useState(trade?.partnerId||online[0]?.id||null)
@@ -1480,29 +1547,15 @@ function Stable({ hud, horseBreeds = HORSE_BREEDS, onTame, onSelect, toggle, onO
   )
 }
 
-function Settings({hud,apply,connect,setName,call}){
+function Settings({hud,apply,setName,call}){
   const [s,setS]=useState({
     ...hud.settings,
     invertCameraX: hud.settings?.invertCameraX !== undefined ? hud.settings.invertCameraX : !!hud.settings?.invertCamera,
     invertCameraY: hud.settings?.invertCameraY !== undefined ? hud.settings.invertCameraY : false
   })
-  const [url,setUrl]=useState(hud.multiplayer?.url||s.multiplayerUrl||'')
   const [nick,setNick]=useState(hud.playerName||'')
   const [saveStatus,setSaveStatus]=useState('')
-  const supabaseCfg = getSupabaseConfig()
-  const [sbUrl, setSbUrl] = useState(supabaseCfg.url || '')
-  const [sbKey, setSbKey] = useState(supabaseCfg.key || '')
-  const [sbStatus, setSbStatus] = useState('')
   const currentLobby=hud.multiplayer?.room||s.multiplayerRoom||'asterra-global'
-
-  const handleSaveSupabase = () => {
-    saveSupabaseConfig(sbUrl, sbKey)
-    setSbStatus('Salvo! Reconectando...')
-    setTimeout(() => {
-      call('connectMultiplayer', '')
-      setSbStatus('')
-    }, 1000)
-  }
 
   const update=(k,v)=>{const n={...s,[k]:v};setS(n);apply(n)}
   const qualityPreset=(mode)=>{
@@ -1551,19 +1604,17 @@ function Settings({hud,apply,connect,setName,call}){
         </button>
       </div>
     </div>
-    {getSavedAccountSession() && (
-      <div className="save-backup-setting glass" style={{ borderColor: 'rgba(56, 189, 248, 0.35)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
-          <div>
-            <b>Conta: {getSavedAccountSession().username}</b>
-            <small>Servidor Atual: {multiplayerLobbies.find(x => x.id === currentLobby)?.name || currentLobby}</small>
-          </div>
-          <button className="save-btn" style={{ background: '#7f1d1d', borderColor: '#ef4444', color: '#fee2e2' }} onClick={() => { call('logoutAccount'); call('closePanel') }}>
-            🚪 Sair da Conta (Trocar)
-          </button>
+    <div className="save-backup-setting glass" style={{ borderColor: 'rgba(56, 189, 248, 0.35)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+        <div>
+          <b>Conta: {hud.playerName}</b>
+          <small>Servidor Atual: {multiplayerLobbies.find(x => x.id === currentLobby)?.name || currentLobby}</small>
         </div>
+        <button className="save-btn" style={{ background: '#7f1d1d', borderColor: '#ef4444', color: '#fee2e2' }} onClick={() => { call('logoutAccount'); call('closePanel') }}>
+          🚪 Sair da Conta (Trocar)
+        </button>
       </div>
-    )}
+    </div>
     <div className="profile-setting">
       <div><b>Perfil do aventureiro</b><small>O nick, nível, HP e rank aparecem acima do seu personagem no multiplayer.</small></div>
       <input value={nick} maxLength={24} onChange={e=>setNick(e.target.value)} placeholder="Seu nick"/>
@@ -1601,38 +1652,11 @@ function Settings({hud,apply,connect,setName,call}){
       <button onClick={()=>update('invertCameraY',!s.invertCameraY)}>{s.invertCameraY?'Usar normal':'Inverter cima/baixo'}</button>
     </Setting>
     <p className="camera-setting-note">Controle normal: arrastar para os lados vira para os lados; arrastar para cima olha para cima. Ative a inversão de lados (horizontal) ou cima/baixo (vertical) conforme sua preferência.</p>
-    <div className="lobby-setting glass">
-      <div><b>Lobbies multiplayer</b><small>Na primeira entrada o jogo escolhe um lobby e salva sua escolha. Ao voltar, você entra automaticamente no último lobby usado.</small></div>
-      <div className="lobby-buttons">{multiplayerLobbies.map(l=><button key={l.id} className={currentLobby===l.id?'active':''} onClick={()=>call('setMultiplayerLobby',l.id)}>{l.name}{currentLobby===l.id?<small>ATUAL</small>:null}</button>)}</div>
-    </div>
     <div className="save-backup-setting glass">
       <div>
-        <b>⚡ Servidor & Banco de Dados Supabase (Online)</b>
-        <small>Multiplayer global em tempo real via canais Realtime e salvamento em nuvem PostgreSQL.</small>
+        <b>⚡ Asterra Global protegido</b>
+        <small>{hud.multiplayer?.connected?`Conectado ao servidor global • ${hud.multiplayer.players||0} outros jogadores • ${hud.multiplayer.serverSave?'save sincronizado':'sincronizando'}`:`Reconectando ao servidor global${hud.multiplayer?.reason?` • ${hud.multiplayer.reason}`:''}`}</small>
       </div>
-      <div style={{display:'flex',flexDirection:'column',gap:'8px',marginTop:'8px'}}>
-        <div style={{display:'grid',gridTemplateColumns:'110px 1fr',gap:'6px',alignItems:'center'}}>
-          <span style={{fontSize:'10px',color:'#85a3b5'}}>URL do Projeto:</span>
-          <input style={{background:'#07111c',border:'1px solid rgba(142,206,240,.2)',color:'#e8f6ff',padding:'6px 10px',borderRadius:'6px',fontSize:'11px'}} value={sbUrl} onChange={e=>setSbUrl(e.target.value)} placeholder="https://kfnlcrsnvckexzmhbyoy.supabase.co"/>
-        </div>
-        <div style={{display:'grid',gridTemplateColumns:'110px 1fr',gap:'6px',alignItems:'center'}}>
-          <span style={{fontSize:'10px',color:'#85a3b5'}}>Chave Pública:</span>
-          <input style={{background:'#07111c',border:'1px solid rgba(142,206,240,.2)',color:'#e8f6ff',padding:'6px 10px',borderRadius:'6px',fontSize:'11px'}} value={sbKey} onChange={e=>setSbKey(e.target.value)} placeholder="sb_publishable_..."/>
-        </div>
-        <div style={{display:'flex',gap:'8px',alignItems:'center',flexWrap:'wrap'}}>
-          <button className="save-btn" onClick={handleSaveSupabase}>⚡ Salvar & Conectar ao Supabase</button>
-          {sbStatus&&<span style={{fontSize:'10px',color:'#38bdf8'}}>{sbStatus}</span>}
-        </div>
-      </div>
-    </div>
-    <div className="multiplayer-setting">
-      <div>
-        <b>Multiplayer Tradicional / LAN</b>
-        <small>{hud.multiplayer?.connected?`Conectado em ${multiplayerLobbies.find(x=>x.id===currentLobby)?.name||currentLobby} • ${hud.multiplayer.transport==='supabase'?'SUPABASE REALTIME & NUVEM':hud.multiplayer.transport==='http'?'VERCEL/HTTP':'LAN/WEBSOCKET'} • ${hud.multiplayer.players||0} outros jogadores • ${hud.multiplayer.latencyMs?Math.round(hud.multiplayer.latencyMs)+' ms • ':''}${hud.multiplayer.quality||'online'} • save ${hud.multiplayer.serverSave?'OK':'sincronizando'}`:`Offline • último lobby: ${multiplayerLobbies.find(x=>x.id===currentLobby)?.name||currentLobby}${hud.multiplayer?.reconnecting?' • reconectando…':''}${hud.multiplayer?.reason?` • ${hud.multiplayer.reason}`:''}`}</small>
-      </div>
-      <input value={url} onChange={e=>setUrl(e.target.value)} placeholder="Automático ou ws://IP:8765/ws"/>
-      <button onClick={()=>connect(url)}>Conectar</button>
-      <button className="subtle" onClick={()=>{setUrl('');connect('')}}>Desconectar</button>
     </div>
     <div className="save-backup-setting glass">
       <div>
@@ -1648,7 +1672,7 @@ function Settings({hud,apply,connect,setName,call}){
         {saveStatus&&<span style={{fontSize:'10px',color:'#7dd3fc'}}>{saveStatus}</span>}
       </div>
     </div>
-    <p className="settings-note">O jogo conecta preferencialmente ao <b>Supabase</b> para multiplayer Realtime e banco PostgreSQL na nuvem. Também suporta fallback automático no <b>Vercel</b> via <b>/api/multiplayer</b> ou na LAN/VPS via WebSocket.</p>
+    <p className="settings-note">O jogo usa somente o <b>Asterra Global</b>: Realtime autenticado e progresso salvo na nuvem.</p>
   </div>
 }
 function Setting({label,value,children}){return <label className="setting"><span><b>{label}</b><small>{value}</small></span>{children}</label>}
@@ -1670,10 +1694,12 @@ function AuthGate({ onLogin }) {
   }, [])
 
   useEffect(() => {
-    const saved = getSavedAccountSession()
-    if (saved?.username) {
-      setUsername(saved.username)
-    }
+    let active = true
+    import('./game/supabaseService.js').then(({getSavedAccountSession}) => {
+      const saved = getSavedAccountSession()
+      if (active && saved?.username) setUsername(saved.username)
+    }).catch(() => {})
+    return () => { active = false }
   }, [])
 
   const handleSubmit = async (e) => {
@@ -1697,6 +1723,7 @@ function AuthGate({ onLogin }) {
 
     setLoading(true)
     try {
+      const { registerAccount, loginAccount } = await import('./game/supabaseService.js')
       if (mode === 'register') {
         const res = await registerAccount({ username: clean, password, server: selectedServer })
         if (!res.ok) {

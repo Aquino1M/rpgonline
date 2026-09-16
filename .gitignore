@@ -13,3 +13,5 @@ ShadowAscension_Web3D_V0.8.4/
 
 .vercel
 .env*
+!.env.example
+hotfix_mobile_tablet_dungeon_v2/

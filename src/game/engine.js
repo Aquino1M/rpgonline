@@ -44,7 +44,7 @@ export class ShadowGame {
       inventory:starterInventory(),inventoryCapacity:40,backpackLevel:0,equipment:{weapon:null,armor:null,boots:null,talisman:null},quests:defaultQuestState(),
       mount:{unlocked:false,active:false,oathCompleted:false,name:'Corcel de Aurora',currentHorseId:'horse_aurora',speedBonus:4.7,tamedHorses:[]},pets:{owned:[],activeId:null,tamingArmed:false},wantedLevel:0,classState:defaultClassState(),travelState:defaultTravelState(),ambush:null,uiPanel:null,dialogue:null,interactionPrompt:null,
       weather:'Céu limpo',time:'08:15',timeHours:8.25,portal:null,merchant:[],toast:null,settings:this.settings,
-      worldMap:WORLD_MAP,playerPosition:{x:0,z:0},playerHeading:0,stats:{kills:0,dungeons:0,bosses:0},ores:2,
+      worldMap:WORLD_MAP,playerPosition:{x:0,z:0},playerHeading:0,stats:{kills:0,dungeons:0,bosses:0},ores:2,currentCityId:null,cityReputation:Object.fromEntries(CITIES.map(c=>[c.id,0])),
       abilities:ABILITIES.map(a=>({...a,remaining:0,ready:true})),currentCity:null,combatMode:false,inCombat:false,combatTimer:0,
       attributes:{strength:0,vitality:0,agility:0,intellect:0},attributePoints:0,
       guildRankIndex:0,guildRank:'E',guildPoints:0,guildMissions:[],guildMissionCycle:null,shopRefresh:null,
@@ -196,14 +196,14 @@ export class ShadowGame {
 
     // Service stalls / guild boards use the same coordinates as the actual NPCs.
     for(const svc of city.services||[]){
-      const role=svc.role,c=role==='merchant'?0xc9944c:role==='blacksmith'?0xa94f3f:role==='stable'?0x6290a8:role==='townhall'?0x3b82f6:role==='guild'?0xeab308:role==='quest'?0x60a5fa:0x5e79ad
+      const role=svc.role,c=role==='merchant'?0xc9944c:role==='blacksmith'?0xa94f3f:role==='stable'?0x6290a8:role==='townhall'?0x3b82f6:role==='guild'?0xeab308:role==='quest'?0x60a5fa:role==='pets'?0xf59e0b:0x5e79ad
       const stall=new THREE.Group();stall.userData.service=role
       const table=mesh(new THREE.BoxGeometry(role==='blacksmith'?3.4:3,.18,1.5),mat(0x6b482d));table.position.y=1;stall.add(table)
       const canopy=mesh(new THREE.BoxGeometry(3.4,.12,1.9),mat(c));canopy.position.y=2.5;stall.add(canopy)
       for(const xx of [-1.45,1.45]){const pole=mesh(new THREE.CylinderGeometry(.05,.05,2.6,6),mat(0x5b3d28));pole.position.set(xx,1.3,0);stall.add(pole)}
       if(role==='blacksmith'){const anvil=mesh(new THREE.BoxGeometry(.8,.35,.45),mat(0x606770,{metalness:.6,roughness:.35}));anvil.position.set(0,.72,.95);stall.add(anvil)}
-      const signText=role==='merchant'?'LOJA • MERCADOR':role==='blacksmith'?'FERREIRO RÚNICO':role==='stable'?'ESTÁBULOS':role==='traveler'?'CARAVANA • VIAGENS':role==='townhall'?'🏛️ PREFEITURA':role==='guild'?'⚔️ GUILDA DE AVENTUREIROS':role==='quest'?'📜 QUADRO DE MISSÕES':'SERVIÇOS'
-      const signBorder=role==='merchant'?'#72f0ad':role==='blacksmith'?'#ff9270':role==='stable'||role==='traveler'?'#7dd3fc':role==='townhall'?'#60a5fa':role==='guild'?'#fbbf24':'#a78bfa'
+      const signText=role==='merchant'?'LOJA • MERCADOR':role==='blacksmith'?'FERREIRO RÚNICO':role==='stable'?'ESTÁBULOS':role==='traveler'?'CARAVANA • VIAGENS':role==='townhall'?'🏛️ PREFEITURA':role==='guild'?'⚔️ GUILDA DE AVENTUREIROS':role==='quest'?'📜 QUADRO DE MISSÕES':role==='pets'?'🐾 PETS • DOMAÇÃO':'SERVIÇOS'
+      const signBorder=role==='merchant'?'#72f0ad':role==='blacksmith'?'#ff9270':role==='stable'||role==='traveler'?'#7dd3fc':role==='townhall'?'#60a5fa':role==='guild'?'#fbbf24':role==='pets'?'#f59e0b':'#a78bfa'
       const signCanvas=document.createElement('canvas');signCanvas.width=512;signCanvas.height=128
       const signCtx=signCanvas.getContext('2d');signCtx.clearRect(0,0,512,128);signCtx.fillStyle='rgba(4,16,26,.88)';signCtx.strokeStyle=signBorder;signCtx.lineWidth=8;signCtx.beginPath();signCtx.roundRect?.(12,14,488,100,28);if(!signCtx.roundRect){signCtx.rect(12,14,488,100)}signCtx.fill();signCtx.stroke();signCtx.font='900 38px Inter,Arial';signCtx.textAlign='center';signCtx.textBaseline='middle';signCtx.fillStyle='#ffffff';signCtx.fillText(signText,256,65)
       const signTexture=new THREE.CanvasTexture(signCanvas);signTexture.colorSpace=THREE.SRGBColorSpace;signTexture.minFilter=THREE.LinearFilter
@@ -347,18 +347,18 @@ export class ShadowGame {
     const body=mesh(new THREE.CapsuleGeometry(.32,.8,5,9),mat(def.color));body.position.y=1.05;g.add(body)
     const head=mesh(new THREE.SphereGeometry(.26,12,10),mat(0xe6b38c));head.position.y=1.78;g.add(head)
     const hair=mesh(new THREE.SphereGeometry(.275,10,7,0,Math.PI*2,0,Math.PI*.55),mat(def.id==='brann'?0x5b2d23:0x342b27));hair.position.y=1.87;g.add(hair)
-    const markerColor=def.role==='quest'?0x38bdf8:def.role==='merchant'?0x70e1a1:def.role==='blacksmith'?0xff855e:def.role==='townhall'?0x60a5fa:def.role==='guild'?0xfbbf24:def.role==='stable'?0xa3e635:0x8bd5ff
+    const markerColor=def.role==='quest'?0x38bdf8:def.role==='merchant'?0x70e1a1:def.role==='blacksmith'?0xff855e:def.role==='townhall'?0x60a5fa:def.role==='guild'?0xfbbf24:def.role==='stable'?0xa3e635:def.role==='pets'?0xf59e0b:0x8bd5ff
     const marker=mesh(new THREE.OctahedronGeometry(.14),new THREE.MeshBasicMaterial({color:markerColor}));marker.position.y=2.55;g.add(marker)
 
     // Overhead nameplate sprite for NPC
     const c=document.createElement('canvas');c.width=384;c.height=96
     const ctx=c.getContext('2d');ctx.clearRect(0,0,384,96)
     ctx.textAlign='center';ctx.textBaseline='middle'
-    ctx.fillStyle='rgba(5,12,22,0.85)';ctx.strokeStyle=def.role==='townhall'?'#60a5fa':def.role==='guild'?'#fbbf24':def.role==='quest'?'#38bdf8':'#ffffff'
+    ctx.fillStyle='rgba(5,12,22,0.85)';ctx.strokeStyle=def.role==='townhall'?'#60a5fa':def.role==='guild'?'#fbbf24':def.role==='quest'?'#38bdf8':def.role==='pets'?'#f59e0b':'#ffffff'
     ctx.lineWidth=4;ctx.beginPath();ctx.roundRect?.(12,12,360,72,20);if(!ctx.roundRect){ctx.rect(12,12,360,72)}ctx.fill();ctx.stroke()
     ctx.font='900 28px Inter,Arial';ctx.fillStyle='#ffffff';ctx.fillText(def.name,192,36)
-    ctx.font='700 18px Inter,Arial';ctx.fillStyle=def.role==='townhall'?'#93c5fd':def.role==='guild'?'#fde047':def.role==='quest'?'#7dd3fc':'#cbd5e1'
-    const sub=def.role==='townhall'?'[Prefeitura]':def.role==='guild'?'[Guilda]':def.role==='quest'?'[Missões]':def.role==='merchant'?'[Mercador]':def.role==='blacksmith'?'[Ferreiro]':def.role==='stable'?'[Estábulos]':'[NPC]'
+    ctx.font='700 18px Inter,Arial';ctx.fillStyle=def.role==='townhall'?'#93c5fd':def.role==='guild'?'#fde047':def.role==='quest'?'#7dd3fc':def.role==='pets'?'#fbbf24':'#cbd5e1'
+    const sub=def.role==='townhall'?'[Prefeitura]':def.role==='guild'?'[Guilda]':def.role==='quest'?'[Missões]':def.role==='merchant'?'[Mercador]':def.role==='blacksmith'?'[Ferreiro]':def.role==='stable'?'[Estábulos]':def.role==='pets'?'[Pets]':'[NPC]'
     ctx.fillText(sub,192,66)
     const tx=new THREE.CanvasTexture(c);tx.minFilter=THREE.LinearFilter;tx.colorSpace=THREE.SRGBColorSpace
     const tag=new THREE.Sprite(new THREE.SpriteMaterial({map:tx,transparent:true,depthTest:false,depthWrite:false,toneMapped:false}))
@@ -1203,7 +1203,7 @@ export class ShadowGame {
   }
 
   killByBot(enemy,bot){
-    if(!enemy||enemy.dead)return;enemy.dead=true;enemy.g.parent?.remove(enemy.g);const respawnAt=this.scheduleEnemyRespawn(enemy);if(enemy.netId)this.multiplayer?.send({type:'enemy_dead',netId:enemy.netId,world:this.currentWorldId(),respawnAt});const progression=resolveEntityProgression(enemy.name,enemy.level,{dungeon:false}),xp=calculateKillXP(bot.level||1,progression.level,{boss:enemy.boss,fixedXP:progression.fixedXP,disableLevelScaling:progression.disableLevelScaling});if(!bot.isGuard){this.botGainXp(bot,xp);bot.gold=(bot.gold||0)+Math.round(6+enemy.level*1.3)}this.enemies=this.enemies.filter(e=>e!==enemy)
+    if(!enemy||enemy.dead)return;enemy.dead=true;enemy.g.parent?.remove(enemy.g);this.scheduleEnemyRespawn(enemy);const progression=resolveEntityProgression(enemy.name,enemy.level,{dungeon:false}),xp=calculateKillXP(bot.level||1,progression.level,{boss:enemy.boss,fixedXP:progression.fixedXP,disableLevelScaling:progression.disableLevelScaling});if(!bot.isGuard){this.botGainXp(bot,xp);bot.gold=(bot.gold||0)+Math.round(6+enemy.level*1.3)}this.enemies=this.enemies.filter(e=>e!==enemy)
   }
 
   spawnCityGuards(){
@@ -1495,11 +1495,11 @@ export class ShadowGame {
     return best
   }
 
-  damageEnemy(e,amount,{knockback=.35,crit=false,network=true,fromPet=false}={}){
+  damageEnemy(e,amount,{knockback=.35,crit=false,fromPet=false}={}){
     if(e?.isCaravanGuard||e?.isCaravanCart)return this.caravanManager?.onDamageCaravanEntity(e,amount,{knockback,crit})
     if(e?.adventurer)return this.damageBot(e,amount,{crit})
     if(!e||e.dead)return false;this.enterCombat(8);const dealt=Math.max(1,Math.round(amount*100/(100+(e.def||0)*5)));e.hp-=dealt
-    this.state.target={name:e.name,level:e.level,hp:Math.max(0,e.hp),maxHp:e.maxHp,boss:e.boss,crit};if(network&&e.netId)this.multiplayer?.send({type:'enemy_damage',netId:e.netId,amount:dealt,hpAfter:Math.max(0,e.hp),maxHp:e.maxHp,world:this.currentWorldId(),respawnAt:Date.now()+5000});this.spawnDamageText(e.g.position,dealt,crit);this.flashEnemy(e,crit)
+    this.state.target={name:e.name,level:e.level,hp:Math.max(0,e.hp),maxHp:e.maxHp,boss:e.boss,crit};this.spawnDamageText(e.g.position,dealt,crit);this.flashEnemy(e,crit)
     if(knockback)e.g.position.addScaledVector(e.g.position.clone().sub(this.player.position).normalize(),knockback)
     if(!fromPet&&this.tryTamePet(e))return true
     if(!fromPet)this.petAttackTarget(e)
@@ -1921,7 +1921,7 @@ export class ShadowGame {
 
   kill(e){
     if(e?.adventurer)return this.killBot(e)
-    if(!e||e.dead)return;e.dead=true;(this.state.dungeon?this.dungeonArena:this.worldRoot).remove(e.g);const respawnAt=!this.state.dungeon?this.scheduleEnemyRespawn(e):0;if(e.netId)this.multiplayer?.send({type:'enemy_dead',netId:e.netId,world:this.currentWorldId(),respawnAt});this.state.stats.kills++;if(e.boss)this.state.stats.bosses++
+    if(!e||e.dead)return;e.dead=true;(this.state.dungeon?this.dungeonArena:this.worldRoot).remove(e.g);if(!this.state.dungeon)this.scheduleEnemyRespawn(e);this.state.stats.kills++;if(e.boss)this.state.stats.bosses++
     this.gateManager?.onEnemyKilled(e)
     if(e.boss&&this.state.classState?.activeClassId==='chaos_sovereign'){
       this.state.classState.bossPowersAbsorbed=(this.state.classState.bossPowersAbsorbed||0)+1
@@ -1938,7 +1938,7 @@ export class ShadowGame {
   awardCombatXp(amount){
     const xp=Math.max(0,Math.round(amount||0)),party=this.state.party||{}
     if(xp<=0)return
-    if(this.multiplayer?.connected&&party.id&&(party.members?.length||0)>1){party.totalXP=(party.totalXP||0)+xp;this.multiplayer.send({type:'party_xp',amount:xp,world:this.currentWorldId()});return}
+    if(party.id&&(party.members?.length||0)>1)party.totalXP=(party.totalXP||0)+xp
     this.gainXp(xp)
   }
 
@@ -2042,6 +2042,7 @@ export class ShadowGame {
     this.saveGame()
   }
   submitTradeOffer({partnerId,itemIds=[],gold=0}={}){
+    if(!this.multiplayer?.authoritativeEconomy){this.toast('Trocas estão protegidas até a validação no servidor ser publicada.');return false}
     const targetId=String(partnerId||'')
     if(!this.multiplayer?.connected||!targetId){this.toast('Conecte ao multiplayer e escolha um jogador para trocar.');return false}
     const idSet=new Set((Array.isArray(itemIds)?itemIds:[]).map(String))
@@ -2103,9 +2104,15 @@ export class ShadowGame {
 
   acceptQuest(id){activateQuest(this.state,id);this.toast('Missão aceita')}
   claimQuest(id){
+    const quest=this.state.quests.find(q=>q.id===id)
     const reward=claimQuest(this.state,id)
     if(!reward)return
     this.gainXp(reward.xp||0)
+    const giver=NPC_DEFS.find(n=>n.name===quest?.giver)
+    if(giver?.cityId){
+      const current=Number(this.state.cityReputation?.[giver.cityId])||0
+      this.state.cityReputation={...(this.state.cityReputation||{}),[giver.cityId]:Math.min(100,current+10)}
+    }
     if(reward.mount||reward.mountPermission){
       this.state.mount.unlocked=true
       this.state.mount.oathCompleted=true
@@ -2318,7 +2325,7 @@ export class ShadowGame {
     const pet=this.activePet();if(!pet||pet.recoverUntil>Date.now()||enemy?.dead)return
     const now=performance.now();if((pet.nextAttackAt||0)>now)return
     pet.nextAttackAt=now+1050;this.petTarget=enemy
-    const damage=Math.max(1,Math.round(pet.damage*(.9+Math.random()*.2)));this.damageEnemy(enemy,damage,{knockback:.12,network:true,fromPet:true})
+    const damage=Math.max(1,Math.round(pet.damage*(.9+Math.random()*.2)));this.damageEnemy(enemy,damage,{knockback:.12,fromPet:true})
     pet.xp=(pet.xp||0)+Math.max(1,Math.round(enemy.level*.7));if(pet.xp>=pet.nextXp){pet.xp-=pet.nextXp;pet.level++;pet.nextXp=Math.round(pet.nextXp*1.28);pet.maxHp+=Math.max(8,Math.round(enemy.level*2));pet.hp=pet.maxHp;pet.damage+=Math.max(2,Math.round(enemy.level*.28));this.toast(`🐾 ${pet.name} subiu para Nv.${pet.level}!`)}
     if((pet.nextSpecialAt||0)<=now){pet.nextSpecialAt=now+5200;this.spawnAbilityRing(0x60a5fa,2.4,.35)}
   }
@@ -2789,44 +2796,13 @@ applyEnemyNetworkState(st){
     }
     if(e.type==='profile_saved'){this.state.multiplayer.serverSave=!!e.ok;return}
     if(e.type==='party_state'){this.state.party={id:e.party?.id||null,leaderId:e.party?.leaderId||null,members:Array.isArray(e.party?.members)?e.party.members:[],totalXP:Number(e.party?.totalXP)||0};return}
-    if(e.type==='party_xp_award'){const amount=Math.max(0,Math.round(Number(e.amount)||0));if(amount){this.gainXp(amount);this.toast(`Equipe: +${amount} XP compartilhado`)}return}
+    if(e.type==='party_xp_award')return
     if(e.type==='party_error'){this.toast(e.message||'Não foi possível alterar a equipe.');return}
     if(e.type==='renamed'){this.state.playerName=e.name||this.state.playerName;return}
-    if(e.type==='trade_offer'){
-      if(e.world&&e.world!==this.currentWorldId())return
-      const offer=normalizeTradeOffer(e.offer)
-      if(!e.tradeId||(!offer.items.length&&!offer.gold))return
-      const active=this.state.trade
-      if(active&&active.status!=='completed'&&(active.id!==e.tradeId||active.partnerId!==e.from)){
-        this.multiplayer?.send({type:'trade_cancel',to:e.from,tradeId:e.tradeId,world:this.currentWorldId(),message:'Este jogador já está em outra troca.'})
-        return
-      }
-      this.state.trade={id:e.tradeId,partnerId:e.from,partnerName:e.fromName||this.remotePlayers.get(e.from)?.data?.name||'Aventureiro',localOffer:active?.localOffer||null,remoteOffer:offer,localConfirmed:false,remoteConfirmed:false,status:'offered'}
-      this.toast(`🤝 ${this.state.trade.partnerName} enviou uma proposta de troca.`)
-      return
-    }
-    if(e.type==='trade_confirm'){
-      const trade=this.state.trade
-      if(!trade||trade.id!==e.tradeId||trade.partnerId!==e.from||e.world&&e.world!==this.currentWorldId())return
-      if(e.localOfferHash!==tradeOfferHash(trade.remoteOffer)||e.remoteOfferHash!==tradeOfferHash(trade.localOffer)){
-        this.state.trade={...trade,remoteConfirmed:false}
-        this.toast('A outra proposta foi alterada. Revise os itens antes de confirmar.')
-        return
-      }
-      this.state.trade={...trade,remoteConfirmed:true,status:trade.localConfirmed?'completing':'awaiting-confirmation'}
-      if(this.state.trade.localConfirmed)this.completeTrade()
-      else this.toast(`${trade.partnerName} confirmou a proposta.`)
-      return
-    }
-    if(e.type==='trade_cancel'){
-      if(this.state.trade?.id===e.tradeId&&this.state.trade.partnerId===e.from){this.state.trade=null;this.toast(e.message||'A outra pessoa cancelou a troca.')}
-      return
-    }
+    if(['trade_offer','trade_confirm','trade_cancel'].includes(e.type))return
     if(e.type==='join'||e.type==='state'){const p=e.player;if(!p||p.id===this.multiplayer?.id)return;let r=this.remotePlayers.get(p.id);if(!r){r=this.makeRemoteAvatar(p);this.remotePlayers.set(p.id,r)}r.data={...r.data,...p};r.target={x:+p.x||0,y:+p.y||0,z:+p.z||0,r:+p.r||0};this.updatePlayerNameplate(r.marker,r.data,false);this.state.multiplayer.players=this.remotePlayers.size;return}
     if(e.type==='leave'){const r=this.remotePlayers.get(e.id);if(r){this.scene.remove(r.g);r.marker?.material?.map?.dispose?.();r.marker?.material?.dispose?.();this.remotePlayers.delete(e.id)};this.state.multiplayer.players=this.remotePlayers.size;return}
-    if(e.type==='enemy_snapshot'){for(const st of e.states||[])this.applyEnemyNetworkState(st);return}
-    if(e.type==='enemy_dead'){this.applyEnemyNetworkState({...e,dead:true});return}
-    if(e.type==='enemy_damage'){if(e.world&&e.world!==this.currentWorldId())return;const mob=this.enemies.find(x=>!x.dead&&x.netId===e.netId);if(mob){mob.hp-=Math.max(0,Number(e.amount)||0);this.flashEnemy(mob,false);this.updateMobLabel(mob);if(mob.hp<=0)this.applyEnemyNetworkState({netId:e.netId,world:e.world,dead:true,respawnAt:e.respawnAt||Date.now()+5000})}return}
+    if(['enemy_snapshot','enemy_dead','enemy_damage'].includes(e.type))return
     if(e.type==='combat'||e.type==='ability'){const r=this.remotePlayers.get(e.from);if(r&&(!e.world||e.world===this.currentWorldId())){r.attackAnim=e.type==='ability'?.55:.32;r.abilityAnim=e.type==='ability'};return}
   }
 
@@ -3005,7 +2981,7 @@ applyEnemyNetworkState(st){
   emitHud(){
     const now=performance.now();if(now-this.lastHud<50)return;this.lastHud=now
     const z=this.state.dungeon?null:zoneAt(this.player.position.x,this.player.position.z,ZONES);if(z){this.state.zone=z.name;this.state.zoneId=z.id}
-    const city=this.state.dungeon?null:this.cityAt(this.player.position.x,this.player.position.z,2);this.state.currentCity=city?.name||null;if(city&&CITY_ECONOMIES[city.id])this.state.economy={cityId:city.id,...CITY_ECONOMIES[city.id]}
+    const city=this.state.dungeon?null:this.cityAt(this.player.position.x,this.player.position.z,2);this.state.currentCity=city?.name||null;this.state.currentCityId=city?.id||null;if(city&&CITY_ECONOMIES[city.id])this.state.economy={cityId:city.id,...CITY_ECONOMIES[city.id]}
     const portal=this.portals.find(p=>p.g.visible&&p.g.position.distanceTo(this.player.position)<6)
     this.state.portal=portal?{name:portal.name,level:portal.level,floors:portal.floors,rarity:{name:portal.rarity.name,color:portal.rarity.color}}:null
     const aimed=this.combatMode?this.getCrosshairTarget(18,.16):null;this.state.crosshairTarget=aimed?{name:aimed.name,level:aimed.level,boss:aimed.boss}:null;this.state.combatMode=this.combatMode;refreshGuildBoard(this.state);this.state.guildRank=getGuildRank(this.state.guildRankIndex||0).id;this.state.guildNextRequirement=guildRankRequirement((this.state.guildRankIndex||0)+1)
@@ -3047,7 +3023,7 @@ applyEnemyNetworkState(st){
       caravans:this.caravanManager?this.caravanManager.getMapCaravans():[],
       players:remotePlayersList,
     }
-    this.state.guildRank=getGuildRank(this.state.guildRankIndex||0).id;this.state.onlinePlayers=remotePlayersList;this.updatePlayerNameplate(this.localPlayerLabel,{name:this.state.playerName||'Aventureiro',level:this.state.level,hp:this.state.hp,maxHp:this.state.maxHp,guildRank:this.state.guildRank},true)
+    this.state.guildRank=getGuildRank(this.state.guildRankIndex||0).id;this.state.onlinePlayers=remotePlayersList;this.state.multiplayer.tradeEnabled=!!this.multiplayer?.authoritativeEconomy;this.updatePlayerNameplate(this.localPlayerLabel,{name:this.state.playerName||'Aventureiro',level:this.state.level,hp:this.state.hp,maxHp:this.state.maxHp,guildRank:this.state.guildRank},true)
     this.onHud?.({...this.state,destinationMarker:this.state.destinationMarker||null,caravanModal:this.state.caravanModal||null,xpNotifications:this.state.xpNotifications||[],lastXpGain:this.state.lastXpGain||null,levelUpCelebration:this.state.levelUpCelebration||null,gateAnnouncement:this.state.gateAnnouncement||null,dungeonModal:this.state.dungeonModal||null,dungeonCompletion:this.state.dungeonCompletion||null,minimap,mapSnapshot,horseBreeds:HORSE_BREEDS,inventory:[...this.state.inventory],equipment:{...this.state.equipment},quests:this.state.quests.map(q=>({...q})),classState:{...this.state.classState},travelState:{...this.state.travelState,vipCost:Math.max(5000,this.state.travelState?.vipCost||5000),nodes:{...(this.state.travelState?.nodes||{})}},settings:{...this.settings},mount:{...this.state.mount},stats:{...this.state.stats},attributes:{...this.state.attributes},guildMissions:(this.state.guildMissions||[]).map(m=>({...m,reward:{...m.reward}})),multiplayer:{...this.state.multiplayer},abilities:this.state.abilities?.map(a=>({...a}))||[]})
   }
 
