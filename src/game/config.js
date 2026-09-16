@@ -39,7 +39,7 @@ export const CITIES = [
     {id:'aurora-blacksmith',role:'blacksmith',name:'Brann',title:'Ferreiro Rúnico',x:10,z:-9,color:0xb8654b},
     {id:'aurora-stable',role:'stable',name:'Mira',title:'Mestra dos Estábulos',x:-11,z:-10,color:0x83a65e},
     {id:'aurora-traveler',role:'traveler',name:'Moço Viajante',title:'Caravaneiro de Asterra',x:-5,z:18,color:0x38bdf8},
-    {id:'aurora-pet-keeper',role:'pets',name:'Nala',title:'Guardião dos Companheiros',x:-15,z:8,color:0xf59e0b},
+    {id:'aurora-pet-keeper',role:'pets',name:'Nala',title:'Guardião dos Companheiros',x:-24,z:-17,color:0xf59e0b},
   ]},
   {id:'lumen-city',zoneId:'meadow',name:'Bastião Lúmen',x:152,z:18,halfW:27,halfH:25,radius:29,wallRadius:29,style:'meadow',accent:'#d8f58e',wall:0xc1ad72,roof:0xa66f35,services:[
     {id:'lumen-quest',role:'quest',name:'Cael',title:'Batedor da Pradaria (Missões)',x:148,z:14,color:0x7e9bd8},
