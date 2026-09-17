@@ -232,9 +232,9 @@ export class CaravanEscortAI {
           if (dToPlayer < 24) threat = this.game.player
         }
         if (!threat && this.game.enemies) {
-          let bestDist = 20
+          let bestDist = 22
           for (const mob of this.game.enemies) {
-            if (mob.dead) continue
+            if (mob.dead || (mob.hp !== undefined && mob.hp <= 0) || !mob.g?.position) continue
             const d = guard.mesh.position.distanceTo(mob.g.position)
             if (d < bestDist) {
               threat = mob
@@ -316,15 +316,33 @@ export class CaravanEscortAI {
       this.game.toast?.(`⚔️ ${guard.name} atingiu você por ${dealt} de dano!`)
       this.game.spawnAbilityRing?.(0xef4444, 1.6, 0.3)
       if (this.game.state.hp <= 0) {
-        this.game.respawnPlayerAt?.(caravan.originCityId)
+        this.game.respawnPlayerAt?.(guard.caravan?.originCityId || 'aurora-city')
         this.game.toast?.('Você foi derrotado pela escolta da caravana!')
       }
-    } else if (threat.damage || threat.hp !== undefined) {
-      // Hit monster
-      threat.hp -= guard.atk
+    } else if (threat && (threat.damage !== undefined || threat.hp !== undefined)) {
+      // Hit monster / threat
+      const baseAtk = Number(guard.atk) || 24
+      const mult = guard.cls?.id === 'tank' ? 0.95 : 1.2
+      const raw = Math.round(baseAtk * (mult + (Math.random() - 0.5) * 0.2))
+      const def = Math.max(0, Number(threat.def) || 0)
+      const dealt = Math.max(1, Math.round(raw * 100 / (100 + def * 0.7)))
+
+      const beforeHp = Number(threat.hp)
+      threat.hp = Math.max(0, (Number.isFinite(beforeHp) ? beforeHp : 100) - dealt)
+
+      const pos = threat.g?.position || threat.position || guard.mesh.position
+      this.game.spawnDamageText?.(pos, dealt, false, '#f59e0b')
+      this.game.flashEnemy?.(threat, false)
+      this.game.updateMobLabel?.(threat)
+
+      if (this.game.state?.target && (this.game.state.target.name === threat.name || this.game.state.target === threat)) {
+        this.game.state.target.hp = threat.hp
+      }
+
       if (threat.hp <= 0) {
         if (this.game.killByBot) this.game.killByBot(threat, guard)
         else this.game.kill?.(threat)
+        guard.target = null
       }
     }
   }
@@ -340,13 +358,35 @@ export class CaravanEscortAI {
     }
 
     if (threat === this.game.player) {
-      this.game.state.hp = Math.max(0, (this.game.state.hp || 120) - guard.atk)
-      this.game.toast?.(`🏹 ${guard.name} disparou contra você: -${guard.atk} HP!`)
-    } else if (threat.hp !== undefined) {
-      threat.hp -= guard.atk
+      const dealt = this.game.damagePlayer?.(guard.atk) ?? guard.atk
+      this.game.toast?.(`🏹 ${guard.name} disparou contra você: -${dealt} HP!`)
+      if (this.game.state.hp <= 0) {
+        this.game.respawnPlayerAt?.(guard.caravan?.originCityId || 'aurora-city')
+        this.game.toast?.('Você foi derrotado pela escolta da caravana!')
+      }
+    } else if (threat && (threat.damage !== undefined || threat.hp !== undefined)) {
+      const baseAtk = Number(guard.atk) || 24
+      const mult = guard.cls?.id === 'mage' ? 1.35 : 1.1
+      const raw = Math.round(baseAtk * (mult + (Math.random() - 0.5) * 0.2))
+      const def = Math.max(0, Number(threat.def) || 0)
+      const dealt = Math.max(1, Math.round(raw * 100 / (100 + def * 0.7)))
+
+      const beforeHp = Number(threat.hp)
+      threat.hp = Math.max(0, (Number.isFinite(beforeHp) ? beforeHp : 100) - dealt)
+
+      const pos = threat.g?.position || threat.position || guard.mesh.position
+      this.game.spawnDamageText?.(pos, dealt, false, guard.cls?.id === 'mage' ? '#a855f7' : '#f59e0b')
+      this.game.flashEnemy?.(threat, false)
+      this.game.updateMobLabel?.(threat)
+
+      if (this.game.state?.target && (this.game.state.target.name === threat.name || this.game.state.target === threat)) {
+        this.game.state.target.hp = threat.hp
+      }
+
       if (threat.hp <= 0) {
         if (this.game.killByBot) this.game.killByBot(threat, guard)
         else this.game.kill?.(threat)
+        guard.target = null
       }
     }
   }

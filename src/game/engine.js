@@ -1495,18 +1495,23 @@ export class ShadowGame {
     return best
   }
 
-  damageEnemy(e,amount,{knockback=.35,crit=false,fromPet=false}={}){
+  damageEnemy(e,amount,{knockback=.35,crit=false,fromPet=false,fromGuard=false}={}){
     if(e?.isCaravanGuard||e?.isCaravanCart)return this.caravanManager?.onDamageCaravanEntity(e,amount,{knockback,crit})
     if(e?.adventurer)return this.damageBot(e,amount,{crit})
-    if(!e||e.dead)return false;this.enterCombat(8);const dealt=Math.max(1,Math.round(amount*100/(100+(e.def||0)*5)));e.hp-=dealt
-    this.state.target={name:e.name,level:e.level,hp:Math.max(0,e.hp),maxHp:e.maxHp,boss:e.boss,crit};this.spawnDamageText(e.g.position,dealt,crit);this.flashEnemy(e,crit)
-    if(knockback)e.g.position.addScaledVector(e.g.position.clone().sub(this.player.position).normalize(),knockback)
-    if(!fromPet&&this.tryTamePet(e))return true
-    if(!fromPet)this.petAttackTarget(e)
+    if(!e||e.dead)return false
+    if(!fromGuard)this.enterCombat(8)
+    const dealt=Math.max(1,Math.round(amount*100/(100+(e.def||0)*5)));e.hp-=dealt
+    this.state.target={name:e.name,level:e.level,hp:Math.max(0,e.hp),maxHp:e.maxHp,boss:e.boss,crit}
+    this.spawnDamageText(e.g.position,dealt,crit,fromPet?'#38bdf8':fromGuard?'#f59e0b':null)
+    this.flashEnemy(e,crit)
+    this.updateMobLabel?.(e)
+    if(knockback&&this.player?.position)e.g.position.addScaledVector(e.g.position.clone().sub(this.player.position).normalize(),knockback)
+    if(!fromPet&&!fromGuard&&this.tryTamePet(e))return true
+    if(!fromPet&&!fromGuard)this.petAttackTarget(e)
     if(e.hp<=0)this.kill(e);return true
   }
   flashEnemy(e,crit=false){const material=e?.body?.material;if(!material?.emissive)return;const old=material.emissive.clone(),oldIntensity=material.emissiveIntensity;material.emissive.set(crit?0xffd45b:0xffffff);material.emissiveIntensity=1.35;setTimeout(()=>{if(!e.dead&&material){material.emissive.copy(old);material.emissiveIntensity=oldIntensity}},90)}
-  spawnDamageText(pos,amount,crit=false){const c=document.createElement('canvas');c.width=256;c.height=96;const x=c.getContext('2d');x.textAlign='center';x.font=`900 ${crit?44:36}px Inter,Arial`;x.lineWidth=7;x.strokeStyle='rgba(0,0,0,.78)';x.strokeText(`${crit?'CRIT ':''}${amount}`,128,58);x.fillStyle=crit?'#ffd968':'#ffffff';x.fillText(`${crit?'CRIT ':''}${amount}`,128,58);const texture=new THREE.CanvasTexture(c),sprite=new THREE.Sprite(new THREE.SpriteMaterial({map:texture,transparent:true,depthTest:false,depthWrite:false}));sprite.position.copy(pos);sprite.position.y+=2.4;sprite.scale.set(crit?2.8:2.2,crit?1.05:.82,1);sprite.renderOrder=40;this.scene.add(sprite);this.effects.push({type:'damage',object:sprite,life:.75,maxLife:.75,texture})}
+  spawnDamageText(pos,amount,crit=false,color=null){const c=document.createElement('canvas');c.width=256;c.height=96;const x=c.getContext('2d');x.textAlign='center';x.font=`900 ${crit?44:36}px Inter,Arial`;x.lineWidth=7;x.strokeStyle='rgba(0,0,0,.78)';x.strokeText(`${crit?'CRIT ':''}${amount}`,128,58);x.fillStyle=color||(crit?'#ffd968':'#ffffff');x.fillText(`${crit?'CRIT ':''}${amount}`,128,58);const texture=new THREE.CanvasTexture(c),sprite=new THREE.Sprite(new THREE.SpriteMaterial({map:texture,transparent:true,depthTest:false,depthWrite:false}));sprite.position.copy(pos);sprite.position.y+=2.4;sprite.scale.set(crit?2.8:2.2,crit?1.05:.82,1);sprite.renderOrder=40;this.scene.add(sprite);this.effects.push({type:'damage',object:sprite,life:.75,maxLife:.75,texture})}
   spawnAbilityRing(color=0x7edcff,radius=3,duration=.45){const material=new THREE.MeshBasicMaterial({color,transparent:true,opacity:.75,side:THREE.DoubleSide,depthWrite:false}),ring=new THREE.Mesh(new THREE.RingGeometry(.72,1,36),material);ring.rotation.x=-Math.PI/2;ring.position.copy(this.player.position);ring.position.y=.12;ring.scale.setScalar(.1);(this.state.dungeon?this.dungeonArena:this.scene).add(ring);this.effects.push({type:'ring',object:ring,life:duration,maxLife:duration,radius,material});return ring}
   updateEffects(dt){
     for(let i=this.effects.length-1;i>=0;i--){

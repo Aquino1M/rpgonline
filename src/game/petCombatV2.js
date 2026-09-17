@@ -19,6 +19,18 @@ function ensurePetStats(pet) {
   pet.xp = Math.max(0, Math.round(Number(pet.xp) || 0))
   pet.nextXp = Math.max(20, Math.round(Number(pet.nextXp) || pet.level * 85))
   pet.recoverUntil = Math.max(0, Number(pet.recoverUntil) || 0)
+
+  const now = nowMs()
+  if (!Number.isFinite(pet.nextAttackAt) || pet.nextAttackAt > now + 3000 || pet.nextAttackAt < now - 30000) {
+    pet.nextAttackAt = 0
+  }
+  if (!Number.isFinite(pet.nextSpecialAt) || pet.nextSpecialAt > now + 12000 || pet.nextSpecialAt < now - 60000) {
+    pet.nextSpecialAt = 0
+  }
+  if (!Number.isFinite(pet.nextHurtAt) || pet.nextHurtAt > now + 3000 || pet.nextHurtAt < now - 30000) {
+    pet.nextHurtAt = 0
+  }
+
   const power = petPowerProfile(pet.name)
   pet.specialName = power.name
   pet.specialType = power.type
@@ -237,7 +249,17 @@ function doPetSpecial(game, pet, target, profile, now) {
   for (const enemy of targets) {
     if (!enemy || enemy.dead || seen.has(enemy)) continue
     seen.add(enemy)
+    const beforeHp = Number(enemy.hp)
     game.damageEnemy?.(enemy, specialDamage, { knockback: 0.22, fromPet: true })
+    if (!enemy.dead && Number.isFinite(beforeHp) && Number(enemy.hp) >= beforeHp) {
+      const def = Math.max(0, Number(enemy.def) || 0)
+      const dealt = Math.max(1, Math.round(specialDamage * 100 / (100 + def * 0.6)))
+      enemy.hp = Math.max(0, beforeHp - dealt)
+      game.spawnDamageText?.(enemy.g?.position || enemy.position, dealt, true, '#38bdf8')
+      game.flashEnemy?.(enemy, true)
+      game.updateMobLabel?.(enemy)
+      if (enemy.hp <= 0) game.kill?.(enemy)
+    }
   }
   pulsePetAttack(game, profile.color)
   game.toast?.(`🐾 ${pet.name}: ${profile.name}!`)
@@ -245,18 +267,38 @@ function doPetSpecial(game, pet, target, profile, now) {
 
 function performPetAttack(game, pet, target, now) {
   if (!isPetCombatTarget(game, target)) return false
-  if ((Number(pet.nextAttackAt) || 0) > now) return false
+  if ((Number(pet.nextAttackAt) || 0) > now) {
+    if ((Number(pet.nextAttackAt) || 0) > now + 3000) pet.nextAttackAt = 0
+    else return false
+  }
   pet.nextAttackAt = now + 920
 
   const damage = Math.max(1, Math.round(pet.damage * (0.9 + Math.random() * 0.2)))
+  const hpBefore = Number(target.hp)
   const hit = game.damageEnemy?.(target, damage, { knockback: 0.12, fromPet: true })
-  if (hit === false) return false
+
+  // Guaranteed damage fallback: if damageEnemy was swallowed or target hp was unchanged
+  if (target && !target.dead && Number.isFinite(hpBefore) && Number(target.hp) >= hpBefore) {
+    const def = Math.max(0, Number(target.def) || 0)
+    const dealt = Math.max(1, Math.round(damage * 100 / (100 + def * 0.6)))
+    target.hp = Math.max(0, hpBefore - dealt)
+    game.spawnDamageText?.(target.g?.position || target.position, dealt, false, '#38bdf8')
+    game.flashEnemy?.(target, false)
+    game.updateMobLabel?.(target)
+    if (game.state?.target && (game.state.target.name === target.name || game.state.target === target)) {
+      game.state.target.hp = target.hp
+    }
+    if (target.hp <= 0) game.kill?.(target)
+  }
 
   pulsePetAttack(game, pet.specialColor || 0x60a5fa)
   gainPetAttackXp(game, pet, target)
 
-  if (!target.dead && Number(target.hp) > 0 && (Number(pet.nextSpecialAt) || 0) <= now) {
-    doPetSpecial(game, pet, target, petPowerProfile(pet.name), now)
+  if (!target.dead && Number(target.hp) > 0) {
+    if ((Number(pet.nextSpecialAt) || 0) > now + 12000) pet.nextSpecialAt = 0
+    if ((Number(pet.nextSpecialAt) || 0) <= now) {
+      doPetSpecial(game, pet, target, petPowerProfile(pet.name), now)
+    }
   }
   return true
 }

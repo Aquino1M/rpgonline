@@ -290,6 +290,8 @@ function installCombatAndProgression(game){
     const attackRange=Math.max(2.8,targetRadius+1.5)
     const inRange=!!(target&&visual&&target.g?.position&&target.g.position.distanceTo(visual.position)<=attackRange)
     const now=perfNow()
+    if((Number(pet.v4NextAttackAt)||0)>now+3000)pet.v4NextAttackAt=0
+    if((Number(pet.v4NextSpecialAt)||0)>now+12000)pet.v4NextSpecialAt=0
     let hpAfter=Number(target?.hp)
     let causedDamage=!!(targetBefore&&Number.isFinite(hpBefore)&&Number(targetBefore.hp)<hpBefore)
 
