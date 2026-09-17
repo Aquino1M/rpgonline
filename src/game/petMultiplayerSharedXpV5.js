@@ -90,7 +90,7 @@ function makeRemotePet(state){
 function applyRemotePetAppearance(g,state){
   if(!g||!state)return
   const stage=Math.max(0,Number(state.evolutionStage)||0)
-  const scale=1+Math.min(stage,8)*.065
+  const scale=1+Math.min(stage,10)*0.035
   g.scale.setScalar(scale)
   const color=new THREE.Color(state.color||'#60a5fa')
   const mat=g.userData?.body?.material

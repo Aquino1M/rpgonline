@@ -218,8 +218,21 @@ function gainPetAttackXp(game, pet, target) {
 function pulsePetAttack(game, color = 0x60a5fa) {
   const visual = game?.petVisual
   if (!visual) return
-  const original = visual.scale.clone()
-  visual.scale.copy(original).multiplyScalar(1.16)
+
+  const pet = activePet(game)
+  const stage = Math.max(0, Number(pet?.evolutionStage) || 0)
+  // Growth bounded strictly to 2%-5% per evolution stage (3.5%)
+  const baseScale = 1 + Math.min(stage, 10) * 0.035
+  visual.userData.baseScale = baseScale
+
+  if (visual.userData.pulseTimer) {
+    window.clearTimeout(visual.userData.pulseTimer)
+    visual.userData.pulseTimer = null
+  }
+
+  // Micro hit pulse (4%) that strictly snaps back to baseScale
+  visual.scale.setScalar(baseScale * 1.04)
+
   const body = visual.children?.find?.(child => child?.material?.emissive)
   const oldEmissive = body?.material?.emissive?.clone?.()
   const oldIntensity = body?.material?.emissiveIntensity
@@ -227,13 +240,16 @@ function pulsePetAttack(game, color = 0x60a5fa) {
     body.material.emissive.setHex(color)
     body.material.emissiveIntensity = 1.15
   }
-  window.setTimeout(() => {
-    if (visual) visual.scale.copy(original)
+  visual.userData.pulseTimer = window.setTimeout(() => {
+    if (visual) {
+      visual.scale.setScalar(baseScale)
+      visual.userData.pulseTimer = null
+    }
     if (body?.material?.emissive && oldEmissive) {
       body.material.emissive.copy(oldEmissive)
       body.material.emissiveIntensity = oldIntensity ?? 0
     }
-  }, 120)
+  }, 110)
 }
 
 function doPetSpecial(game, pet, target, profile, now) {
@@ -412,6 +428,11 @@ export function installPetCombatV2(game) {
       moveVisualToward(game, home, 7.6, dt)
       pet.hp = Math.min(pet.maxHp, pet.hp + pet.maxHp * Math.max(0, dt) * 0.04)
     }
+
+    const stage = Math.max(0, Number(pet.evolutionStage) || 0)
+    const baseScale = 1 + Math.min(stage, 10) * 0.035
+    visual.userData.baseScale = baseScale
+    if (!visual.userData?.pulseTimer) visual.scale.setScalar(baseScale)
 
     visual.position.y = 0.55 + Math.sin(now * 0.004) * 0.08
     ensurePetNameplate(game, pet)

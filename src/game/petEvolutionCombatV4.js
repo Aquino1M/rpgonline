@@ -84,11 +84,16 @@ function applyPetVisualEvolution(game,pet){
   if(!visual||!pet)return
   refreshEvolutionFields(pet)
   const stage=Math.max(0,Number(pet.evolutionStage)||0)
-  if(visual.userData?.petEvolutionStage===stage&&visual.userData?.petEvolutionId===pet.id)return
+  // Crescer apenas 2% a 5% por estágio de evolução (3.5% por evolução)
+  const scale=1+Math.min(stage,10)*0.035
+  visual.userData.baseScale=scale
+  if(visual.userData?.petEvolutionStage===stage&&visual.userData?.petEvolutionId===pet.id){
+    if(!visual.userData?.pulseTimer)visual.scale.setScalar(scale)
+    return
+  }
   visual.userData.petEvolutionStage=stage
   visual.userData.petEvolutionId=pet.id
-  const scale=1+Math.min(stage,8)*.065
-  visual.scale.setScalar(scale)
+  if(!visual.userData?.pulseTimer)visual.scale.setScalar(scale)
   if(stage>0){
     const body=visual.children?.find?.(child=>child?.material?.color)
     if(body?.material?.color){
