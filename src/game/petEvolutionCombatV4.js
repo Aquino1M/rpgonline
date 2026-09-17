@@ -270,9 +270,6 @@ function installCombatAndProgression(game){
     const petBefore=game.activePet?.()
     if(petBefore){
       refreshEvolutionFields(petBefore)
-      // Older systems used specials from level 1. V4 owns special timing and unlocks it at level 10.
-      petBefore.nextSpecialAt=Number.POSITIVE_INFINITY
-      petBefore.v3NextSpecialAt=Number.POSITIVE_INFINITY
     }
     const targetBefore=game.petTarget
     const hpBefore=Number(targetBefore?.hp)
@@ -289,13 +286,14 @@ function installCombatAndProgression(game){
 
     const target=game.petTarget||((targetBefore&&!targetBefore.dead&&Number(targetBefore.hp)>0)?targetBefore:null)
     const visual=game.petVisual
-    const inRange=!!(target&&visual&&target.g?.position&&target.g.position.distanceTo(visual.position)<=2.45)
+    const targetRadius=Number(target?.radius)||1.1
+    const attackRange=Math.max(2.8,targetRadius+1.5)
+    const inRange=!!(target&&visual&&target.g?.position&&target.g.position.distanceTo(visual.position)<=attackRange)
     const now=perfNow()
     let hpAfter=Number(target?.hp)
     let causedDamage=!!(targetBefore&&Number.isFinite(hpBefore)&&Number(targetBefore.hp)<hpBefore)
 
-    // Last safety net: if a commanded pet reaches melee range but older wrappers still fail to mutate HP,
-    // apply one guaranteed companion hit on its own cooldown.
+    // Safety net: if a commanded pet reaches melee range, apply companion hit
     if(target&&!target.dead&&Number(target.hp)>0&&inRange&&!causedDamage&&now>=(Number(pet.v4NextAttackAt)||0)){
       pet.v4NextAttackAt=now+900
       const dealt=directDamage(game,target,(Number(pet.damage)||4)*(1+Math.min(.4,(Number(pet.evolutionStage)||0)*.04)))

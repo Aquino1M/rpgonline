@@ -200,36 +200,72 @@ async function authenticateNickname(client, action, username, password) {
 
 export async function registerAccount({ username, password, server = 'asterra-global' }) {
   const client = getSupabaseClient()
-  if (!client) return { ok:false, error:'Servidor Supabase não conectado. Verifique sua conexão.' }
   const cleanUser = cleanUsername(username)
   if (cleanUser.length < 3 || cleanUser.length > 20) return { ok:false, error:'O nickname deve ter entre 3 e 20 caracteres.' }
   if (!password || password.length < 8) return { ok:false, error:'A senha deve ter pelo menos 8 caracteres.' }
+  if (!client) {
+    const session = { accountId:`offline-${cleanUser}`, username:cleanUser, server:server || 'asterra-local', loginTime:Date.now() }
+    const profile = { id:session.accountId, name:cleanUser, level:1, guildRank:'E', lastLobby:session.server }
+    saveAccountSession(session)
+    return { ok:true, session, profile, isNew:true, isOffline:true }
+  }
   try {
     const auth = await authenticateNickname(client, 'register', cleanUser, password)
-    if (!auth.ok) return auth
+    if (!auth.ok) {
+      if (/Failed to send|edge function|não foi possível acessar/i.test(auth.error || '')) {
+        const session = { accountId:`offline-${cleanUser}`, username:cleanUser, server:server || 'asterra-local', loginTime:Date.now() }
+        const profile = { id:session.accountId, name:cleanUser, level:1, guildRank:'E', lastLobby:session.server }
+        saveAccountSession(session)
+        return { ok:true, session, profile, isNew:true, isOffline:true }
+      }
+      return auth
+    }
     const ownProfile = await loadOrCreateOwnProfile(client, auth.user, server)
     if (!ownProfile.ok) return ownProfile
     const session = makeSession(auth.user, ownProfile.profile, server)
     saveAccountSession(session)
     return { ok:true, session, profile:ownProfile.profile, isNew:true }
-  } catch (err) { return { ok:false, error:String(err?.message || err) } }
+  } catch (err) {
+    const session = { accountId:`offline-${cleanUser}`, username:cleanUser, server:server || 'asterra-local', loginTime:Date.now() }
+    const profile = { id:session.accountId, name:cleanUser, level:1, guildRank:'E', lastLobby:session.server }
+    saveAccountSession(session)
+    return { ok:true, session, profile, isNew:true, isOffline:true }
+  }
 }
 
 export async function loginAccount({ username, password, server = null }) {
   const client = getSupabaseClient()
-  if (!client) return { ok:false, error:'Servidor Supabase não conectado. Verifique sua conexão.' }
   const cleanUser = cleanUsername(username)
   if (cleanUser.length < 3 || cleanUser.length > 20) return { ok:false, error:'Informe o nickname da conta.' }
   if (!password) return { ok:false, error:'Informe a senha.' }
+  if (!client) {
+    const session = { accountId:`offline-${cleanUser}`, username:cleanUser, server:server || 'asterra-local', loginTime:Date.now() }
+    const profile = { id:session.accountId, name:cleanUser, level:1, guildRank:'E', lastLobby:session.server }
+    saveAccountSession(session)
+    return { ok:true, session, profile, isOffline:true }
+  }
   try {
     const auth = await authenticateNickname(client, 'login', cleanUser, password)
-    if (!auth.ok) return auth
+    if (!auth.ok) {
+      if (/Failed to send|edge function|não foi possível acessar/i.test(auth.error || '')) {
+        const session = { accountId:`offline-${cleanUser}`, username:cleanUser, server:server || 'asterra-local', loginTime:Date.now() }
+        const profile = { id:session.accountId, name:cleanUser, level:1, guildRank:'E', lastLobby:session.server }
+        saveAccountSession(session)
+        return { ok:true, session, profile, isOffline:true }
+      }
+      return auth
+    }
     const ownProfile = await loadOrCreateOwnProfile(client, auth.user, server || 'asterra-global')
     if (!ownProfile.ok) return ownProfile
     const session = makeSession(auth.user, ownProfile.profile, server)
     saveAccountSession(session)
     return { ok:true, session, profile:ownProfile.profile }
-  } catch (err) { return { ok:false, error:String(err?.message || err) } }
+  } catch (err) {
+    const session = { accountId:`offline-${cleanUser}`, username:cleanUser, server:server || 'asterra-local', loginTime:Date.now() }
+    const profile = { id:session.accountId, name:cleanUser, level:1, guildRank:'E', lastLobby:session.server }
+    saveAccountSession(session)
+    return { ok:true, session, profile, isOffline:true }
+  }
 }
 
 export async function restoreAccountSession() {

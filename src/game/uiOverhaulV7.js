@@ -152,20 +152,70 @@ function renderCityTheme(game){
   document.documentElement.style.setProperty('--v7-city',color)
   document.querySelector('.player-card')?.classList.add('v7-hud-upgraded')
 }
+function isModalOpen(game){
+  if(typeof document==='undefined')return false
+  return !!(game?.state?.uiPanel || document.querySelector('.overlay-shell') || document.querySelector('.window'))
+}
 function renderMenuToggle(game){
-  const app=document.querySelector('.app'),menu=document.querySelector('.side-menu');if(!app||!menu)return
-  const btn=ensureEl('v7-menu-toggle','button',app);btn.type='button';btn.title='Recolher/abrir menu';btn.textContent=app.classList.contains('v7-menu-collapsed')?'›':'‹'
-  if(!btn.dataset.bound){btn.dataset.bound='1';btn.addEventListener('click',()=>{const off=app.classList.toggle('v7-menu-collapsed');localStorage.setItem('shadow-v7-menu-collapsed',off?'1':'0');btn.textContent=off?'›':'‹'})}
-  if(!app.dataset.v7MenuLoaded){app.dataset.v7MenuLoaded='1';if(localStorage.getItem('shadow-v7-menu-collapsed')==='1')app.classList.add('v7-menu-collapsed')}
+  const app=document.querySelector('.app'),menu=document.querySelector('.side-menu')
+  if(!app||!menu){removeEl('v7-menu-toggle');return}
+  if(app.classList.contains('touch-ui')||window.innerWidth<900||isModalOpen(game)){
+    removeEl('v7-menu-toggle')
+    return
+  }
+  const btn=ensureEl('v7-menu-toggle','button',app)
+  btn.type='button'
+  btn.title='Recolher/abrir menu lateral'
+  const isCollapsed=app.classList.contains('v7-menu-collapsed')
+  btn.textContent=isCollapsed?'›':'‹'
+
+  if(isCollapsed){
+    btn.style.left='8px'
+    btn.style.top='50%'
+    btn.style.transform='translateY(-50%)'
+  }else{
+    const menuRect=menu.getBoundingClientRect()
+    btn.style.left=`${Math.round(menuRect.right + 6)}px`
+    btn.style.top=`${Math.round(menuRect.top + 6)}px`
+    btn.style.transform='none'
+  }
+
+  if(!btn.dataset.bound){
+    btn.dataset.bound='1'
+    btn.addEventListener('click',()=>{
+      const off=app.classList.toggle('v7-menu-collapsed')
+      localStorage.setItem('shadow-v7-menu-collapsed',off?'1':'0')
+      btn.textContent=off?'›':'‹'
+    })
+  }
+  if(!app.dataset.v7MenuLoaded){
+    app.dataset.v7MenuLoaded='1'
+    if(localStorage.getItem('shadow-v7-menu-collapsed')==='1')app.classList.add('v7-menu-collapsed')
+  }
 }
 function renderPetHud(game){
   const pet=activePet(game)
-  if(!pet){removeEl('v7-pet-hud');return}
-  const el=ensureEl('v7-pet-hud'),recover=Math.max(0,Math.ceil((Number(pet.recoverUntil)-now())/1000)),specialRemain=Math.max(0,Math.ceil(((Number(pet.v4NextSpecialAt)||0)-perfNow())/1000))
+  const app=document.querySelector('.app')
+  const playerCard=document.querySelector('.player-card')
+  const modalOpen=isModalOpen(game)
+
+  if(!pet || modalOpen || !playerCard || !app){
+    removeEl('v7-pet-hud')
+    return
+  }
+  const el=ensureEl('v7-pet-hud','div',app)
+  const cardRect=playerCard.getBoundingClientRect()
+  el.style.top=`${Math.round(cardRect.bottom + 8)}px`
+  el.style.left=`${Math.round(cardRect.left)}px`
+  el.style.width=`${Math.round(cardRect.width)}px`
+
+  const recover=Math.max(0,Math.ceil((Number(pet.recoverUntil)-now())/1000))
+  const specialRemain=Math.max(0,Math.ceil(((Number(pet.v4NextSpecialAt)||Number(pet.nextSpecialAt)||0)-perfNow())/1000))
   const hp=pct(pet.hp,pet.maxHp),xp=pct(pet.xp,pet.nextXp)
   el.innerHTML=`<div class="v7-pet-title"><strong>🐾 ${esc(pet.name)} • Nv.${Math.max(1,Number(pet.level)||1)}</strong><span class="v7-pet-state">${recover?`RECUPERA ${recover}s`:pet.inCombat?'⚔ combate':'● pronto'}</span></div><div class="v7-pet-meta"><span>HP ${Math.ceil(Number(pet.hp)||0)}/${Math.ceil(Number(pet.maxHp)||1)}</span><span>Dano ${Math.round(Number(pet.damage)||0)}</span></div><div class="v7-mini-bar"><i style="width:${hp}%"></i></div><div class="v7-pet-meta"><span>XP ${Math.floor(Number(pet.xp)||0)}/${Math.max(1,Math.floor(Number(pet.nextXp)||1))}</span><span>${pet.specialUnlocked===false?'🔒 especial Nv.10':specialRemain?`✨ ${specialRemain}s`:`✨ ${esc(pet.specialName||'Especial')}`}</span></div><div class="v7-mini-bar xp"><i style="width:${xp}%"></i></div>`
 }
 function renderBossBar(game){
+  if(isModalOpen(game)){removeEl('v7-boss-bar');return}
   const t=game.state?.target,boss=t?.boss?t:(game.state?.boss?.active?game.state.boss:null)
   if(!boss){removeEl('v7-boss-bar');return}
   const el=ensureEl('v7-boss-bar'),hp=pct(boss.hp,boss.maxHp)
@@ -173,12 +223,14 @@ function renderBossBar(game){
   el.innerHTML=`<header><strong>☠ ${esc(boss.name||'CHEFE')}</strong><span>NV.${Math.max(1,Number(boss.level)||1)} • ${phase}</span></header><div class="v7-boss-hp"><i style="width:${hp}%"></i></div><footer><span>HP ${Math.ceil(Number(boss.hp)||0)} / ${Math.ceil(Number(boss.maxHp)||1)}</span><span>${Math.round(hp)}%</span></footer>`
 }
 function renderWanted(game){
+  if(isModalOpen(game)){removeEl('v7-wanted');return}
   const level=clamp(Math.round(Number(game.state?.wantedLevel)||0),0,5)
   if(!level){removeEl('v7-wanted');return}
   const el=ensureEl('v7-wanted'),stars='★'.repeat(level)+'☆'.repeat(5-level),bounty=level*500
   el.innerHTML=`🚨 ${stars}<small>PROCURADO ${level}/5 • recompensa estimada ${bounty}◈</small>`
 }
 function renderTotemQuick(game){
+  if(isModalOpen(game)){removeEl('v7-totem-quick');return}
   const item=(game.state?.inventory||[]).find(i=>i?.subtype==='teleport_totem'&&(Number(i.qty)||1)>0)
   if(!item){removeEl('v7-totem-quick');return}
   const el=ensureEl('v7-totem-quick','button');el.type='button';el.innerHTML=`<span>🗿</span>×${Math.max(1,Number(item.qty)||1)}<small>RETORNO</small>`
@@ -194,6 +246,7 @@ function questPoint(game,q){
   const city=(CITIES||[]).find(c=>c.zoneId===q?.zoneId)||(CITIES||[]).find(c=>String(q?.location||'').includes(c.name));return city||null
 }
 function renderQuestFocus(game){
+  if(isModalOpen(game)){removeEl('v7-quest-focus');return}
   const quests=(game.state?.quests||[]).filter(q=>q.status==='active'||q.status==='ready').slice(0,3)
   if(!quests.length){removeEl('v7-quest-focus');return}
   const p=game.player?.position||{x:0,z:0},el=ensureEl('v7-quest-focus')
@@ -331,7 +384,12 @@ function compactLegacySurfaces(game){
 }
 
 function renderAll(game){
-  if(typeof document==='undefined'||!document.querySelector('.app'))return
+  if(typeof document==='undefined')return
+  const app=document.querySelector('.app')
+  if(!app)return
+  const modalOpen=isModalOpen(game)
+  app.classList.toggle('v7-has-modal',modalOpen)
+
   renderCityTheme(game);renderMenuToggle(game);renderPetHud(game);renderBossBar(game);renderWanted(game);renderTotemQuick(game);renderQuestFocus(game)
   renderNpcBanner(game);renderShopCompare(game);renderInventoryTools(game);renderGuildRoad(game);renderPetEvolution(game);renderMapLegend(game);renderDungeonIntro(game);renderMobileEditor(game);compactLegacySurfaces(game)
 }

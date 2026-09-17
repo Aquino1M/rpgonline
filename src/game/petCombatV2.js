@@ -52,21 +52,21 @@ export function isPetCombatTarget(game, target) {
 function createPetNameplate() {
   if (typeof document === 'undefined') return null
   const canvas = document.createElement('canvas')
-  canvas.width = 460
-  canvas.height = 128
+  canvas.width = 256
+  canvas.height = 72
   const texture = new THREE.CanvasTexture(canvas)
   texture.minFilter = THREE.LinearFilter
   texture.generateMipmaps = false
   const material = new THREE.SpriteMaterial({
     map: texture,
     transparent: true,
-    depthTest: false,
+    depthTest: true,
     depthWrite: false,
   })
   const sprite = new THREE.Sprite(material)
   sprite.name = 'PetCombatNameplate'
-  sprite.position.set(0, 1.62, 0)
-  sprite.scale.set(4.25, 1.18, 1)
+  sprite.position.set(0, 0.96, 0)
+  sprite.scale.set(1.35, 0.38, 1)
   sprite.renderOrder = 80
   sprite.userData.petCanvas = canvas
   sprite.userData.petTexture = texture
@@ -88,41 +88,55 @@ function drawPetNameplate(sprite, pet) {
   if (!ctx || !texture) return
 
   const hpPct = Math.max(0, Math.min(1, snap.hp / Math.max(1, snap.maxHp)))
-  const xpPct = Math.max(0, Math.min(1, snap.xp / Math.max(1, snap.nextXp)))
   ctx.clearRect(0, 0, canvas.width, canvas.height)
 
-  ctx.fillStyle = 'rgba(4, 10, 18, 0.92)'
-  ctx.fillRect(8, 8, 444, 112)
-  ctx.strokeStyle = recovering ? '#94a3b8' : '#60a5fa'
-  ctx.lineWidth = 4
-  ctx.strokeRect(8, 8, 444, 112)
+  ctx.fillStyle = 'rgba(5, 12, 22, 0.78)'
+  ctx.beginPath()
+  if (typeof ctx.roundRect === 'function') ctx.roundRect(4, 4, 248, 64, 10)
+  else ctx.rect(4, 4, 248, 64)
+  ctx.fill()
+  ctx.strokeStyle = recovering ? '#64748b' : '#38bdf8'
+  ctx.lineWidth = 2
+  ctx.stroke()
 
   ctx.textAlign = 'center'
-  ctx.font = '900 24px Inter, Arial'
-  ctx.fillStyle = recovering ? '#cbd5e1' : '#ffffff'
-  ctx.fillText(`🐾 ${snap.name}  •  Nv.${snap.level}`, 230, 38)
+  ctx.font = '900 16px Inter, Arial'
+  ctx.fillStyle = recovering ? '#94a3b8' : '#ffffff'
+  ctx.fillText(`🐾 ${snap.name} • Nv.${snap.level}`, 128, 26)
 
-  ctx.font = '800 15px Inter, Arial'
-  ctx.fillStyle = recovering ? '#cbd5e1' : '#f8fafc'
-  ctx.fillText(recovering ? 'RECUPERANDO' : `HP ${Math.ceil(snap.hp)} / ${Math.ceil(snap.maxHp)}`, 230, 61)
-
-  ctx.fillStyle = '#172033'
-  ctx.fillRect(34, 70, 392, 18)
+  ctx.fillStyle = '#0f172a'
+  ctx.fillRect(20, 36, 216, 12)
   ctx.fillStyle = recovering ? '#64748b' : hpPct > 0.55 ? '#22c55e' : hpPct > 0.25 ? '#f59e0b' : '#ef4444'
-  ctx.fillRect(34, 70, 392 * hpPct, 18)
-  ctx.strokeStyle = 'rgba(255,255,255,.45)'
+  ctx.fillRect(20, 36, 216 * hpPct, 12)
+  ctx.strokeStyle = 'rgba(255,255,255,0.25)'
   ctx.lineWidth = 1
-  ctx.strokeRect(34, 70, 392, 18)
+  ctx.strokeRect(20, 36, 216, 12)
 
-  ctx.fillStyle = '#101827'
-  ctx.fillRect(34, 96, 392, 10)
-  ctx.fillStyle = '#38bdf8'
-  ctx.fillRect(34, 96, 392 * xpPct, 10)
-  ctx.font = '700 11px Inter, Arial'
-  ctx.fillStyle = '#cbd5e1'
-  ctx.fillText(`XP ${snap.xp}/${snap.nextXp}`, 230, 117)
+  ctx.font = '800 11px Inter, Arial'
+  ctx.fillStyle = '#e2e8f0'
+  ctx.fillText(recovering ? 'RECUPERANDO...' : `HP ${Math.ceil(snap.hp)}/${Math.ceil(snap.maxHp)}`, 128, 60)
 
   texture.needsUpdate = true
+}
+
+export function findBestPetTarget(game) {
+  if (!game) return null
+  if (isPetCombatTarget(game, game.petTarget)) return game.petTarget
+
+  const st = game.state?.target
+  if (st && !st.dead) {
+    const fromEnemies = (game.enemies || []).find(e => isPetCombatTarget(game, e) && (e === st || e.name === st.name || (e.boss && st.boss)))
+    if (fromEnemies) return fromEnemies
+  }
+
+  const pPos = game.player?.position
+  if (!pPos) return null
+  const candidates = (game.enemies || []).filter(e => isPetCombatTarget(game, e) && e.g.position.distanceTo(pPos) <= 24)
+  if (candidates.length) {
+    candidates.sort((a, b) => a.g.position.distanceTo(pPos) - b.g.position.distanceTo(pPos))
+    return candidates[0]
+  }
+  return null
 }
 
 function ensurePetNameplate(game, pet) {
@@ -330,17 +344,17 @@ export function installPetCombatV2(game) {
       visual.position.y = 0.55
     }
 
-    let target = game.petTarget
-    if (!isPetCombatTarget(game, target)) {
-      target = null
-      game.petTarget = null
-    }
+    let target = findBestPetTarget(game)
+    game.petTarget = target
 
-    if (target) {
+    if (target && target.g?.position) {
       const targetPos = target.g.position
       const distance = Math.hypot(targetPos.x - visual.position.x, targetPos.z - visual.position.z)
-      if (distance > 1.85) {
-        moveVisualToward(game, targetPos, 8.8, dt)
+      const targetRadius = Number(target.radius) || 1.1
+      const attackRange = Math.max(2.8, targetRadius + 1.5)
+
+      if (distance > attackRange) {
+        moveVisualToward(game, targetPos, 11.2, dt)
       } else {
         const dx = targetPos.x - visual.position.x
         const dz = targetPos.z - visual.position.z
@@ -350,7 +364,7 @@ export function installPetCombatV2(game) {
       }
 
       if (target.dead || Number(target.hp) <= 0) {
-        game.petTarget = null
+        game.petTarget = findBestPetTarget(game)
       }
     } else {
       moveVisualToward(game, home, 7.6, dt)

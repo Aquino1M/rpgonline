@@ -43,10 +43,10 @@ function safePetState(game){
 
 function makeLabel(){
   if(typeof document==='undefined')return null
-  const canvas=document.createElement('canvas');canvas.width=420;canvas.height=108
+  const canvas=document.createElement('canvas');canvas.width=256;canvas.height=72
   const texture=new THREE.CanvasTexture(canvas);texture.minFilter=THREE.LinearFilter;texture.generateMipmaps=false
-  const sprite=new THREE.Sprite(new THREE.SpriteMaterial({map:texture,transparent:true,depthTest:false,depthWrite:false,toneMapped:false}))
-  sprite.position.set(0,1.48,0);sprite.scale.set(3.7,.95,1);sprite.renderOrder=90
+  const sprite=new THREE.Sprite(new THREE.SpriteMaterial({map:texture,transparent:true,depthTest:true,depthWrite:false,toneMapped:false}))
+  sprite.position.set(0,0.95,0);sprite.scale.set(1.35,0.38,1);sprite.renderOrder=80
   sprite.userData.canvas=canvas;sprite.userData.texture=texture;sprite.userData.signature=''
   return sprite
 }
