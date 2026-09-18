@@ -95,10 +95,23 @@
 
 /* 2. Collapsible side navigation */
 #v7-menu-toggle{
-  position:fixed;z-index:12;
-  width:28px;height:32px;border-radius:8px;border:1px solid var(--v7-line);
-  background:rgba(5,12,21,.92);color:var(--v7-text);font-size:15px;cursor:pointer;
-  box-shadow:0 6px 18px rgba(0,0,0,.35);display:grid;place-items:center;
+  position:fixed;z-index:90;
+  min-height:36px;padding:6px 12px;border-radius:10px;
+  border:1.5px solid rgba(168,85,247,.45);
+  background:linear-gradient(135deg,rgba(15,23,42,.94),rgba(30,27,75,.92));
+  color:#f8fafc;font-size:13px;font-weight:800;cursor:pointer;
+  box-shadow:0 8px 24px rgba(0,0,0,.5),0 0 14px rgba(168,85,247,.25);
+  display:flex;align-items:center;gap:6px;backdrop-filter:blur(10px);
+  transition:all .2s ease;
+}
+#v7-menu-toggle:hover{
+  border-color:#c084fc;
+  background:linear-gradient(135deg,rgba(30,27,75,.98),rgba(76,29,149,.95));
+  box-shadow:0 10px 28px rgba(0,0,0,.6),0 0 20px rgba(168,85,247,.45);
+  transform:translateY(-1px);color:#ffffff;
+}
+#v7-menu-toggle:active{
+  transform:translateY(1px);
 }
 .app.touch-ui #v7-menu-toggle,
 .is-mobile #v7-menu-toggle,
@@ -107,7 +120,7 @@
 .app:has(.overlay-shell) #v7-menu-toggle{
   display:none!important;
 }
-.app.v7-menu-collapsed .side-menu{transform:translateX(calc(-100% - 24px))!important;opacity:.15;pointer-events:none}
+.app.v7-menu-collapsed .side-menu{transform:translateX(calc(-100% - 32px))!important;opacity:0;pointer-events:none}
 .app .side-menu{transition:transform .22s ease,opacity .22s ease}
 .app .side-menu .menu-button{border-radius:10px!important;transition:transform .16s ease,background .16s ease,border-color .16s ease}
 .app .side-menu .menu-button:hover{transform:translateX(3px);border-color:color-mix(in srgb,var(--v7-city) 42%,transparent)!important;background:color-mix(in srgb,var(--v7-city) 10%,rgba(8,15,25,.85))!important}
@@ -219,8 +232,39 @@
 /* 11. Guild progression road */
 .v7-guild-road{display:flex;align-items:center;gap:5px;overflow-x:auto;padding:10px 4px 8px;margin:8px 0 12px;scrollbar-width:thin}.v7-guild-node{min-width:42px;height:42px;border-radius:50%;display:grid;place-items:center;border:1px solid rgba(148,163,184,.28);background:#111827;color:#64748b;font-weight:1000;font-size:12px;position:relative}.v7-guild-node.done{color:#bbf7d0;border-color:#22c55e;background:rgba(22,101,52,.28)}.v7-guild-node.current{color:white;border-color:var(--v7-city);box-shadow:0 0 18px color-mix(in srgb,var(--v7-city) 35%,transparent)}.v7-guild-node.early{color:#fee2e2;border-color:#ef4444;background:rgba(127,29,29,.42);box-shadow:0 0 18px rgba(239,68,68,.25)}.v7-guild-line{height:2px;min-width:16px;background:rgba(148,163,184,.22)}.v7-guild-prize{margin-top:7px;padding:8px 10px;border-radius:9px;border:1px solid rgba(239,68,68,.35);background:rgba(127,29,29,.16);color:#fecaca;font-size:10px;font-weight:800}
 
-/* 12/13. Pet evolution + talents */
-.v7-pet-evolution-panel{margin:10px 0;padding:12px;border:1px solid rgba(167,139,250,.3);border-radius:12px;background:linear-gradient(145deg,rgba(76,29,149,.12),rgba(8,15,28,.64))}.v7-evo-track{display:flex;align-items:center;gap:5px;overflow-x:auto;padding:8px 0}.v7-evo-form{min-width:92px;padding:8px;border-radius:9px;text-align:center;border:1px solid rgba(148,163,184,.22);background:rgba(15,23,42,.66);font-size:9px;color:#94a3b8}.v7-evo-form b{display:block;color:#e2e8f0;font-size:10px;margin-bottom:2px}.v7-evo-form.done{border-color:#8b5cf6;color:#c4b5fd}.v7-evo-form.current{border-color:#c084fc;box-shadow:0 0 18px rgba(168,85,247,.25)}.v7-evo-arrow{color:#64748b;font-size:11px}.v7-talents{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin-top:9px}.v7-talent{padding:8px;border-radius:9px;border:1px solid rgba(148,163,184,.22);background:rgba(3,8,18,.55);font-size:9px;color:#cbd5e1}.v7-talent b{display:block;color:#fff;margin-bottom:3px}.v7-talent button{margin-top:6px;width:100%;border:1px solid #8b5cf6;background:rgba(124,58,237,.2);color:#ede9fe;border-radius:7px;padding:6px;font-size:9px;font-weight:900;cursor:pointer}.v7-talent.chosen{border-color:#22c55e;background:rgba(22,101,52,.16)}
+/* 12/13. Pet 3-Tabs, Evolution Tree & High-Legibility Talents */
+.v6-pet-tabs{display:flex;gap:10px;margin-bottom:14px;width:100%}
+.v6-pet-tab-btn{flex:1;min-height:44px;padding:10px 16px;border-radius:12px;font-size:14.5px;font-weight:900;cursor:pointer;transition:all .2s ease;display:flex;align-items:center;justify-content:center;gap:8px;border:1px solid rgba(148,163,184,.3);background:rgba(15,23,42,.7);color:#cbd5e1}
+.v6-pet-tab-btn:hover{background:rgba(30,41,59,.9);color:#ffffff;border-color:rgba(168,85,247,.5);transform:translateY(-1px)}
+.v6-pet-tab-btn.active{background:linear-gradient(135deg,rgba(126,34,206,.5),rgba(76,29,149,.7));border:1.5px solid #a855f7;color:#ffffff;box-shadow:0 4px 18px rgba(168,85,247,.35)}
+
+.v6-pet-evolution-tab{width:100%;display:flex;flex-direction:column}
+.v7-pet-evolution-panel{margin:0 0 16px 0;padding:20px;border:1.5px solid rgba(167,139,250,.38);border-radius:16px;background:linear-gradient(145deg,rgba(30,27,75,.45),rgba(8,15,28,.85));box-shadow:0 10px 30px rgba(0,0,0,.4)}
+.v7-evo-track{display:flex;align-items:center;gap:10px;overflow-x:auto;padding:12px 4px;margin:8px 0 12px;scrollbar-width:thin}
+.v7-evo-form{min-width:130px;padding:12px 14px;border-radius:12px;text-align:center;border:1.5px solid rgba(148,163,184,.25);background:rgba(15,23,42,.8);font-size:12.5px;color:#94a3b8;transition:all .2s}
+.v7-evo-form b{display:block;color:#f8fafc;font-size:15px;margin-bottom:4px;font-weight:900}
+.v7-evo-form span{display:block;font-size:12px;color:#cbd5e1}
+.v7-evo-form.done{border-color:#8b5cf6;color:#c4b5fd;background:rgba(76,29,149,.25)}
+.v7-evo-form.current{border-color:#c084fc;color:#ffffff;background:rgba(126,34,206,.35);box-shadow:0 0 20px rgba(168,85,247,.4);transform:scale(1.02)}
+.v7-evo-arrow{color:#a78bfa;font-size:18px;font-weight:900;padding:0 2px}
+
+.v7-talents{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-top:14px}
+.v7-talent{padding:18px 16px;border-radius:14px;border:1.5px solid rgba(148,163,184,.28);background:linear-gradient(145deg,rgba(17,24,39,.92),rgba(30,27,75,.7));font-size:14px;line-height:1.5;color:#e2e8f0;display:flex;flex-direction:column;justify-content:space-between;min-height:150px;box-shadow:0 6px 20px rgba(0,0,0,.35);transition:transform .2s,border-color .2s}
+.v7-talent:hover{border-color:rgba(192,132,252,.65);transform:translateY(-2px)}
+.v7-talent-header b{display:flex;align-items:center;gap:8px;color:#ffffff;font-size:16.5px;font-weight:900;margin-bottom:8px}
+.v7-talent-header p{margin:0;font-size:13.5px;line-height:1.55;color:#cbd5e1}
+.v7-talent button{margin-top:14px;width:100%;min-height:44px;border:1px solid rgba(192,132,252,.6);background:linear-gradient(135deg,#7c3aed,#9333ea);color:#ffffff;border-radius:10px;padding:10px 16px;font-size:14.5px;font-weight:900;cursor:pointer;transition:all .2s;box-shadow:0 4px 14px rgba(124,58,237,.35);display:flex;align-items:center;justify-content:center}
+.v7-talent button:hover{background:linear-gradient(135deg,#8b5cf6,#a855f7);transform:translateY(-1px);box-shadow:0 6px 18px rgba(168,85,247,.5)}
+.v7-talent.chosen{border-color:#22c55e;background:rgba(22,101,52,.22)}
+
+/* Pet Cards Action Buttons */
+.horse-card-actions{display:flex;flex-direction:column;gap:6px;margin-top:10px;width:100%}
+.pet-equip-btn{width:100%;min-height:42px;border-radius:10px;font-size:14px;font-weight:900;cursor:pointer;transition:all .2s ease;display:flex;align-items:center;justify-content:center;gap:6px;border:1.5px solid #a78bfa;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#ffffff;box-shadow:0 4px 14px rgba(99,102,241,.3)}
+.pet-equip-btn:hover{background:linear-gradient(135deg,#4f46e5,#7c3aed);transform:translateY(-1px)}
+.pet-equip-btn.is-active{border-color:#34d399;background:linear-gradient(135deg,#059669,#10b981);color:#ffffff;box-shadow:0 4px 14px rgba(16,185,129,.35)}
+.pet-equip-btn.is-active:hover{background:linear-gradient(135deg,#047857,#059669);filter:brightness(1.1)}
+.pet-equip-btn:disabled{background:rgba(71,85,105,.4);border-color:rgba(148,163,184,.25);color:#94a3b8;cursor:not-allowed;box-shadow:none}
+.pet-v4-delete{margin-top:6px!important;margin-left:0!important;width:100%!important;text-align:center!important;font-size:12px!important;padding:6px 10px!important}
 
 /* 14. Map legend and quick waypoints */
 .v7-map-legend{position:absolute;right:14px;bottom:14px;z-index:5;max-width:260px;padding:9px;border-radius:10px;border:1px solid rgba(148,163,184,.2);background:rgba(5,10,18,.86);display:flex;flex-wrap:wrap;gap:5px}.v7-map-legend button{border:1px solid rgba(148,163,184,.22);background:rgba(15,23,42,.72);color:#e2e8f0;border-radius:7px;padding:5px 7px;font-size:9px;font-weight:800;cursor:pointer}.v7-map-legend button:hover{border-color:#38bdf8;color:#fff}
@@ -273,16 +317,38 @@
 
 /* 20. New surfaces are deliberately scoped to V7 modules instead of extending the 235 KB legacy stylesheet. */
 
-/* Responsive protection */
+/* Responsive protection & Tablet / Mobile Pet Overhaul */
 @media (max-width:1100px){
   #v7-quest-focus{right:10px;top:140px;width:200px}
 }
+
+/* Tablet Layout (701px - 1024px) */
+@media (min-width: 701px) and (max-width: 1024px) {
+  .v6-pet-tabs{gap:8px}
+  .v6-pet-tab-btn{font-size:13.5px;padding:10px 12px;min-height:42px}
+  .v7-talents{grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));gap:12px}
+  .v7-talent{padding:16px 14px}
+  .v7-talent-header b{font-size:15.5px}
+  .v7-talent-header p{font-size:13px}
+  .horse-grid{grid-template-columns:repeat(2, minmax(0, 1fr))!important;gap:12px}
+}
+
+/* Mobile Layout (< 700px) */
 @media (max-width:700px){
   #v7-menu-toggle{display:none!important}
   #v7-quest-focus{display:none!important}
   #v7-totem-quick{right:8px;bottom:88px;min-width:52px;padding:4px 6px}
   #v7-wanted{right:8px;top:54px;font-size:8.5px}
-  .v7-talents{grid-template-columns:1fr}
+  .v6-pet-tabs{overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:4px;gap:6px}
+  .v6-pet-tab-btn{font-size:12.5px;padding:9px 10px;flex:1 0 auto;white-space:nowrap;min-height:40px}
+  .v7-pet-evolution-panel{padding:14px 12px}
+  .v7-evo-track{gap:6px;padding:8px 2px}
+  .v7-evo-form{min-width:112px;padding:10px 8px;font-size:11.5px}
+  .v7-evo-form b{font-size:13.5px}
+  .v7-talents{grid-template-columns:1fr;gap:12px}
+  .v7-talent{min-height:auto;padding:14px 12px}
+  .v7-talent button{min-height:44px;font-size:14px}
+  .horse-grid{grid-template-columns:1fr!important}
   .v7-map-legend{max-width:180px;right:7px;bottom:7px}
 }
 @media (prefers-reduced-motion:reduce){#v7-awakening-cinematic .sigil,.v7-combat-float,#v7-dungeon-intro{animation:none!important}.app .side-menu,.merchant-card,.shop-scroll-card{transition:none!important}}

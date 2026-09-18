@@ -185,7 +185,8 @@ export default function App(){
       <MenuButton icon="📜" label="Missões" hotkey="J" onClick={()=>call('togglePanel','quests')}/>
       <MenuButton icon="🏛" label="Guilda" hotkey="U" onClick={()=>call('togglePanel','guild')}/>
       <MenuButton icon="✚" label="Atributos" hotkey="K" badge={hud.attributePoints||0} onClick={()=>call('togglePanel','attributes')}/>
-      <MenuButton icon="🤝" label="Trocar" hotkey="P" onClick={()=>call('togglePanel','trade')}/>
+      <MenuButton icon="🐾" label="Pets" hotkey="P" onClick={()=>call('togglePanel','pets')}/>
+      <MenuButton icon="🤝" label="Trocar" hotkey="T" onClick={()=>call('togglePanel','trade')}/>
       <MenuButton icon="🗺" label="Mapa" hotkey="M" onClick={()=>call('togglePanel','map')}/>
       <MenuButton icon="⚙" label="Opções" hotkey="O" onClick={()=>call('togglePanel','settings')}/>
     </nav>
@@ -820,6 +821,7 @@ function MobileControls({hud,abilities,call,touch}){
       <button onClick={()=>closeAnd('grimoire')}>📖<small>Classes</small></button>
       <button onClick={()=>closeAnd('quests')}>📜<small>Missões</small></button>
       <button onClick={()=>closeAnd('guild')}>🏛<small>Guilda</small></button>
+      <button onClick={()=>closeAnd('pets')}>🐾<small>Pets</small></button>
       <button onClick={()=>closeAnd('trade')}>🤝<small>Troca</small></button>
       <button onClick={()=>closeAnd('attributes')}>
         ✚<small>Atributos</small>
@@ -1405,7 +1407,79 @@ function TownHall({ hud, accept, claim, onOpenStable }) {
 
 function Pets({hud,arm,select}){
   const pets=hud.pets?.owned||[],activeId=hud.pets?.activeId,food=hud.inventory?.find(i=>i.subtype==='pet_food')?.qty||0
-  return <div className="stable-layout"><section className="tamed-horse-card glass"><div className="tamed-badge">🐾 DOMAÇÃO</div><div className="tamed-body"><div className="tamed-avatar">🐾</div><div className="tamed-info"><h3>Companheiros de Asterra</h3><p>Use uma Ração e ataque um monstro com menos de 55% de HP. Você pode guardar até cinco pets e equipar um.</p><div className="tamed-meta"><span>Rações: <b>{food}</b></span><span>Pets: <b>{pets.length}/5</b></span></div></div><div className="tamed-actions"><button type="button" disabled={!food||pets.length>=5} className={hud.pets?.tamingArmed?'tamed-toggle-btn active':'tamed-toggle-btn'} onClick={arm}>{hud.pets?.tamingArmed?'Ração equipada':'Usar ração'}</button></div></div></section><section className="stable-catalog-section"><div className="section-title"><div><small>GUARDIÃO DOS COMPANHEIROS</small><h3>Seus Pets</h3></div><span>{pets.length}/5</span></div><div className="horse-grid">{pets.length?pets.map(p=>{const recovering=p.recoverUntil>Date.now(),active=p.id===activeId;return <article className={`horse-card glass ${active?'current':''}`} key={p.id}><header><div><span className="horse-lvl-badge">Nv. {p.level}</span><h4>{p.name}</h4></div><span className="horse-tag">{recovering?`Recupera em ${Math.ceil((p.recoverUntil-Date.now())/1000)}s`:active?'★ Ativo':'Disponível'}</span></header><p>HP {Math.ceil(p.hp)}/{p.maxHp} • Dano {p.damage}<br/>{p.specialName||'Poder da criatura'}</p><button type="button" disabled={recovering||active} onClick={()=>select(p.id)}>{active?'Equipado':'Equipar para lutar'}</button></article>}):<p className="empty">Nenhum pet domado. Compre Ração de Domação no mercador.</p>}</div></section></div>
+  return (
+    <div className="stable-layout">
+      <section className="tamed-horse-card glass">
+        <div className="tamed-badge">🐾 DOMAÇÃO</div>
+        <div className="tamed-body">
+          <div className="tamed-avatar">🐾</div>
+          <div className="tamed-info">
+            <h3>Companheiros de Asterra</h3>
+            <p>Use uma Ração e ataque um monstro com menos de 55% de HP. Você pode guardar até cinco pets e equipar um.</p>
+            <div className="tamed-meta">
+              <span>Rações: <b>{food}</b></span>
+              <span>Pets: <b>{pets.length}/5</b></span>
+            </div>
+          </div>
+          <div className="tamed-actions">
+            <button
+              type="button"
+              disabled={!food||pets.length>=5}
+              className={hud.pets?.tamingArmed?'tamed-toggle-btn active':'tamed-toggle-btn'}
+              onClick={arm}
+            >
+              {hud.pets?.tamingArmed?'Ração equipada':'Usar ração'}
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section className="stable-catalog-section">
+        <div className="section-title">
+          <div>
+            <small>GUARDIÃO DOS COMPANHEIROS</small>
+            <h3>Seus Pets Domados</h3>
+          </div>
+          <span className="pet-count-badge">{pets.length}/5</span>
+        </div>
+        <div className="horse-grid">
+          {pets.length ? pets.map(p => {
+            const recovering = p.recoverUntil > Date.now(), active = p.id === activeId
+            return (
+              <article className={`horse-card glass ${active ? 'current' : ''}`} key={p.id}>
+                <header>
+                  <div>
+                    <span className="horse-lvl-badge">Nv. {p.level}</span>
+                    <h4>{p.name}</h4>
+                  </div>
+                  <span className={`horse-tag ${active ? 'active-tag' : recovering ? 'recovering-tag' : ''}`}>
+                    {recovering ? `⏳ Recupera em ${Math.ceil((p.recoverUntil - Date.now()) / 1000)}s` : active ? '★ Em Combate' : 'Disponível'}
+                  </span>
+                </header>
+                <p>
+                  HP {Math.ceil(p.hp)}/{p.maxHp} • Dano {p.damage}
+                  <br/>
+                  {p.specialName || 'Poder da criatura'}
+                </p>
+                <div className="horse-card-actions">
+                  <button
+                    type="button"
+                    disabled={recovering}
+                    className={`pet-equip-btn ${active ? 'is-active' : ''}`}
+                    onClick={() => select(p.id)}
+                  >
+                    {active ? '✓ Equipado (Toque p/ Guardar)' : '⚔ Equipar Pet'}
+                  </button>
+                </div>
+              </article>
+            )
+          }) : (
+            <p className="empty">Nenhum pet domado. Compre Ração de Domação no mercador para capturar monstros.</p>
+          )}
+        </div>
+      </section>
+    </div>
+  )
 }
 
 function Stable({ hud, horseBreeds = HORSE_BREEDS, onTame, onSelect, toggle, onOpenTownHall }) {

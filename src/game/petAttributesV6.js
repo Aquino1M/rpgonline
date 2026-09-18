@@ -177,16 +177,50 @@ function render(game,panel){
 function patchTabs(game){
   if(typeof document==='undefined'||game.state?.uiPanel!=='pets')return
   const root=document.querySelector('.stable-layout');if(!root)return
-  let tabs=root.querySelector(':scope > .v6-pet-tabs'),attrs=root.querySelector(':scope > .v6-pet-attributes')
+  let tabs=root.querySelector(':scope > .v6-pet-tabs'),attrs=root.querySelector(':scope > .v6-pet-attributes'),evo=root.querySelector(':scope > .v6-pet-evolution-tab')
   if(!tabs){
-    tabs=document.createElement('div');tabs.className='v6-pet-tabs';tabs.style.cssText='display:flex;gap:8px;margin-bottom:10px';tabs.innerHTML='<button data-tab="pets" style="padding:9px 13px;border-radius:9px;font-weight:900">🐾 Companheiros</button><button data-tab="attrs" style="padding:9px 13px;border-radius:9px;font-weight:900">📈 Evoluir Atributos</button>';root.insertBefore(tabs,root.firstChild)
-    attrs=document.createElement('div');attrs.className='v6-pet-attributes glass';attrs.style.cssText='display:none;border-radius:12px;margin-top:4px';root.insertBefore(attrs,tabs.nextSibling)
-    game.__v6PetTab=game.__v6PetTab||'pets';for(const b of tabs.querySelectorAll('[data-tab]'))b.addEventListener('click',()=>{game.__v6PetTab=b.dataset.tab;patchTabs(game)})
+    tabs=document.createElement('div');tabs.className='v6-pet-tabs'
+    tabs.innerHTML='<button type="button" data-tab="pets" class="v6-pet-tab-btn">🐾 Meus Pets</button><button type="button" data-tab="evo" class="v6-pet-tab-btn">🌟 Linha de Evolução</button><button type="button" data-tab="attrs" class="v6-pet-tab-btn">📈 Treinar Atributos</button>'
+    root.insertBefore(tabs,root.firstChild)
+
+    evo=document.createElement('div');evo.className='v6-pet-evolution-tab glass'
+    evo.style.cssText='display:none;border-radius:14px;margin-top:6px'
+    root.insertBefore(evo,tabs.nextSibling)
+
+    attrs=document.createElement('div');attrs.className='v6-pet-attributes glass'
+    attrs.style.cssText='display:none;border-radius:14px;margin-top:6px'
+    root.insertBefore(attrs,evo.nextSibling)
+
+    game.__v6PetTab=game.__v6PetTab||'pets'
+    for(const b of tabs.querySelectorAll('[data-tab]')){
+      b.addEventListener('click',()=>{
+        game.__v6PetTab=b.dataset.tab
+        patchTabs(game)
+        if(game.__v6PetTab==='evo')game.renderPetEvolutionOverhaul?.()
+      })
+    }
   }
-  const show=game.__v6PetTab==='attrs';attrs.style.display=show?'block':'none'
-  for(const child of [...root.children])if(child!==tabs&&child!==attrs)child.style.display=show?'none':''
-  for(const b of tabs.querySelectorAll('[data-tab]')){const active=b.dataset.tab===(show?'attrs':'pets');b.style.border=active?'1px solid #a855f7':'1px solid rgba(148,163,184,.35)';b.style.background=active?'rgba(126,34,206,.28)':'rgba(15,23,42,.5)';b.style.color=active?'#f3e8ff':'#cbd5e1'}
-  if(show)render(game,attrs)
+
+  const currentTab=game.__v6PetTab||'pets'
+  if(evo)evo.style.display=currentTab==='evo'?'block':'none'
+  if(attrs)attrs.style.display=currentTab==='attrs'?'block':'none'
+
+  // Show catalog and taming cards only on the 'pets' tab
+  for(const child of [...root.children]){
+    if(child!==tabs&&child!==attrs&&child!==evo){
+      child.style.display=currentTab==='pets'?'':'none'
+    }
+  }
+
+  for(const b of tabs.querySelectorAll('[data-tab]')){
+    const active=b.dataset.tab===currentTab
+    b.classList.toggle('active',active)
+    b.style.border=active?'1.5px solid #a855f7':'1px solid rgba(148,163,184,.32)'
+    b.style.background=active?'linear-gradient(135deg,rgba(126,34,206,.45),rgba(88,28,135,.6))':'rgba(15,23,42,.65)'
+    b.style.color=active?'#ffffff':'#cbd5e1'
+  }
+
+  if(currentTab==='attrs')render(game,attrs)
 }
 
 export function installPetAttributesV6(game){

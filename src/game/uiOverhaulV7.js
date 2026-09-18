@@ -165,27 +165,33 @@ function renderMenuToggle(game){
   }
   const btn=ensureEl('v7-menu-toggle','button',app)
   btn.type='button'
-  btn.title='Recolher/abrir menu lateral'
   const isCollapsed=app.classList.contains('v7-menu-collapsed')
-  btn.textContent=isCollapsed?'›':'‹'
 
   if(isCollapsed){
-    btn.style.left='8px'
-    btn.style.top='50%'
-    btn.style.transform='translateY(-50%)'
+    btn.innerHTML='<span style="font-size:15px">☰</span> <b>ABRIR MENU</b> <span style="font-size:14px">›</span>'
+    btn.title='Abrir menu lateral [Clique ou atalho de menu]'
+    btn.style.left='14px'
+    btn.style.top='auto'
+    btn.style.bottom='210px'
+    btn.style.transform='none'
   }else{
     const menuRect=menu.getBoundingClientRect()
-    btn.style.left=`${Math.round(menuRect.right + 6)}px`
-    btn.style.top=`${Math.round(menuRect.top + 6)}px`
+    btn.innerHTML='<span style="font-size:14px">‹</span> <span style="font-size:11px;font-weight:900">RECOLHER</span>'
+    btn.title='Recolher menu lateral'
+    btn.style.left=`${Math.round(menuRect.right + 8)}px`
+    btn.style.top=`${Math.max(14, Math.round(menuRect.top + 6))}px`
+    btn.style.bottom='auto'
     btn.style.transform='none'
   }
 
   if(!btn.dataset.bound){
     btn.dataset.bound='1'
-    btn.addEventListener('click',()=>{
+    btn.addEventListener('click',(e)=>{
+      e.stopPropagation()
+      e.preventDefault()
       const off=app.classList.toggle('v7-menu-collapsed')
       localStorage.setItem('shadow-v7-menu-collapsed',off?'1':'0')
-      btn.textContent=off?'›':'‹'
+      renderMenuToggle(game)
     })
   }
   if(!app.dataset.v7MenuLoaded){
@@ -324,18 +330,122 @@ function renderGuildRoad(game){
 function evoTitles(pet){const species=String(pet?.speciesName||pet?.name||'Companheiro'),rule=EVOLUTION_LINES.find(r=>r.re.test(species));return rule?.titles||GENERIC_EVOS}
 function renderPetEvolution(game){
   if(game.state?.uiPanel!=='pets')return
-  const section=document.querySelector('.window-pets .stable-catalog-section');if(!section)return
-  const pet=activePet(game);let panel=section.querySelector(':scope > .v7-pet-evolution-panel')
-  if(!panel){panel=document.createElement('div');panel.className='v7-pet-evolution-panel';const grid=section.querySelector('.horse-grid');grid?section.insertBefore(panel,grid):section.appendChild(panel)}
-  if(!pet){panel.innerHTML='<b>🌟 Evolução do Companheiro</b><p style="font-size:10px;color:#94a3b8">Equipe um pet para visualizar a linha evolutiva e talentos.</p>';return}
+  const evoTab=document.querySelector('.v6-pet-evolution-tab')
+  const section=document.querySelector('.window-pets .stable-catalog-section')
+  const targetParent=evoTab||section
+  if(!targetParent)return
+
+  const pet=activePet(game)
+  let panel=targetParent.querySelector(':scope > .v7-pet-evolution-panel')
+  if(!panel){
+    panel=document.createElement('div')
+    panel.className='v7-pet-evolution-panel'
+    targetParent.appendChild(panel)
+  }
+  // Ensure panel is inside the dedicated evolution tab if present
+  if(evoTab&&panel.parentElement!==evoTab){
+    evoTab.appendChild(panel)
+  }
+
+  if(!pet){
+    panel.innerHTML=`
+      <div style="padding:28px 16px;text-align:center">
+        <div style="font-size:42px;margin-bottom:12px">🐾</div>
+        <h3 style="font-size:20px;font-weight:900;color:#fff;margin:0 0 8px">Nenhum Pet Ativo no Momento</h3>
+        <p style="font-size:14px;color:#94a3b8;max-width:440px;margin:0 auto 16px;line-height:1.5">
+          Para visualizar a linha evolutiva completa, formas ascendentes e escolher talentos, equipe um dos seus companheiros na aba <b>Meus Pets</b>.
+        </p>
+        <button type="button" class="v7-goto-pets-btn" style="padding:10px 20px;border-radius:10px;font-size:14px;font-weight:900;background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;border:1px solid #c084fc;cursor:pointer">
+          Ir para Meus Pets
+        </button>
+      </div>
+    `
+    panel.querySelector('.v7-goto-pets-btn')?.addEventListener('click',()=>{
+      game.__v6PetTab='pets'
+      const root=document.querySelector('.stable-layout')
+      if(root){
+        for(const b of root.querySelectorAll('.v6-pet-tab-btn')){
+          if(b.dataset.tab==='pets')b.click()
+        }
+      }
+    })
+    return
+  }
+
   const stage=Math.max(0,Math.floor((Number(pet.level)||1)/20)),titles=evoTitles(pet),species=String(pet.speciesName||pet.name||'Companheiro'),maxShow=Math.min(5,Math.max(stage+1,3))
   const forms=[{stage:0,name:species,level:1},...titles.slice(0,maxShow).map((name,i)=>({stage:i+1,name:`${species} ${name}`,level:(i+1)*20}))]
   pet.evolutionTalents=pet.evolutionTalents||{}
   const talentStage=Math.max(1,[...Array(stage).keys()].map(i=>i+1).find(s=>!pet.evolutionTalents[s])||stage||1)
   const choiceOpen=stage>=1&&!pet.evolutionTalents[talentStage]
   const chosen=stage>=1?pet.evolutionTalents[Math.max(1,Math.min(stage,talentStage))]:null
-  panel.innerHTML=`<div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><div><small style="color:#c4b5fd;font-weight:1000;letter-spacing:.1em">LINHA DE EVOLUÇÃO</small><h3 style="margin:3px 0;color:#fff">🐾 ${esc(pet.name)} • Evolução ${stage}</h3></div><span style="font-size:10px;color:#ddd6fe">Próxima: Nv.${(stage+1)*20}</span></div><div class="v7-evo-track">${forms.map((f,i)=>`${i?'<span class="v7-evo-arrow">→</span>':''}<div class="v7-evo-form ${f.stage<stage?'done':f.stage===stage?'current':''}"><b>${esc(f.name)}</b>Nv.${f.level}${f.stage>stage?' • 🔒':''}</div>`).join('')}</div>${stage<1?'<p style="font-size:10px;color:#94a3b8">O primeiro talento libera junto da evolução no Nv.20.</p>':`<div style="font-size:10px;color:#cbd5e1"><b>🌟 Talento da Evolução ${talentStage}</b>${choiceOpen?' • escolha permanente:':chosen?` • ${esc(PET_TALENTS.find(t=>t.id===chosen)?.name||chosen)}`:' • todos escolhidos'}</div>${choiceOpen?`<div class="v7-talents">${PET_TALENTS.map(t=>`<div class="v7-talent"><b>${t.icon} ${esc(t.name)}</b>${esc(t.desc)}<button data-v7-talent="${t.id}" data-stage="${talentStage}">Escolher</button></div>`).join('')}</div>`:''}`}`
-  for(const b of panel.querySelectorAll('[data-v7-talent]'))b.addEventListener('click',()=>{if(window.confirm(`Escolher este talento para a Evolução ${b.dataset.stage}? A escolha é permanente.`))game.choosePetTalentV7?.(Number(b.dataset.stage),b.dataset.v7Talent,pet.id)})
+
+  panel.innerHTML=`
+    <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:14px">
+      <div>
+        <small style="color:#c4b5fd;font-weight:1000;letter-spacing:.12em;font-size:13px;display:block">ÁRVORE DE ASCENSÃO</small>
+        <h2 style="margin:4px 0;color:#fff;font-size:22px;font-weight:900">🐾 ${esc(pet.name)} • <span style="color:#c084fc">Evolução ${stage}</span></h2>
+      </div>
+      <span style="font-size:13px;font-weight:800;color:#f3e8ff;background:rgba(126,34,206,.35);border:1px solid rgba(168,85,247,.5);padding:6px 14px;border-radius:999px">
+        Próxima Forma: Nível ${(stage+1)*20}
+      </span>
+    </div>
+
+    <div class="v7-evo-track">
+      ${forms.map((f,i)=>`
+        ${i?'<span class="v7-evo-arrow">→</span>':''}
+        <div class="v7-evo-form ${f.stage<stage?'done':f.stage===stage?'current':''}">
+          <b>${esc(f.name)}</b>
+          <span>Nível ${f.level}${f.stage>stage?' • 🔒 Bloqueado':f.stage===stage?' • ★ Atual':' • ✓ Desbloqueado'}</span>
+        </div>
+      `).join('')}
+    </div>
+
+    ${stage<1 ? `
+      <div style="margin-top:14px;padding:14px 16px;border-radius:12px;background:rgba(15,23,42,.65);border:1px solid rgba(148,163,184,.25)">
+        <h4 style="margin:0 0 6px;color:#f8fafc;font-size:15px;font-weight:800">🔒 Talentos de Evolução</h4>
+        <p style="font-size:13px;color:#94a3b8;margin:0;line-height:1.5">
+          O primeiro talento de combate será liberado automaticamente quando seu companheiro atingir o <b>Nível 20</b> e completar sua <b>Evolução 1</b>. Continue derrotando monstros e explorando com seu pet equipado para acumular experiência!
+        </p>
+      </div>
+    ` : `
+      <div style="margin-top:18px">
+        <div style="font-size:16px;font-weight:900;color:#f1f5f9;margin-bottom:12px;display:flex;align-items:center;gap:8px">
+          <span>🌟 Talento da Evolução ${talentStage}</span>
+          <span style="font-size:13px;font-weight:700;color:${choiceOpen?'#fbbf24':'#a78bfa'}">
+            ${choiceOpen?'• Escolha permanente para seu companheiro:':chosen?`• Ativo: ${esc(PET_TALENTS.find(t=>t.id===chosen)?.name||chosen)}`:'• Todos os talentos escolhidos'}
+          </span>
+        </div>
+
+        ${choiceOpen ? `
+          <div class="v7-talents">
+            ${PET_TALENTS.map(t=>`
+              <div class="v7-talent">
+                <div class="v7-talent-header">
+                  <b><span style="font-size:20px">${t.icon}</span> ${esc(t.name)}</b>
+                  <p>${esc(t.desc)}</p>
+                </div>
+                <button type="button" data-v7-talent="${t.id}" data-stage="${talentStage}">
+                  Escolher Talento
+                </button>
+              </div>
+            `).join('')}
+          </div>
+        ` : chosen ? `
+          <div style="padding:14px 18px;border-radius:12px;background:rgba(22,101,52,.2);border:1.5px solid #22c55e;color:#bbf7d0;font-size:14px;line-height:1.5">
+            <b>✓ Talento Consagrado:</b> ${esc(PET_TALENTS.find(t=>t.id===chosen)?.name||chosen)} — <i>${esc(PET_TALENTS.find(t=>t.id===chosen)?.desc||'')}</i>
+          </div>
+        ` : ''}
+      </div>
+    `}
+  `
+
+  for(const b of panel.querySelectorAll('[data-v7-talent]')){
+    b.addEventListener('click',()=>{
+      if(window.confirm(`Confirmar a escolha deste talento para a Evolução ${b.dataset.stage}? A escolha é permanente.`)){
+        game.choosePetTalentV7?.(Number(b.dataset.stage),b.dataset.v7Talent,pet.id)
+      }
+    })
+  }
 }
 
 /* ---------- World map helper legend ---------- */
@@ -397,6 +507,7 @@ function renderAll(game){
 export function installUiOverhaulV7(game){
   if(!game||game.__uiOverhaulV7)return false;game.__uiOverhaulV7=true
   installCombatFeedback(game);installInventoryRules(game);installPetTalents(game);installAwakeningCinematic(game)
+  game.renderPetEvolutionOverhaul=()=>renderPetEvolution(game)
   game.__v7UiTimer=window.setInterval(()=>renderAll(game),220)
   setTimeout(()=>renderAll(game),40)
   return true

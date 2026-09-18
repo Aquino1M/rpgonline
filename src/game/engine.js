@@ -671,7 +671,7 @@ export class ShadowGame {
       if(e.code==='KeyQ')this.toggleCombatMode()
       if(e.code==='Space')this.jump(); if(e.code==='ShiftLeft')this.dash(); if(e.code==='KeyE')this.interact(); if(e.code==='KeyF')this.castAbility(2); if(e.code==='KeyR')this.usePotion(); if(e.code==='KeyH')this.toggleMount()
       if(e.code==='Digit1')this.castAbility(1); if(e.code==='Digit2')this.castAbility(2); if(e.code==='Digit3')this.castAbility(3)
-      if(e.code==='KeyI')this.togglePanel('inventory'); if(e.code==='KeyJ')this.togglePanel('quests'); if(e.code==='KeyG')this.togglePanel('grimoire'); if(e.code==='KeyU')this.togglePanel('guild'); if(e.code==='KeyK')this.togglePanel('attributes'); if(e.code==='KeyM')this.togglePanel('map'); if(e.code==='KeyO')this.togglePanel('settings'); if(e.code==='Escape'){if(this.isTouchDevice)this.closePanel();else if(this.combatMode)this.toggleCombatMode(false);else this.closePanel()}
+      if(e.code==='KeyI')this.togglePanel('inventory'); if(e.code==='KeyJ')this.togglePanel('quests'); if(e.code==='KeyG')this.togglePanel('grimoire'); if(e.code==='KeyU')this.togglePanel('guild'); if(e.code==='KeyK')this.togglePanel('attributes'); if(e.code==='KeyP')this.togglePanel('pets'); if(e.code==='KeyM')this.togglePanel('map'); if(e.code==='KeyO')this.togglePanel('settings'); if(e.code==='Escape'){if(this.isTouchDevice)this.closePanel();else if(this.combatMode)this.toggleCombatMode(false);else this.closePanel()}
     },{passive:false})
     on(window,'keyup',e=>{
       if(e.target&&(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA'||e.target.isContentEditable))return
@@ -2376,7 +2376,14 @@ export class ShadowGame {
     const pet=(this.state.pets?.owned||[]).find(p=>p.id===id)
     if(!pet)return false
     if(pet.recoverUntil>Date.now()){this.toast(`${pet.name} ainda está se recuperando.`);return false}
-    this.state.pets.activeId=id;this.syncPetVisual();this.saveGame();return true
+    if(this.state.pets.activeId===id){
+      this.state.pets.activeId=null
+      this.syncPetVisual()
+      this.saveGame()
+      this.toast(`🐾 ${pet.name} foi guardado no estábulo.`)
+      return true
+    }
+    this.state.pets.activeId=id;this.syncPetVisual();this.saveGame();this.toast(`⚔ ${pet.name} equipado para lutar!`);return true
   }
   syncPetVisual(){
     const pet=this.activePet(),root=this.state.dungeon?this.dungeonArena:this.worldRoot
