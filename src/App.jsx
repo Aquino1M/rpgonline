@@ -478,42 +478,92 @@ function Inventory({hud,equip,unequip,call}){
           )}
 
           {/* Item Comparison panel when selecting a bag item */}
-          {selectedBagItem && ['weapon','armor','boots','talisman','tool'].includes(selectedBagItem.type) && (
-            <div className="item-compare-panel glass" style={{ marginTop: '8px', padding: '10px', borderRadius: '10px', border: '1px solid rgba(250,204,21,0.35)', background: 'rgba(15,23,42,0.85)' }}>
-              <div style={{ fontSize: '10px', color: '#facc15', fontWeight: 'bold', letterSpacing: '.06em', marginBottom: '6px' }}>
-                COMPARAÇÃO DE EQUIPAMENTO
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '11px' }}>
-                <div style={{ background: 'rgba(0,0,0,0.3)', padding: '6px', borderRadius: '6px' }}>
-                  <small style={{ color: '#94a3b8', display: 'block' }}>EQUIPADO</small>
-                  {currentlyEquipped ? (
-                    <>
-                      <b style={{ color: currentlyEquipped.color || '#e2e8f0', fontSize: '11px' }}>{currentlyEquipped.name}</b>
-                      <div style={{ color: '#cbd5e1', fontSize: '10px' }}>
-                        {currentlyEquipped.stats?.attack ? `ATK: ${currentlyEquipped.stats.attack} ` : ''}
-                        {currentlyEquipped.stats?.defense ? `DEF: ${currentlyEquipped.stats.defense}` : ''}
-                      </div>
-                    </>
-                  ) : <span style={{ color: '#64748b' }}>Nenhum</span>}
+          {selectedBagItem && ['weapon','armor','boots','talisman','tool'].includes(selectedBagItem.type) && (() => {
+            const comp = compareItemWithEquipped(selectedBagItem, gear)
+            return (
+              <div className="item-compare-panel glass" style={{ marginTop: '8px', padding: '10px', borderRadius: '10px', border: `1px solid ${comp?.status === 'inferior' ? 'rgba(239,68,68,0.5)' : comp?.status === 'superior' ? 'rgba(34,197,94,0.5)' : 'rgba(250,204,21,0.35)'}`, background: 'rgba(15,23,42,0.92)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                  <span style={{ fontSize: '10px', color: '#facc15', fontWeight: 'bold', letterSpacing: '.06em' }}>
+                    COMPARAÇÃO DE EQUIPAMENTO
+                  </span>
+                  {comp && (
+                    <span style={{ fontSize: '10px', fontWeight: '800', color: comp.color, background: `${comp.color}22`, padding: '2px 7px', borderRadius: '4px', border: `1px solid ${comp.color}55` }}>
+                      {comp.label}
+                    </span>
+                  )}
                 </div>
-                <div style={{ background: 'rgba(0,0,0,0.3)', padding: '6px', borderRadius: '6px' }}>
-                  <small style={{ color: '#94a3b8', display: 'block' }}>NOVO ITEM</small>
-                  <b style={{ color: selectedBagItem.color || '#e2e8f0', fontSize: '11px' }}>{selectedBagItem.name}</b>
-                  <div style={{ color: '#cbd5e1', fontSize: '10px' }}>
-                    {selectedBagItem.stats?.attack ? `ATK: ${selectedBagItem.stats.attack} ` : ''}
-                    {selectedBagItem.stats?.defense ? `DEF: ${selectedBagItem.stats.defense}` : ''}
+
+                {comp?.status === 'inferior' && (
+                  <div style={{ padding: '5px 8px', marginBottom: '8px', borderRadius: '6px', background: 'rgba(239,68,68,0.18)', border: '1px solid rgba(239,68,68,0.4)', color: '#fca5a5', fontSize: '10px', fontWeight: '700' }}>
+                    ⚠️ Este item é INFERIOR ao seu equipamento atual ({comp.diffText})!
+                  </div>
+                )}
+                {comp?.status === 'superior' && (
+                  <div style={{ padding: '5px 8px', marginBottom: '8px', borderRadius: '6px', background: 'rgba(34,197,94,0.18)', border: '1px solid rgba(34,197,94,0.4)', color: '#86efac', fontSize: '10px', fontWeight: '700' }}>
+                    ✨ Este item é SUPERIOR ao seu equipamento atual ({comp.diffText})!
+                  </div>
+                )}
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '11px' }}>
+                  <div style={{ background: 'rgba(0,0,0,0.32)', padding: '7px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                    <small style={{ color: '#94a3b8', display: 'block', fontWeight: '700', marginBottom: '2px' }}>EQUIPADO</small>
+                    {currentlyEquipped ? (
+                      <>
+                        <b style={{ color: currentlyEquipped.color || '#e2e8f0', fontSize: '11px' }}>{currentlyEquipped.name}</b>
+                        <div style={{ color: '#cbd5e1', fontSize: '10px', marginTop: '3px', display: 'flex', flexDirection: 'column', gap: '1px' }}>
+                          {currentlyEquipped.stats?.attack ? <div>ATK: +{currentlyEquipped.stats.attack}</div> : null}
+                          {currentlyEquipped.stats?.defense ? <div>DEF: +{currentlyEquipped.stats.defense}</div> : null}
+                          {currentlyEquipped.stats?.speed ? <div>SPD: +{currentlyEquipped.stats.speed}</div> : null}
+                          {currentlyEquipped.stats?.crit ? <div>CRIT: +{currentlyEquipped.stats.crit}%</div> : null}
+                          <div style={{ color: '#94a3b8' }}>Nv.{currentlyEquipped.level || 1} • {currentlyEquipped.rarity}</div>
+                        </div>
+                      </>
+                    ) : <span style={{ color: '#64748b' }}>Nenhum</span>}
+                  </div>
+                  <div style={{ background: 'rgba(0,0,0,0.32)', padding: '7px', borderRadius: '6px', border: `1px solid ${comp?.status === 'inferior' ? 'rgba(239,68,68,0.35)' : comp?.status === 'superior' ? 'rgba(34,197,94,0.35)' : 'rgba(255,255,255,0.06)'}` }}>
+                    <small style={{ color: '#94a3b8', display: 'block', fontWeight: '700', marginBottom: '2px' }}>NOVO ITEM</small>
+                    <b style={{ color: selectedBagItem.color || '#e2e8f0', fontSize: '11px' }}>{selectedBagItem.name}</b>
+                    <div style={{ color: '#cbd5e1', fontSize: '10px', marginTop: '3px', display: 'flex', flexDirection: 'column', gap: '1px' }}>
+                      {selectedBagItem.stats?.attack ? (
+                        <div style={{ color: comp?.diffAtk > 0 ? '#4ade80' : comp?.diffAtk < 0 ? '#f87171' : '#cbd5e1', fontWeight: comp?.diffAtk ? '700' : '400' }}>
+                          ATK: +{selectedBagItem.stats.attack} {comp?.diffAtk ? `(${comp.diffAtk > 0 ? '+' : ''}${comp.diffAtk})` : ''}
+                        </div>
+                      ) : null}
+                      {selectedBagItem.stats?.defense ? (
+                        <div style={{ color: comp?.diffDef > 0 ? '#4ade80' : comp?.diffDef < 0 ? '#f87171' : '#cbd5e1', fontWeight: comp?.diffDef ? '700' : '400' }}>
+                          DEF: +{selectedBagItem.stats.defense} {comp?.diffDef ? `(${comp.diffDef > 0 ? '+' : ''}${comp.diffDef})` : ''}
+                        </div>
+                      ) : null}
+                      {selectedBagItem.stats?.speed ? (
+                        <div style={{ color: comp?.diffSpd > 0 ? '#4ade80' : comp?.diffSpd < 0 ? '#f87171' : '#cbd5e1', fontWeight: comp?.diffSpd ? '700' : '400' }}>
+                          SPD: +{selectedBagItem.stats.speed} {comp?.diffSpd ? `(${comp.diffSpd > 0 ? '+' : ''}${comp.diffSpd})` : ''}
+                        </div>
+                      ) : null}
+                      {selectedBagItem.stats?.crit ? <div>CRIT: +{selectedBagItem.stats.crit}%</div> : null}
+                      <div style={{ color: '#94a3b8' }}>Nv.{selectedBagItem.level || 1} • {selectedBagItem.rarity}</div>
+                    </div>
                   </div>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => { equip(selectedBagItem.id); setSelectedBagItem(null) }}
+                  style={{
+                    marginTop: '9px',
+                    width: '100%',
+                    padding: '8px',
+                    background: comp?.status === 'inferior' ? '#e11d48' : '#38bdf8',
+                    color: comp?.status === 'inferior' ? '#ffffff' : '#0f172a',
+                    fontWeight: 'bold',
+                    borderRadius: '6px',
+                    border: 'none',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {comp?.status === 'inferior' ? 'EQUIPAR MESMO ASSIM' : 'EQUIPAR'}
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => { equip(selectedBagItem.id); setSelectedBagItem(null) }}
-                style={{ marginTop: '8px', width: '100%', padding: '7px', background: '#38bdf8', color: '#0f172a', fontWeight: 'bold', borderRadius: '6px', border: 'none', cursor: 'pointer' }}
-              >
-                EQUIPAR
-              </button>
-            </div>
-          )}
+            )
+          })()}
 
           <p className="hub-note">🪓 Machado corta árvores. ⛏️ Picareta quebra minérios. Armas e armaduras perdem durabilidade com o uso e podem ser reparadas no ferreiro.</p>
         </section>
@@ -542,6 +592,7 @@ function Inventory({hud,equip,unequip,call}){
                 <ItemCard
                   key={it.id}
                   item={it}
+                  equipment={gear}
                   compact
                   isSelected={selectedBagItem?.id === it.id}
                   onSelect={()=>setSelectedBagItem(it)}
@@ -590,14 +641,118 @@ function slotIcon(s, item){
   return s==='armor'?'🛡️':s==='boots'?'⬒':s==='talisman'?'✦':'◆'
 }
 
-function ItemCard({item,actions,compact=false,isSelected=false,onSelect}){
+function slotForItem(item){
+  if(!item)return null
+  if(item.type==='weapon'||item.type==='tool')return 'weapon'
+  if(item.type==='armor')return 'armor'
+  if(item.type==='boots')return 'boots'
+  if(item.type==='talisman')return 'talisman'
+  return null
+}
+
+function compareItemWithEquipped(item, equipment={}){
+  const slot=slotForItem(item)
+  if(!slot)return null
+  const equipped=equipment[slot]
+  if(!equipped){
+    return { status:'better', diffText:'Equipável', label:'▲ Equipável', shortLabel:'▲ Novo', color:'#4ade80' }
+  }
+  if(equipped.id===item.id){
+    return { status:'equipped', diffText:'Equipado', label:'✓ Equipado', shortLabel:'✓ Equipado', color:'#38bdf8' }
+  }
+
+  const upItem=1+(item.upgrade||0)*.12
+  const upEq=1+(equipped.upgrade||0)*.12
+
+  const itemAtk=Math.round((Number(item.stats?.attack)||0)*upItem)
+  const eqAtk=Math.round((Number(equipped.stats?.attack)||0)*upEq)
+  const diffAtk=itemAtk - eqAtk
+
+  const itemDef=Math.round((Number(item.stats?.defense)||0)*upItem)
+  const eqDef=Math.round((Number(equipped.stats?.defense)||0)*upEq)
+  const diffDef=itemDef - eqDef
+
+  const itemSpd=Number(((Number(item.stats?.speed)||0)*(1+(item.upgrade||0)*.025)).toFixed(2))
+  const eqSpd=Number(((Number(equipped.stats?.speed)||0)*(1+(equipped.upgrade||0)*.025)).toFixed(2))
+  const diffSpd=Number((itemSpd - eqSpd).toFixed(2))
+
+  const itemPower=(itemAtk*2.5)+(itemDef*2.5)+(itemSpd*15)+(Number(item.power)||0)+(Number(item.level)||1)*1.5
+  const eqPower=(eqAtk*2.5)+(eqDef*2.5)+(eqSpd*15)+(Number(equipped.power)||0)+(Number(equipped.level)||1)*1.5
+
+  if(itemPower < eqPower){
+    let diffStr=''
+    if(diffAtk<0)diffStr=`${diffAtk} ATK`
+    else if(diffDef<0)diffStr=`${diffDef} DEF`
+    else if(diffSpd<0)diffStr=`${diffSpd} SPD`
+    else diffStr='Inferior'
+    return {
+      status:'inferior',
+      diffAtk,
+      diffDef,
+      diffSpd,
+      diffText:diffStr,
+      label:`▼ Inferior (${diffStr})`,
+      shortLabel:`▼ Inferior (${diffStr})`,
+      color:'#f87171'
+    }
+  } else if(itemPower > eqPower){
+    let diffStr=''
+    if(diffAtk>0)diffStr=`+${diffAtk} ATK`
+    else if(diffDef>0)diffStr=`+${diffDef} DEF`
+    else if(diffSpd>0)diffStr=`+${diffSpd} SPD`
+    else diffStr='Superior'
+    return {
+      status:'superior',
+      diffAtk,
+      diffDef,
+      diffSpd,
+      diffText:diffStr,
+      label:`▲ Superior (${diffStr})`,
+      shortLabel:`▲ Superior (${diffStr})`,
+      color:'#4ade80'
+    }
+  } else {
+    return {
+      status:'equal',
+      diffAtk:0,
+      diffDef:0,
+      diffSpd:0,
+      diffText:'Equivalente',
+      label:'● Equivalente',
+      shortLabel:'● Igual',
+      color:'#94a3b8'
+    }
+  }
+}
+
+function ItemCard({item,actions,compact=false,isSelected=false,onSelect,equipment}){
   const stats=item.stats||{}
   const orbIcon=item.icon||(item.type==='tool'?(item.subtype==='pickaxe'?'⛏️':'🪓'):item.type==='weapon'?(item.subtype==='bow'?'🏹':item.subtype==='dagger'?'🗡':item.subtype==='spellbook'?'📖':item.subtype==='axe'?'🪓':item.subtype==='pickaxe'?'⛏️':'⚔'):item.type==='armor'?'🛡️':item.type==='boots'?'⬒':item.type==='material'||item.type==='resource'?'🪵':item.subtype==='potion'?'🧪':'✦')
   const qty=Math.max(1,Number(item.qty)||1),max=Number(item.maxDurability)||0,cur=Number.isFinite(Number(item.durability))?Number(item.durability):max,durPct=max?Math.max(0,Math.min(100,cur/max*100)):100
-  return <article onClick={onSelect} className={`item-card ${compact?'compact':''} ${isSelected?'is-selected':''} ${item.broken||durPct<=0?'broken':''}`} style={{'--rarity':item.color||'#cbd5e1', cursor: onSelect ? 'pointer' : 'default'}} title={`${item.name} • Nv.${item.level||1}`}>
+  const comp=equipment?compareItemWithEquipped(item,equipment):null
+
+  return <article onClick={onSelect} className={`item-card ${compact?'compact':''} ${isSelected?'is-selected':''} ${item.broken||durPct<=0?'broken':''} ${comp?.status?`item-${comp.status}`:''}`} style={{'--rarity':item.color||'#cbd5e1', cursor: onSelect ? 'pointer' : 'default'}} title={`${item.name} • Nv.${item.level||1}`}>
     {qty>1&&<strong className="stack-badge">×{qty}</strong>}
     <div className="item-orb">{orbIcon}</div><b>{item.name}</b>
     <small style={{color:item.color}}>{item.rarity}{qty>1?` • Pilha ${qty}`:''} • Nv.{item.level||1}</small>
+    {comp&&(
+      <span className={`item-comp-badge comp-${comp.status}`} style={{
+        display:'inline-flex',
+        alignItems:'center',
+        padding:'1px 5px',
+        borderRadius:'4px',
+        fontSize:'8px',
+        fontWeight:'800',
+        letterSpacing:'.02em',
+        color:comp.color,
+        background:comp.status==='inferior'?'rgba(239,68,68,0.22)':comp.status==='superior'?'rgba(34,197,94,0.22)':'rgba(148,163,184,0.15)',
+        border:`1px solid ${comp.color}66`,
+        margin:'2px 0 1px 0',
+        width:'fit-content'
+      }}>
+        {comp.shortLabel}
+      </span>
+    )}
     <span>{stats.attack?`+${Math.round(stats.attack)} ATK `:''}{stats.defense?`+${Math.round(stats.defense)} DEF `:''}{stats.speed?`+${stats.speed} SPD `:''}{stats.range?`[${stats.range}m] `:''}{item.harvestBonus?.tree?`Madeira ×${item.harvestBonus.tree} `:''}{item.harvestBonus?.ore?`Minérios ×${item.harvestBonus.ore} `:''}{!stats.attack&&!stats.defense&&!stats.speed&&!item.harvestBonus&&item.power?`Poder ${item.power}`:''}{item.description?item.description:''}</span>
     {max>0&&<div className="durability-row"><small>{durPct<=0?'QUEBRADO':`Durabilidade ${Math.round(cur)}/${max}`}</small><i><u style={{width:`${durPct}%`}}/></i></div>}
     {item.upgrade>0&&<strong className="upgrade-badge">+{item.upgrade}</strong>}
@@ -1288,7 +1443,7 @@ function TradeModal({hud,call,onClose}){
 function Blacksmith({hud,upgrade,buy,repair,upgradeBackpack}){
   const weapons=(hud.merchant||[]).filter(it=>it.type==='weapon'||it.type==='armor'),eco=hud.economy||{}
   const backpackLevel=Number(hud.backpackLevel)||0,capacity=Number(hud.inventoryCapacity)||40,bagGold=180+backpackLevel*220,bagOres=1+Math.floor(backpackLevel/2)
-  return <><div className="economy-banner forge-economy"><div><small>FORJA REGIONAL</small><b>{eco.label||hud.currentCity||'Forja local'}</b></div><p>Melhore e repare sua durabilidade. Equipamentos quebrados perdem grande parte da eficiência.</p><span>{eco.material||'Minério regional'}</span></div><div className="blacksmith-layout"><section><div className="forge-banner"><span>🔥</span><div><h3>Forja de {hud.currentCity||'Asterra'}</h3><p>Armas, ferramentas e armaduras perdem durabilidade durante combate e coleta.</p></div><b>◆ {hud.ores||0}</b></div><div className="backpack-forge-card"><div><small>MOCHILA DO DESPERTO • NÍVEL {backpackLevel}</small><b>{capacity}/100 espaços</b><p>Amplie em +10 espaços para guardar mais recompensas.</p></div><button type="button" disabled={capacity>=100||hud.gold<bagGold||(hud.ores||0)<bagOres} onClick={upgradeBackpack}>{capacity>=100?'Mochila máxima':`Ampliar +10 • ${bagGold}◈ + ${bagOres}◆`}</button></div><div className="forge-grid">{EQUIPMENT_SLOTS.map(slot=>{const it=hud.equipment?.[slot],up=it?.upgrade||0,cost=it?Math.round(80+(up+1)*65+it.level*4):0,ore=1+Math.floor(up/3),max=Number(it?.maxDurability)||0,cur=Number.isFinite(Number(it?.durability))?Number(it.durability):max,repairCost=it&&max?Math.max(8,Math.round(Math.max(0,max-cur)*(.22+(Number(it.level)||1)*.012+itemRarityRank(it)*.09))):0;return <article key={slot} style={{'--rarity':it?.color||'#607080'}}><span>{slotIcon(slot,it)}</span><b>{it?.name||slotNames[slot]}</b><small>{it?`${it.rarity} • Nv.${it.level} • +${up}${max?` • Dur. ${Math.round(cur)}/${max}`:''}`:'Nenhum item equipado'}</small><div className="forge-actions"><button disabled={!it||up>=10||hud.gold<cost||(hud.ores||0)<ore} onClick={()=>upgrade(slot)}>{up>=10?'Máximo':`Melhorar ${cost}◈ + ${ore}◆`}</button>{it&&max>0&&cur<max&&<button className="repair-btn" disabled={hud.gold<repairCost} onClick={()=>repair(slot)}>🔧 Reparar {repairCost}◈</button>}</div></article>})}</div></section><aside className="smith-shop"><div className="section-title"><div><small>ARMAS & ARMADURAS</small><h3>Comprar na forja</h3></div><span>◈ {hud.gold}</span></div><div className="smith-stock shop-scroll-list">{weapons.map(it=><article key={it.id} className="shop-scroll-card" style={{'--rarity':it.color}}><ItemCard item={it} compact/><button type="button" disabled={hud.gold<it.value} onClick={()=>buy(it.id)}>Comprar • {it.value}◈</button></article>)}</div></aside></div></>
+  return <><div className="economy-banner forge-economy"><div><small>FORJA REGIONAL</small><b>{eco.label||hud.currentCity||'Forja local'}</b></div><p>Melhore e repare sua durabilidade. Equipamentos quebrados perdem grande parte da eficiência.</p><span>{eco.material||'Minério regional'}</span></div><div className="blacksmith-layout"><section><div className="forge-banner"><span>🔥</span><div><h3>Forja de {hud.currentCity||'Asterra'}</h3><p>Armas, ferramentas e armaduras perdem durabilidade durante combate e coleta.</p></div><b>◆ {hud.ores||0}</b></div><div className="backpack-forge-card"><div><small>MOCHILA DO DESPERTO • NÍVEL {backpackLevel}</small><b>{capacity}/100 espaços</b><p>Amplie em +10 espaços para guardar mais recompensas.</p></div><button type="button" disabled={capacity>=100||hud.gold<bagGold||(hud.ores||0)<bagOres} onClick={upgradeBackpack}>{capacity>=100?'Mochila máxima':`Ampliar +10 • ${bagGold}◈ + ${bagOres}◆`}</button></div><div className="forge-grid">{EQUIPMENT_SLOTS.map(slot=>{const it=hud.equipment?.[slot],up=it?.upgrade||0,cost=it?Math.round(80+(up+1)*65+it.level*4):0,ore=1+Math.floor(up/3),max=Number(it?.maxDurability)||0,cur=Number.isFinite(Number(it?.durability))?Number(it.durability):max,repairCost=it&&max?Math.max(8,Math.round(Math.max(0,max-cur)*(.22+(Number(it.level)||1)*.012+itemRarityRank(it)*.09))):0;return <article key={slot} style={{'--rarity':it?.color||'#607080'}}><span>{slotIcon(slot,it)}</span><b>{it?.name||slotNames[slot]}</b><small>{it?`${it.rarity} • Nv.${it.level} • +${up}${max?` • Dur. ${Math.round(cur)}/${max}`:''}`:'Nenhum item equipado'}</small><div className="forge-actions"><button disabled={!it||up>=10||hud.gold<cost||(hud.ores||0)<ore} onClick={()=>upgrade(slot)}>{up>=10?'Máximo':`Melhorar ${cost}◈ + ${ore}◆`}</button>{it&&max>0&&cur<max&&<button className="repair-btn" disabled={hud.gold<repairCost} onClick={()=>repair(slot)}>🔧 Reparar {repairCost}◈</button>}</div></article>})}</div></section><aside className="smith-shop"><div className="section-title"><div><small>ARMAS & ARMADURAS</small><h3>Comprar na forja</h3></div><span>◈ {hud.gold}</span></div><div className="smith-stock shop-scroll-list">{weapons.map(it=><article key={it.id} className="shop-scroll-card" style={{'--rarity':it.color}}><ItemCard item={it} compact equipment={hud.equipment}/><button type="button" disabled={hud.gold<it.value} onClick={()=>buy(it.id)}>Comprar • {it.value}◈</button></article>)}</div></aside></div></>
 }
 
 function ActiveQuestTrackerHUD({ hud, onOpenQuests, onClaim }) {

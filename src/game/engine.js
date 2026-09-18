@@ -1417,7 +1417,7 @@ export class ShadowGame {
     this.state.critChance=Number(((gear.crit||0)+attr.crit+(cls.stats?.critChance?cls.stats.critChance*100:0)+(rankInfo?.critBonus||0)).toFixed(1))
     this.state.abilityDamageMult=(attr.abilityMult||1)*(1+(rankInfo?.abilityBonus||0))
     this.state.maxHp=Math.round((this.state.baseMaxHp||120)+attr.maxHp);this.state.maxStamina=Math.round((this.state.baseMaxStamina||100)+attr.maxStamina)
-    this.state.hp=Math.min(this.state.hp,this.state.maxHp);this.state.stamina=Math.min(this.state.stamina,this.state.maxStamina);this.updateEquipmentVisuals()
+    this.state.hp=Math.min(this.state.hp,this.state.maxHp);this.state.stamina=Math.min(this.state.stamina,this.state.maxStamina);this.updateEquipmentVisuals();this.updateClassAura()
   }
 
   upgradeClassRank(classId){
@@ -2325,6 +2325,45 @@ export class ShadowGame {
   updateClassAura(){
     if(!this.auraRoot){this.auraRoot=new THREE.Group();this.scene.add(this.auraRoot)}
     this.auraRoot.clear()
+    const activeId=this.state.classState?.activeClassId||'mercenary_swordsman'
+    const cls=CLASSES_LIST.find(c=>c.id===activeId)||CLASSES_LIST[0]
+    const classRanks=this.state.classState?.classRanks||{}
+    const currentRank=Math.max(1,Number(classRanks[activeId])||1)
+    const upgrades=currentRank - 1 // Cada upgrade/evolução é um círculo no chão
+    if(upgrades<=0)return
+
+    const baseColor=new THREE.Color(cls.auraColor||0x38bdf8)
+
+    for(let i=0;i<upgrades;i++){
+      const innerR=0.72 + i*0.38
+      const outerR=innerR + 0.08
+      const ringGeo=new THREE.RingGeometry(innerR, outerR, 36)
+      const ringMat=new THREE.MeshBasicMaterial({
+        color: baseColor,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: Math.max(0.35, 0.72 - i * 0.08),
+        depthWrite: false
+      })
+      const ring=new THREE.Mesh(ringGeo, ringMat)
+      ring.rotation.x=-Math.PI/2
+      ring.position.y=0.035 + i * 0.005
+      ring.userData={ringIndex: i, speed: (i % 2 === 0 ? 0.45 : -0.35)}
+
+      const torusGeo=new THREE.TorusGeometry(innerR + 0.04, 0.015, 6, 28)
+      const torusMat=new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: Math.max(0.25, 0.55 - i * 0.06),
+        depthWrite: false
+      })
+      const torus=new THREE.Mesh(torusGeo, torusMat)
+      torus.rotation.x=-Math.PI/2
+      torus.position.y=0.036 + i * 0.005
+      ring.add(torus)
+
+      this.auraRoot.add(ring)
+    }
   }
   awakenClass(){
     const awakeningCount=this.state.classState?.awakeningCount||0
@@ -3258,6 +3297,6 @@ applyEnemyNetworkState(st){
       this.renderer.render(this.scene,this.camera)
       return
     }
-    if(!this.state.dungeon)this.ensureChunks();this.updateDayNight(dt);this.updateWeather(dt,t);this.ambientAtmosphere?.update(dt,t);this.updatePlayer(dt,t);this.updatePets(dt);if(this.auraRoot)this.auraRoot.position.copy(this.player.position);this.updateEffects(dt);this.updateProjectiles(dt);this.updateCityVisibility();this.updateRespawns();this.updateBots(dt,t);this.updateCityGuards(dt,t);this.updateEnemies(dt,t);this.updatePortals(t);this.gateManager?.update(dt,t);this.caravanManager?.update(dt,t);this.updateWater(t);this.updateNPCs(t,dt);this.advanceDungeonIfClear();this.updateInteractions();this.cameraFollow(dt);this.updateMultiplayer(dt);this.emitHud();this.renderer.render(this.scene,this.camera)
+    if(!this.state.dungeon)this.ensureChunks();this.updateDayNight(dt);this.updateWeather(dt,t);this.ambientAtmosphere?.update(dt,t);this.updatePlayer(dt,t);this.updatePets(dt);if(this.auraRoot){this.auraRoot.position.copy(this.player.position);for(const c of this.auraRoot.children)if(c.userData?.speed)c.rotation.z+=dt*c.userData.speed;}this.updateEffects(dt);this.updateProjectiles(dt);this.updateCityVisibility();this.updateRespawns();this.updateBots(dt,t);this.updateCityGuards(dt,t);this.updateEnemies(dt,t);this.updatePortals(t);this.gateManager?.update(dt,t);this.caravanManager?.update(dt,t);this.updateWater(t);this.updateNPCs(t,dt);this.advanceDungeonIfClear();this.updateInteractions();this.cameraFollow(dt);this.updateMultiplayer(dt);this.emitHud();this.renderer.render(this.scene,this.camera)
   }
 }
