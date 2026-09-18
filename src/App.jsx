@@ -64,6 +64,9 @@ export default function App(){
   const [help,setHelp]=useState(false)
   const [viewport,setViewport]=useState(()=>getViewportState())
   const [pwaState,setPwaState]=useState(getPWAState)
+  const [pcMenuCollapsed,setPcMenuCollapsed]=useState(()=>{
+    try{return localStorage.getItem('shadow-pc-menu-collapsed')==='1'}catch{return false}
+  })
 
   useEffect(()=>subscribePWA(setPwaState),[])
   const startGame=(session,profile)=>{
@@ -179,17 +182,50 @@ export default function App(){
     </div>
     {hud.target&&<div className={`target-card glass ${hud.target.boss?'boss':''}`}><div><b>{hud.target.boss?'★ CHEFE — ':''}{hud.target.name}</b><span>Nv.{hud.target.level}</span></div><Bar value={pct(hud.target.hp,hud.target.maxHp)} cls="enemy"/></div>}
 
-    <nav className="side-menu glass" aria-label="Menus">
-      <MenuButton icon="🎒" label="Inventário" hotkey="I" onClick={()=>call('togglePanel','inventory')}/>
-      <MenuButton icon="📖" label="Grimório" hotkey="G" onClick={()=>call('togglePanel','grimoire')}/>
-      <MenuButton icon="📜" label="Missões" hotkey="J" onClick={()=>call('togglePanel','quests')}/>
-      <MenuButton icon="🏛" label="Guilda" hotkey="U" onClick={()=>call('togglePanel','guild')}/>
-      <MenuButton icon="✚" label="Atributos" hotkey="K" badge={hud.attributePoints||0} onClick={()=>call('togglePanel','attributes')}/>
-      <MenuButton icon="🐾" label="Pets" hotkey="P" onClick={()=>call('togglePanel','pets')}/>
-      <MenuButton icon="🤝" label="Trocar" hotkey="T" onClick={()=>call('togglePanel','trade')}/>
-      <MenuButton icon="🗺" label="Mapa" hotkey="M" onClick={()=>call('togglePanel','map')}/>
-      <MenuButton icon="⚙" label="Opções" hotkey="O" onClick={()=>call('togglePanel','settings')}/>
-    </nav>
+    {viewport.isDesktop && pcMenuCollapsed && (
+      <button
+        type="button"
+        className="pc-menu-toggle-pill glass"
+        onClick={() => {
+          setPcMenuCollapsed(false)
+          try { localStorage.setItem('shadow-pc-menu-collapsed', '0') } catch {}
+        }}
+        title="Abrir Menu Lateral"
+      >
+        <span className="pill-icon">☰</span>
+        <span className="pill-text">ABRIR MENU</span>
+      </button>
+    )}
+
+    {(!viewport.isDesktop || !pcMenuCollapsed) && (
+      <nav className="side-menu glass" aria-label="Menus">
+        {viewport.isDesktop && (
+          <div className="side-menu-header">
+            <span className="side-menu-header-title">MENUS</span>
+            <button
+              type="button"
+              className="side-menu-collapse-btn"
+              onClick={() => {
+                setPcMenuCollapsed(true)
+                try { localStorage.setItem('shadow-pc-menu-collapsed', '1') } catch {}
+              }}
+              title="Recolher Menu Lateral"
+            >
+              ‹ Ocultar
+            </button>
+          </div>
+        )}
+        <MenuButton icon="🎒" label="Inventário" hotkey="I" onClick={()=>call('togglePanel','inventory')}/>
+        <MenuButton icon="📖" label="Grimório" hotkey="G" onClick={()=>call('togglePanel','grimoire')}/>
+        <MenuButton icon="📜" label="Missões" hotkey="J" onClick={()=>call('togglePanel','quests')}/>
+        <MenuButton icon="🏛" label="Guilda" hotkey="U" onClick={()=>call('togglePanel','guild')}/>
+        <MenuButton icon="✚" label="Atributos" hotkey="K" badge={hud.attributePoints||0} onClick={()=>call('togglePanel','attributes')}/>
+        <MenuButton icon="🐾" label="Pets" hotkey="P" onClick={()=>call('togglePanel','pets')}/>
+        <MenuButton icon="🤝" label="Trocar" hotkey="T" onClick={()=>call('togglePanel','trade')}/>
+        <MenuButton icon="🗺" label="Mapa" hotkey="M" onClick={()=>call('togglePanel','map')}/>
+        <MenuButton icon="⚙" label="Opções" hotkey="O" onClick={()=>call('togglePanel','settings')}/>
+      </nav>
+    )}
 
     <MiniMap hud={hud} onOpenMap={()=>call('togglePanel','map')}/>
     <ActiveQuestTrackerHUD hud={hud} onOpenQuests={()=>call('togglePanel','quests')} onClaim={id=>call('claimQuest',id)}/>
@@ -279,7 +315,7 @@ export default function App(){
       {panel==='merchant'&&<Merchant hud={hud} buy={id=>call('buyItem',id)} sell={id=>call('sellItem',id)} sellMultiple={ids=>call('sellMultipleItems',ids)}/>} 
       {panel==='blacksmith'&&<Blacksmith hud={hud} upgrade={s=>call('upgrade',s)} repair={s=>call('repairItem',s)} buy={id=>call('buyItem',id)} upgradeBackpack={()=>call('backpackUpgrade')}/>}
       {panel==='stable'&&<Stable hud={hud} horseBreeds={hud.horseBreeds||HORSE_BREEDS} onTame={id=>call('tameHorse',id)} onSelect={id=>call('selectHorse',id)} toggle={()=>call('toggleMount')} onOpenTownHall={()=>call('togglePanel','townhall')}/>} 
-      {panel==='pets'&&<Pets hud={hud} arm={()=>call('armPetTaming')} select={id=>call('selectPet',id)}/>}
+      {panel==='pets'&&<Pets hud={hud} arm={()=>call('armPetTaming')} select={id=>call('selectPet',id)} call={call}/>}
       {panel==='trade'&&<TradeModal hud={hud} call={call} onClose={()=>call('closePanel')}/>}
       {panel==='map'&&<WorldMap hud={hud}/>} 
       {panel==='settings'&&<Settings hud={hud} apply={v=>call('applySettings',v)} connect={url=>call('connectMultiplayer',url)} setName={name=>call('setPlayerName',name)} call={call}/>} 
@@ -1405,79 +1441,513 @@ function TownHall({ hud, accept, claim, onOpenStable }) {
   )
 }
 
-function Pets({hud,arm,select}){
-  const pets=hud.pets?.owned||[],activeId=hud.pets?.activeId,food=hud.inventory?.find(i=>i.subtype==='pet_food')?.qty||0
+const PET_EVO_TITLES = [
+  { re: /slime/i, titles: ['Prismático', 'Real', 'Arcano', 'Imperial', 'Primordial'] },
+  { re: /lobo|wolf|raposa|fox/i, titles: ['Alfa', 'Lunar', 'Rúnico', 'Ancestral', 'Celestial'] },
+  { re: /javali|bode|fera|boar|goat|beast/i, titles: ['Feral', 'Couraçado', 'Ancestral', 'Colosso', 'Primordial'] },
+  { re: /aranha|besouro|escorpi|spider|beetle|scorpion/i, titles: ['Caçador', 'Venenoso', 'Rúnico', 'Abissal', 'Imperador'] },
+  { re: /corvo|gaivota|harpia|roc|bird|crow|harpy/i, titles: ['Tempestuoso', 'Celeste', 'Rúnico', 'Soberano', 'Primordial'] },
+  { re: /caranguejo|serpente|leviat|crab|serpent|maré/i, titles: ['da Maré', 'Abissal', 'Leviatã', 'Soberano', 'Primordial'] },
+  { re: /golem|treant|pedra|xisto|cristal/i, titles: ['Guardião', 'Rúnico', 'Colosso', 'Ancestral', 'Primordial'] },
+  { re: /brasa|magm|rubro|fogo|fire|ember|lava/i, titles: ['Ígneo', 'Magmático', 'Infernal', 'Rubro', 'Primordial'] },
+  { re: /umbral|vazio|sombrio|arconte|void|shadow|mímico|mimic/i, titles: ['Umbral', 'Abissal', 'Arconte', 'Eclipse', 'Primordial'] },
+  { re: /serafim|celeste|soberano|dragão|dragon|celestial|seraph/i, titles: ['Radiante', 'Serafim', 'Astral', 'Soberano', 'Primordial'] }
+]
+const GENERIC_PET_EVOS = ['Desperto', 'Veterano', 'Arcano', 'Ascendido', 'Primordial']
+function getPetEvoTitles(pet) {
+  const species = String(pet?.speciesName || pet?.name || 'Companheiro')
+  const rule = PET_EVO_TITLES.find(r => r.re.test(species))
+  return rule ? rule.titles : GENERIC_PET_EVOS
+}
+
+const PET_TALENTS_DATA = [
+  { id: 'ferocity', icon: '⚔️', name: 'Fúria Instintiva', desc: '+12% de dano permanente nos ataques básicos e acertos críticos.' },
+  { id: 'guardian', icon: '🛡️', name: 'Coração Guardião', desc: '+16% de HP máximo e cura instantânea completa do companheiro.' },
+  { id: 'soul', icon: '✨', name: 'Sinergia de Alma', desc: '+8% de dano, +8% de HP e habilidade especial 15% mais potente.' }
+]
+
+function Pets({ hud, arm, select, call }) {
+  const [activeTab, setActiveTab] = useState('pets')
+  const [stagedAttrs, setStagedAttrs] = useState({ strength: 0, vitality: 0, agility: 0, spirit: 0 })
+
+  const pets = hud.pets?.owned || []
+  const activeId = hud.pets?.activeId
+  const activePet = pets.find(p => p.id === activeId) || null
+  const food = hud.inventory?.find(i => i.subtype === 'pet_food')?.qty || 0
+
+  const stage = activePet ? Math.max(0, Math.floor((Number(activePet.level) || 1) / 20)) : 0
+  const titles = activePet ? getPetEvoTitles(activePet) : GENERIC_PET_EVOS
+  const species = activePet ? String(activePet.speciesName || activePet.name || 'Companheiro') : 'Companheiro'
+  const maxShow = Math.min(5, Math.max(stage + 1, 3))
+  const forms = activePet ? [
+    { stage: 0, name: species, level: 1 },
+    ...titles.slice(0, maxShow).map((name, i) => ({ stage: i + 1, name: `${species} ${name}`, level: (i + 1) * 20 }))
+  ] : []
+
+  const evolutionTalents = activePet?.evolutionTalents || {}
+  const talentStage = Math.max(1, [...Array(stage).keys()].map(i => i + 1).find(s => !evolutionTalents[s]) || stage || 1)
+  const choiceOpen = stage >= 1 && !evolutionTalents[talentStage]
+  const chosenTalentId = stage >= 1 ? evolutionTalents[Math.max(1, Math.min(stage, talentStage))] : null
+  const chosenTalent = PET_TALENTS_DATA.find(t => t.id === chosenTalentId)
+
+  const petAttrs = activePet?.attributes || { strength: 0, vitality: 0, agility: 0, spirit: 0 }
+  const totalStaged = (stagedAttrs.strength || 0) + (stagedAttrs.vitality || 0) + (stagedAttrs.agility || 0) + (stagedAttrs.spirit || 0)
+  const availablePoints = Math.max(0, (Number(activePet?.attributePoints) || 0) - totalStaged)
+
+  const handleIncAttr = (key) => {
+    if (availablePoints <= 0) return
+    setStagedAttrs(prev => ({ ...prev, [key]: (prev[key] || 0) + 1 }))
+  }
+
+  const handleDecAttr = (key) => {
+    if ((stagedAttrs[key] || 0) <= 0) return
+    setStagedAttrs(prev => ({ ...prev, [key]: Math.max(0, (prev[key] || 0) - 1) }))
+  }
+
+  const handleClearAttrs = () => {
+    setStagedAttrs({ strength: 0, vitality: 0, agility: 0, spirit: 0 })
+  }
+
+  const handleConfirmAttrs = () => {
+    if (totalStaged <= 0 || !activePet) return
+    call?.('allocatePetAttributes', stagedAttrs, activePet.id)
+    setStagedAttrs({ strength: 0, vitality: 0, agility: 0, spirit: 0 })
+  }
+
+  const handleChooseTalent = (talentId) => {
+    if (!activePet) return
+    if (window.confirm('Confirmar a escolha deste talento para seu companheiro? A escolha é permanente.')) {
+      call?.('choosePetTalent', talentStage, talentId, activePet.id)
+    }
+  }
+
   return (
     <div className="stable-layout">
-      <section className="tamed-horse-card glass">
-        <div className="tamed-badge">🐾 DOMAÇÃO</div>
-        <div className="tamed-body">
-          <div className="tamed-avatar">🐾</div>
-          <div className="tamed-info">
-            <h3>Companheiros de Asterra</h3>
-            <p>Use uma Ração e ataque um monstro com menos de 55% de HP. Você pode guardar até cinco pets e equipar um.</p>
-            <div className="tamed-meta">
-              <span>Rações: <b>{food}</b></span>
-              <span>Pets: <b>{pets.length}/5</b></span>
-            </div>
-          </div>
-          <div className="tamed-actions">
-            <button
-              type="button"
-              disabled={!food||pets.length>=5}
-              className={hud.pets?.tamingArmed?'tamed-toggle-btn active':'tamed-toggle-btn'}
-              onClick={arm}
-            >
-              {hud.pets?.tamingArmed?'Ração equipada':'Usar ração'}
-            </button>
-          </div>
-        </div>
-      </section>
+      {/* 3 Dedicated Top Tabs */}
+      <div className="react-pet-tabs v6-pet-tabs">
+        <button
+          type="button"
+          className={`react-pet-tab-btn v6-pet-tab-btn ${activeTab === 'pets' ? 'active' : ''}`}
+          onClick={() => setActiveTab('pets')}
+        >
+          🐾 Meus Pets ({pets.length}/5)
+        </button>
+        <button
+          type="button"
+          className={`react-pet-tab-btn v6-pet-tab-btn ${activeTab === 'evo' ? 'active' : ''}`}
+          onClick={() => setActiveTab('evo')}
+        >
+          🌟 Linha de Evolução {activePet ? `(${activePet.name})` : ''}
+        </button>
+        <button
+          type="button"
+          className={`react-pet-tab-btn v6-pet-tab-btn ${activeTab === 'attrs' ? 'active' : ''}`}
+          onClick={() => setActiveTab('attrs')}
+        >
+          📈 Treinar Atributos {activePet?.attributePoints ? `(+${activePet.attributePoints})` : ''}
+        </button>
+      </div>
 
-      <section className="stable-catalog-section">
-        <div className="section-title">
-          <div>
-            <small>GUARDIÃO DOS COMPANHEIROS</small>
-            <h3>Seus Pets Domados</h3>
-          </div>
-          <span className="pet-count-badge">{pets.length}/5</span>
-        </div>
-        <div className="horse-grid">
-          {pets.length ? pets.map(p => {
-            const recovering = p.recoverUntil > Date.now(), active = p.id === activeId
-            return (
-              <article className={`horse-card glass ${active ? 'current' : ''}`} key={p.id}>
-                <header>
-                  <div>
-                    <span className="horse-lvl-badge">Nv. {p.level}</span>
-                    <h4>{p.name}</h4>
-                  </div>
-                  <span className={`horse-tag ${active ? 'active-tag' : recovering ? 'recovering-tag' : ''}`}>
-                    {recovering ? `⏳ Recupera em ${Math.ceil((p.recoverUntil - Date.now()) / 1000)}s` : active ? '★ Em Combate' : 'Disponível'}
-                  </span>
-                </header>
-                <p>
-                  HP {Math.ceil(p.hp)}/{p.maxHp} • Dano {p.damage}
-                  <br/>
-                  {p.specialName || 'Poder da criatura'}
-                </p>
-                <div className="horse-card-actions">
-                  <button
-                    type="button"
-                    disabled={recovering}
-                    className={`pet-equip-btn ${active ? 'is-active' : ''}`}
-                    onClick={() => select(p.id)}
-                  >
-                    {active ? '✓ Equipado (Toque p/ Guardar)' : '⚔ Equipar Pet'}
-                  </button>
+      {/* ABA 1: MEUS PETS */}
+      {activeTab === 'pets' && (
+        <>
+          <section className="tamed-horse-card glass">
+            <div className="tamed-badge">🐾 DOMAÇÃO</div>
+            <div className="tamed-body">
+              <div className="tamed-avatar">🐾</div>
+              <div className="tamed-info">
+                <h3>Companheiros de Asterra</h3>
+                <p>Use uma Ração e ataque um monstro com menos de 55% de HP. Você pode guardar até cinco pets e equipar um.</p>
+                <div className="tamed-meta">
+                  <span>Rações: <b>{food}</b></span>
+                  <span>Pets: <b>{pets.length}/5</b></span>
                 </div>
-              </article>
-            )
-          }) : (
-            <p className="empty">Nenhum pet domado. Compre Ração de Domação no mercador para capturar monstros.</p>
+              </div>
+              <div className="tamed-actions">
+                <button
+                  type="button"
+                  disabled={!food || pets.length >= 5}
+                  className={hud.pets?.tamingArmed ? 'tamed-toggle-btn active' : 'tamed-toggle-btn'}
+                  onClick={arm}
+                >
+                  {hud.pets?.tamingArmed ? 'Ração equipada' : 'Usar ração'}
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <section className="stable-catalog-section">
+            <div className="section-title">
+              <div>
+                <small>GUARDIÃO DOS COMPANHEIROS</small>
+                <h3>Seus Pets Domados</h3>
+              </div>
+              <span className="pet-count-badge">{pets.length}/5</span>
+            </div>
+
+            <div className="horse-grid">
+              {pets.length ? pets.map(p => {
+                const recovering = p.recoverUntil > Date.now()
+                const active = p.id === activeId
+                const petStage = Math.max(0, Math.floor((Number(p.level) || 1) / 20))
+                return (
+                  <article className={`horse-card glass ${active ? 'current' : ''}`} key={p.id}>
+                    <header>
+                      <div>
+                        <span className="horse-lvl-badge">Nv. {p.level}</span>
+                        <h4>{p.name}</h4>
+                      </div>
+                      <span className={`horse-tag ${active ? 'active-tag' : recovering ? 'recovering-tag' : ''}`}>
+                        {recovering ? `⏳ Recupera em ${Math.ceil((p.recoverUntil - Date.now()) / 1000)}s` : active ? '★ Em Combate' : 'Disponível'}
+                      </span>
+                    </header>
+
+                    <p>
+                      HP {Math.ceil(p.hp)}/{p.maxHp} • Dano {p.damage}
+                      <br/>
+                      {p.specialName || 'Poder da criatura'}
+                    </p>
+
+                    <div style={{ padding: '7px 9px', borderRadius: '8px', background: 'rgba(126,34,206,.15)', border: '1px solid rgba(168,85,247,.3)', fontSize: '12px', color: '#e9d5ff', marginBottom: '8px' }}>
+                      🌟 <b>Evolução {petStage}</b> • {petStage < 4 ? `Próxima forma: Nv. ${(petStage + 1) * 20}` : 'Forma Máxima'}
+                    </div>
+
+                    <div className="horse-card-actions">
+                      <button
+                        type="button"
+                        disabled={recovering}
+                        className={`pet-equip-btn ${active ? 'is-active' : ''}`}
+                        onClick={() => select(p.id)}
+                      >
+                        {active ? '✓ Equipado (Toque p/ Guardar)' : '⚔ Equipar Pet'}
+                      </button>
+
+                      <button
+                        type="button"
+                        style={{
+                          width: '100%', minHeight: '36px', borderRadius: '8px', fontSize: '12.5px', fontWeight: '800',
+                          background: 'rgba(30,27,75,.85)', border: '1px solid rgba(168,85,247,.4)', color: '#d8b4fe', cursor: 'pointer'
+                        }}
+                        onClick={() => {
+                          if (!active) select(p.id)
+                          setActiveTab('evo')
+                        }}
+                      >
+                        🌟 Ver Linha de Evolução & Talentos
+                      </button>
+
+                      <button
+                        type="button"
+                        style={{
+                          width: '100%', minHeight: '30px', borderRadius: '8px', fontSize: '11.5px', fontWeight: '800',
+                          background: 'rgba(239,68,68,.12)', border: '1px solid rgba(239,68,68,.35)', color: '#fca5a5', cursor: 'pointer', marginTop: '2px'
+                        }}
+                        onClick={() => {
+                          if (window.confirm(`Excluir ${p.name}? Esta ação remove o pet da sua coleção permanentemente.`)) {
+                            call?.('deletePet', p.id)
+                          }
+                        }}
+                      >
+                        🗑️ Excluir pet
+                      </button>
+                    </div>
+                  </article>
+                )
+              }) : (
+                <p className="empty">Nenhum pet domado. Compre Ração de Domação no mercador para capturar monstros enfraquecidos.</p>
+              )}
+            </div>
+          </section>
+        </>
+      )}
+
+      {/* ABA 2: LINHA DE EVOLUÇÃO (DEDICADA) */}
+      {activeTab === 'evo' && (
+        <div className="v7-pet-evolution-panel glass" style={{ marginTop: '4px' }}>
+          {!activePet ? (
+            <div style={{ padding: '36px 18px', textAlign: 'center' }}>
+              <div style={{ fontSize: '48px', marginBottom: '12px' }}>🐾</div>
+              <h3 style={{ fontSize: '20px', fontWeight: '900', color: '#fff', margin: '0 0 8px' }}>Nenhum Pet Ativo no Momento</h3>
+              <p style={{ fontSize: '14px', color: '#94a3b8', maxWidth: '460px', margin: '0 auto 18px', lineHeight: '1.6' }}>
+                Para visualizar a linha evolutiva completa, formas ascendentes e escolher talentos permanentes, equipe um dos seus companheiros na aba <b>Meus Pets</b>.
+              </p>
+              <button
+                type="button"
+                className="btn-primary"
+                style={{ padding: '10px 22px', fontSize: '14px', borderRadius: '10px' }}
+                onClick={() => setActiveTab('pets')}
+              >
+                🐾 Ir para Meus Pets
+              </button>
+            </div>
+          ) : (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '16px' }}>
+                <div>
+                  <small style={{ color: '#c4b5fd', fontWeight: '1000', letterSpacing: '.12em', fontSize: '13px', display: 'block' }}>ÁRVORE DE ASCENSÃO</small>
+                  <h2 style={{ margin: '4px 0', color: '#fff', fontSize: '22px', fontWeight: '900' }}>🐾 {activePet.name} • <span style={{ color: '#c084fc' }}>Evolução {stage}</span></h2>
+                </div>
+                <span style={{ fontSize: '13px', fontWeight: '800', color: '#f3e8ff', background: 'rgba(126,34,206,.35)', border: '1px solid rgba(168,85,247,.5)', padding: '6px 14px', borderRadius: '999px' }}>
+                  Próxima Forma: Nível {(stage + 1) * 20}
+                </span>
+              </div>
+
+              {/* Trilha de Formas */}
+              <div className="v7-evo-track">
+                {forms.map((f, i) => (
+                  <React.Fragment key={f.stage}>
+                    {i > 0 && <span className="v7-evo-arrow">→</span>}
+                    <div className={`v7-evo-form ${f.stage < stage ? 'done' : f.stage === stage ? 'current' : ''}`}>
+                      <b>{f.name}</b>
+                      <span>Nível {f.level}{f.stage > stage ? ' • 🔒 Bloqueado' : f.stage === stage ? ' • ★ Atual' : ' • ✓ Desbloqueado'}</span>
+                    </div>
+                  </React.Fragment>
+                ))}
+              </div>
+
+              {/* Seção de Talentos */}
+              {stage < 1 ? (
+                <div style={{ marginTop: '16px', padding: '16px 18px', borderRadius: '12px', background: 'rgba(15,23,42,.65)', border: '1px solid rgba(148,163,184,.25)' }}>
+                  <h4 style={{ margin: '0 0 6px', color: '#f8fafc', fontSize: '15px', fontWeight: '800' }}>🔒 Talentos de Evolução</h4>
+                  <p style={{ fontSize: '13.5px', color: '#94a3b8', margin: 0, lineHeight: '1.55' }}>
+                    O primeiro talento de combate será liberado automaticamente quando seu companheiro atingir o <b>Nível 20</b> e completar sua <b>Evolução 1</b>. Continue derrotando monstros e explorando com seu pet equipado para acumular experiência!
+                  </p>
+                </div>
+              ) : (
+                <div style={{ marginTop: '20px' }}>
+                  <div style={{ fontSize: '16px', fontWeight: '900', color: '#f1f5f9', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    <span>🌟 Talento da Evolução {talentStage}</span>
+                    <span style={{ fontSize: '13px', fontWeight: '700', color: choiceOpen ? '#fbbf24' : '#a78bfa' }}>
+                      {choiceOpen ? '• Escolha permanente para seu companheiro:' : chosenTalent ? `• Consagrado: ${chosenTalent.name}` : '• Todos os talentos desta forma escolhidos'}
+                    </span>
+                  </div>
+
+                  {choiceOpen ? (
+                    <div className="v7-talents">
+                      {PET_TALENTS_DATA.map(t => (
+                        <div className="v7-talent" key={t.id}>
+                          <div className="v7-talent-header">
+                            <b><span style={{ fontSize: '20px' }}>{t.icon}</span> {t.name}</b>
+                            <p>{t.desc}</p>
+                          </div>
+                          <button type="button" onClick={() => handleChooseTalent(t.id)}>
+                            Escolher Talento
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : chosenTalent ? (
+                    <div style={{ padding: '16px 20px', borderRadius: '12px', background: 'rgba(22,101,52,.2)', border: '1.5px solid #22c55e', color: '#bbf7d0', fontSize: '14.5px', lineHeight: '1.55' }}>
+                      <b>✓ Talento Consagrado:</b> {chosenTalent.name} — <i>{chosenTalent.desc}</i>
+                    </div>
+                  ) : null}
+                </div>
+              )}
+            </div>
           )}
         </div>
-      </section>
+      )}
+
+      {/* ABA 3: TREINAR ATRIBUTOS (DEDICADA) */}
+      {activeTab === 'attrs' && (
+        <div className="v7-pet-evolution-panel glass" style={{ marginTop: '4px' }}>
+          {!activePet ? (
+            <div style={{ padding: '36px 18px', textAlign: 'center' }}>
+              <div style={{ fontSize: '48px', marginBottom: '12px' }}>📈</div>
+              <h3 style={{ fontSize: '20px', fontWeight: '900', color: '#fff', margin: '0 0 8px' }}>Nenhum Pet Ativo no Momento</h3>
+              <p style={{ fontSize: '14px', color: '#94a3b8', maxWidth: '460px', margin: '0 auto 18px', lineHeight: '1.6' }}>
+                Para distribuir pontos e treinar os atributos de combate (Força, Destreza, Vitalidade, Espírito), equipe um companheiro na aba <b>Meus Pets</b>.
+              </p>
+              <button
+                type="button"
+                className="btn-primary"
+                style={{ padding: '10px 22px', fontSize: '14px', borderRadius: '10px' }}
+                onClick={() => setActiveTab('pets')}
+              >
+                🐾 Ir para Meus Pets
+              </button>
+            </div>
+          ) : (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '16px' }}>
+                <div>
+                  <small style={{ color: '#c4b5fd', fontWeight: '1000', letterSpacing: '.12em', fontSize: '13px', display: 'block' }}>TREINO DE COMPANHEIRO</small>
+                  <h2 style={{ margin: '4px 0', color: '#fff', fontSize: '22px', fontWeight: '900' }}>🐾 {activePet.name} • <span style={{ color: '#38bdf8' }}>Nv. {activePet.level}</span></h2>
+                </div>
+                <span style={{ fontSize: '14px', fontWeight: '900', color: '#fde047', background: 'rgba(234,179,8,.18)', border: '1.5px solid rgba(234,179,8,.5)', padding: '6px 16px', borderRadius: '999px' }}>
+                  Pontos Disponíveis: {availablePoints}
+                </span>
+              </div>
+
+              {/* Grid de Atributos */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '14px', marginTop: '12px' }}>
+                {/* Força */}
+                <div style={{ padding: '16px', borderRadius: '12px', background: 'rgba(15,23,42,.75)', border: '1px solid rgba(148,163,184,.25)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                      <b style={{ color: '#f87171', fontSize: '16px' }}>⚔️ Força (Ataque)</b>
+                      <span style={{ fontSize: '18px', fontWeight: '900', color: '#fff' }}>
+                        {(petAttrs.strength || 0) + (stagedAttrs.strength || 0)}
+                        {stagedAttrs.strength > 0 && <small style={{ color: '#4ade80', marginLeft: '4px' }}>+{stagedAttrs.strength}</small>}
+                      </span>
+                    </div>
+                    <p style={{ margin: '0 0 12px', fontSize: '13px', color: '#94a3b8', lineHeight: '1.5' }}>
+                      Aumenta o dano de ataque básico do pet (+2 a +3 de dano por ponto).
+                    </p>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                      type="button"
+                      disabled={(stagedAttrs.strength || 0) <= 0}
+                      onClick={() => handleDecAttr('strength')}
+                      style={{ flex: 1, minHeight: '38px', borderRadius: '8px', border: '1px solid rgba(148,163,184,.3)', background: 'rgba(30,41,59,.8)', color: '#fff', fontSize: '16px', fontWeight: '900', cursor: (stagedAttrs.strength || 0) > 0 ? 'pointer' : 'not-allowed' }}
+                    >
+                      −
+                    </button>
+                    <button
+                      type="button"
+                      disabled={availablePoints <= 0}
+                      onClick={() => handleIncAttr('strength')}
+                      style={{ flex: 1, minHeight: '38px', borderRadius: '8px', border: '1px solid #f87171', background: 'rgba(239,68,68,.25)', color: '#fff', fontSize: '16px', fontWeight: '900', cursor: availablePoints > 0 ? 'pointer' : 'not-allowed' }}
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+
+                {/* Vitalidade / Constituição */}
+                <div style={{ padding: '16px', borderRadius: '12px', background: 'rgba(15,23,42,.75)', border: '1px solid rgba(148,163,184,.25)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                      <b style={{ color: '#4ade80', fontSize: '16px' }}>🛡️ Constituição (HP)</b>
+                      <span style={{ fontSize: '18px', fontWeight: '900', color: '#fff' }}>
+                        {(petAttrs.vitality || 0) + (stagedAttrs.vitality || 0)}
+                        {stagedAttrs.vitality > 0 && <small style={{ color: '#4ade80', marginLeft: '4px' }}>+{stagedAttrs.vitality}</small>}
+                      </span>
+                    </div>
+                    <p style={{ margin: '0 0 12px', fontSize: '13px', color: '#94a3b8', lineHeight: '1.5' }}>
+                      Aumenta a vida máxima (HP) do companheiro (+10 a +15 por ponto).
+                    </p>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                      type="button"
+                      disabled={(stagedAttrs.vitality || 0) <= 0}
+                      onClick={() => handleDecAttr('vitality')}
+                      style={{ flex: 1, minHeight: '38px', borderRadius: '8px', border: '1px solid rgba(148,163,184,.3)', background: 'rgba(30,41,59,.8)', color: '#fff', fontSize: '16px', fontWeight: '900', cursor: (stagedAttrs.vitality || 0) > 0 ? 'pointer' : 'not-allowed' }}
+                    >
+                      −
+                    </button>
+                    <button
+                      type="button"
+                      disabled={availablePoints <= 0}
+                      onClick={() => handleIncAttr('vitality')}
+                      style={{ flex: 1, minHeight: '38px', borderRadius: '8px', border: '1px solid #4ade80', background: 'rgba(34,197,94,.25)', color: '#fff', fontSize: '16px', fontWeight: '900', cursor: availablePoints > 0 ? 'pointer' : 'not-allowed' }}
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+
+                {/* Agilidade / Destreza */}
+                <div style={{ padding: '16px', borderRadius: '12px', background: 'rgba(15,23,42,.75)', border: '1px solid rgba(148,163,184,.25)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                      <b style={{ color: '#38bdf8', fontSize: '16px' }}>⚡ Agilidade (Velocidade)</b>
+                      <span style={{ fontSize: '18px', fontWeight: '900', color: '#fff' }}>
+                        {(petAttrs.agility || 0) + (stagedAttrs.agility || 0)}
+                        {stagedAttrs.agility > 0 && <small style={{ color: '#4ade80', marginLeft: '4px' }}>+{stagedAttrs.agility}</small>}
+                      </span>
+                    </div>
+                    <p style={{ margin: '0 0 12px', fontSize: '13px', color: '#94a3b8', lineHeight: '1.5' }}>
+                      Melhora o tempo de reação, movimentação e ritmo de ataque do companheiro.
+                    </p>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                      type="button"
+                      disabled={(stagedAttrs.agility || 0) <= 0}
+                      onClick={() => handleDecAttr('agility')}
+                      style={{ flex: 1, minHeight: '38px', borderRadius: '8px', border: '1px solid rgba(148,163,184,.3)', background: 'rgba(30,41,59,.8)', color: '#fff', fontSize: '16px', fontWeight: '900', cursor: (stagedAttrs.agility || 0) > 0 ? 'pointer' : 'not-allowed' }}
+                    >
+                      −
+                    </button>
+                    <button
+                      type="button"
+                      disabled={availablePoints <= 0}
+                      onClick={() => handleIncAttr('agility')}
+                      style={{ flex: 1, minHeight: '38px', borderRadius: '8px', border: '1px solid #38bdf8', background: 'rgba(56,189,248,.25)', color: '#fff', fontSize: '16px', fontWeight: '900', cursor: availablePoints > 0 ? 'pointer' : 'not-allowed' }}
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+
+                {/* Espírito / Inteligência */}
+                <div style={{ padding: '16px', borderRadius: '12px', background: 'rgba(15,23,42,.75)', border: '1px solid rgba(148,163,184,.25)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                      <b style={{ color: '#c084fc', fontSize: '16px' }}>🔮 Espírito (Poder)</b>
+                      <span style={{ fontSize: '18px', fontWeight: '900', color: '#fff' }}>
+                        {(petAttrs.spirit || 0) + (stagedAttrs.spirit || 0)}
+                        {stagedAttrs.spirit > 0 && <small style={{ color: '#4ade80', marginLeft: '4px' }}>+{stagedAttrs.spirit}</small>}
+                      </span>
+                    </div>
+                    <p style={{ margin: '0 0 12px', fontSize: '13px', color: '#94a3b8', lineHeight: '1.5' }}>
+                      Potencializa o poder especial da criatura e amplia o bônus de dano mágico.
+                    </p>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                      type="button"
+                      disabled={(stagedAttrs.spirit || 0) <= 0}
+                      onClick={() => handleDecAttr('spirit')}
+                      style={{ flex: 1, minHeight: '38px', borderRadius: '8px', border: '1px solid rgba(148,163,184,.3)', background: 'rgba(30,41,59,.8)', color: '#fff', fontSize: '16px', fontWeight: '900', cursor: (stagedAttrs.spirit || 0) > 0 ? 'pointer' : 'not-allowed' }}
+                    >
+                      −
+                    </button>
+                    <button
+                      type="button"
+                      disabled={availablePoints <= 0}
+                      onClick={() => handleIncAttr('spirit')}
+                      style={{ flex: 1, minHeight: '38px', borderRadius: '8px', border: '1px solid #c084fc', background: 'rgba(168,85,247,.25)', color: '#fff', fontSize: '16px', fontWeight: '900', cursor: availablePoints > 0 ? 'pointer' : 'not-allowed' }}
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Botões de Ação de Atributos */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '18px' }}>
+                <button
+                  type="button"
+                  disabled={totalStaged <= 0}
+                  onClick={handleClearAttrs}
+                  style={{
+                    padding: '10px 18px', borderRadius: '10px', fontSize: '13.5px', fontWeight: '800',
+                    background: 'rgba(30,41,59,.7)', border: '1px solid rgba(148,163,184,.3)', color: '#cbd5e1', cursor: totalStaged > 0 ? 'pointer' : 'not-allowed'
+                  }}
+                >
+                  ↺ Limpar
+                </button>
+                <button
+                  type="button"
+                  disabled={totalStaged <= 0}
+                  onClick={handleConfirmAttrs}
+                  className="btn-primary"
+                  style={{
+                    padding: '10px 22px', borderRadius: '10px', fontSize: '14.5px', fontWeight: '900',
+                    cursor: totalStaged > 0 ? 'pointer' : 'not-allowed', opacity: totalStaged > 0 ? 1 : 0.5
+                  }}
+                >
+                  ✓ Confirmar Atributos {totalStaged > 0 ? `(+${totalStaged} pts)` : ''}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

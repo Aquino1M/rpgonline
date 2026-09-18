@@ -227,43 +227,13 @@ function installDeletePet(game){
 }
 
 function patchPetPanelDom(game){
-  if(typeof document==='undefined'||game.state?.uiPanel!=='pets')return
+  // Handled natively in React App.jsx
   const pets=game.state?.pets?.owned||[]
-  const cards=[...document.querySelectorAll('.stable-catalog-section .horse-card')]
-  cards.forEach((card,index)=>{
-    const pet=pets[index]
-    if(!pet)return
-    refreshEvolutionFields(pet)
-    card.dataset.petId=pet.id
-
-    let evo=card.querySelector('.pet-v4-evolution')
-    if(!evo){
-      evo=document.createElement('div')
-      evo.className='pet-v4-evolution'
-      evo.style.cssText='margin-top:8px;padding:8px 9px;border:1px solid rgba(168,85,247,.45);background:rgba(88,28,135,.15);border-radius:9px;font-size:12px;line-height:1.45;color:#e9d5ff'
-      const p=card.querySelector('p')
-      p?.insertAdjacentElement('afterend',evo)
-    }
-    const stage=Math.max(0,Number(pet.evolutionStage)||0)
-    evo.innerHTML=`<b>🌟 ${pet.evolutionName}</b><br>XP ${Math.floor(Number(pet.xp)||0)}/${Math.max(1,Math.floor(Number(pet.nextXp)||1))} • Evolução ${stage}${stage<99?` • próxima Nv.${pet.nextEvolutionLevel}`:''}<br>${pet.specialUnlocked?`✨ <b>${pet.specialName}</b> liberado`:'🔒 Poder especial libera no Nv.10'}`
-
-    let del=card.querySelector('.pet-v4-delete')
-    if(!del){
-      del=document.createElement('button')
-      del.type='button'
-      del.className='pet-v4-delete'
-      del.textContent='🗑️ Excluir pet'
-      del.style.cssText='margin-top:7px;margin-left:6px;border:1px solid #ef4444;background:rgba(239,68,68,.13);color:#fecaca;border-radius:8px;padding:7px 9px;font-weight:900;cursor:pointer'
-      del.addEventListener('click',()=>{
-        const id=card.dataset.petId
-        const current=(game.state?.pets?.owned||[]).find(p=>p.id===id)
-        if(!current)return
-        if(!window.confirm(`Excluir ${current.name}? Esta ação remove o pet da sua coleção.`))return
-        game.deletePet?.(id)
-      })
-      card.appendChild(del)
-    }
-  })
+  pets.forEach(pet => refreshEvolutionFields(pet))
+  const oldDel = document.querySelectorAll('.pet-v4-delete')
+  oldDel.forEach(el => el.remove())
+  const oldEvo = document.querySelectorAll('.pet-v4-evolution')
+  oldEvo.forEach(el => el.remove())
 }
 
 function installCombatAndProgression(game){

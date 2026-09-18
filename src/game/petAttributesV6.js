@@ -174,58 +174,9 @@ function render(game,panel){
   })
 }
 
-function patchTabs(game){
-  if(typeof document==='undefined'||game.state?.uiPanel!=='pets')return
-  const root=document.querySelector('.stable-layout');if(!root)return
-  let tabs=root.querySelector(':scope > .v6-pet-tabs'),attrs=root.querySelector(':scope > .v6-pet-attributes'),evo=root.querySelector(':scope > .v6-pet-evolution-tab')
-  if(!tabs){
-    tabs=document.createElement('div');tabs.className='v6-pet-tabs'
-    tabs.innerHTML='<button type="button" data-tab="pets" class="v6-pet-tab-btn">🐾 Meus Pets</button><button type="button" data-tab="evo" class="v6-pet-tab-btn">🌟 Linha de Evolução</button><button type="button" data-tab="attrs" class="v6-pet-tab-btn">📈 Treinar Atributos</button>'
-    root.insertBefore(tabs,root.firstChild)
-
-    evo=document.createElement('div');evo.className='v6-pet-evolution-tab glass'
-    evo.style.cssText='display:none;border-radius:14px;margin-top:6px'
-    root.insertBefore(evo,tabs.nextSibling)
-
-    attrs=document.createElement('div');attrs.className='v6-pet-attributes glass'
-    attrs.style.cssText='display:none;border-radius:14px;margin-top:6px'
-    root.insertBefore(attrs,evo.nextSibling)
-
-    game.__v6PetTab=game.__v6PetTab||'pets'
-    for(const b of tabs.querySelectorAll('[data-tab]')){
-      b.addEventListener('click',()=>{
-        game.__v6PetTab=b.dataset.tab
-        patchTabs(game)
-        if(game.__v6PetTab==='evo')game.renderPetEvolutionOverhaul?.()
-      })
-    }
-  }
-
-  const currentTab=game.__v6PetTab||'pets'
-  if(evo)evo.style.display=currentTab==='evo'?'block':'none'
-  if(attrs)attrs.style.display=currentTab==='attrs'?'block':'none'
-
-  // Show catalog and taming cards only on the 'pets' tab
-  for(const child of [...root.children]){
-    if(child!==tabs&&child!==attrs&&child!==evo){
-      child.style.display=currentTab==='pets'?'':'none'
-    }
-  }
-
-  for(const b of tabs.querySelectorAll('[data-tab]')){
-    const active=b.dataset.tab===currentTab
-    b.classList.toggle('active',active)
-    b.style.border=active?'1.5px solid #a855f7':'1px solid rgba(148,163,184,.32)'
-    b.style.background=active?'linear-gradient(135deg,rgba(126,34,206,.45),rgba(88,28,135,.6))':'rgba(15,23,42,.65)'
-    b.style.color=active?'#ffffff':'#cbd5e1'
-  }
-
-  if(currentTab==='attrs')render(game,attrs)
-}
-
 export function installPetAttributesV6(game){
   if(!game||game.__petAttributesV6)return false;game.__petAttributesV6=true;installAttributes(game)
-  game.__v6PetAttrTimer=window.setInterval(()=>{for(const p of game.state?.pets?.owned||[])normalize(p);patchTabs(game)},280);return true
+  game.__v6PetAttrTimer=window.setInterval(()=>{for(const p of game.state?.pets?.owned||[])normalize(p)},500);return true
 }
 function ready(){if(typeof window==='undefined')return;const a=()=>{if(!window.game)return false;setTimeout(()=>installPetAttributesV6(window.game),1240);return true};if(a())return;const t=setInterval(()=>{if(a())clearInterval(t)},100);setTimeout(()=>clearInterval(t),60000)}
 ready()

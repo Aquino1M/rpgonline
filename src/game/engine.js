@@ -2385,6 +2385,61 @@ export class ShadowGame {
     }
     this.state.pets.activeId=id;this.syncPetVisual();this.saveGame();this.toast(`⚔ ${pet.name} equipado para lutar!`);return true
   }
+  deletePet(petId){
+    const pets=this.state.pets?.owned||[]
+    const index=pets.findIndex(p=>p.id===petId)
+    if(index<0)return false
+    const [removed]=pets.splice(index,1)
+    if(this.state.pets.activeId===petId){
+      this.state.pets.activeId=null
+      this.petTarget=null
+      if(this.petVisual){this.petVisual.parent?.remove(this.petVisual);this.petVisual=null}
+      if(this.petNameplate){this.petNameplate.parent?.remove(this.petNameplate);this.petNameplate=null}
+      this.petVisualKey=''
+      this.syncPetVisual?.()
+    }
+    this.saveGame()
+    this.toast(`🗑️ ${removed?.name||'Pet'} foi removido dos seus companheiros.`)
+    return true
+  }
+  choosePetTalent(stage,talentId,petId=null){
+    const pet=(this.state.pets?.owned||[]).find(p=>p.id===(petId||this.state.pets.activeId))||this.activePet()
+    if(!pet)return false
+    stage=Math.max(1,Math.floor(Number(stage)||1))
+    if((Number(pet.level)||1)<stage*20){this.toast(`Esse talento libera na Evolução ${stage} (Nv.${stage*20}).`);return false}
+    pet.evolutionTalents=pet.evolutionTalents||{}
+    if(pet.evolutionTalents[stage]){this.toast('Essa evolução já possui um talento escolhido.');return false}
+    pet.evolutionTalents[stage]=talentId
+    if(talentId==='ferocity'){pet.damage=Math.max(1,Math.round((Number(pet.damage)||1)*1.12))}
+    else if(talentId==='guardian'){pet.maxHp=Math.max(1,Math.round((Number(pet.maxHp)||1)*1.16));pet.hp=pet.maxHp}
+    else if(talentId==='soul'){pet.damage=Math.max(1,Math.round((Number(pet.damage)||1)*1.08));pet.maxHp=Math.max(1,Math.round((Number(pet.maxHp)||1)*1.08));pet.hp=Math.min(pet.maxHp,(Number(pet.hp)||0)+Math.ceil(pet.maxHp*.08));pet.specialPowerBonus=(Number(pet.specialPowerBonus)||0)+.15}
+    this.saveGame()
+    const talentNames={ferocity:'Fúria Instintiva',guardian:'Coração Guardião',soul:'Sinergia de Alma'}
+    this.toast(`🌟 ${pet.name} aprendeu ${talentNames[talentId]||talentId}!`)
+    this.showCenterAnnouncement?.('🐾 TALENTO DO PET',`${talentNames[talentId]||talentId} • Evolução ${stage}`)
+    return true
+  }
+  allocatePetAttributes(staged,petId=null){
+    const pet=(this.state.pets?.owned||[]).find(p=>p.id===(petId||this.state.pets.activeId))||this.activePet()
+    if(!pet||!staged)return false
+    const total=(Number(staged.strength)||0)+(Number(staged.vitality)||0)+(Number(staged.agility)||0)+(Number(staged.spirit)||0)
+    if(total<=0)return false
+    if(total>(Number(pet.attributePoints)||0)){this.toast('Pontos insuficientes para esta distribuição.');return false}
+    pet.attributePoints-=total
+    pet.attributes=pet.attributes||{strength:0,vitality:0,agility:0,spirit:0}
+    const lv=Math.max(1,Number(pet.level)||1)
+    for(const key of ['strength','vitality','agility','spirit']){
+      const pts=Math.max(0,Number(staged[key])||0)
+      if(!pts)continue
+      pet.attributes[key]=(Number(pet.attributes[key])||0)+pts
+      if(key==='strength')pet.damage=Math.max(1,Number(pet.damage)||1)+pts*Math.max(2,Math.round(2+lv*.04))
+      if(key==='vitality'){const add=pts*Math.max(10,Math.round(9+lv*.25));pet.maxHp=Math.max(1,Number(pet.maxHp)||1)+add;pet.hp=Math.min(pet.maxHp,(Number(pet.hp)||0)+add)}
+      if(key==='spirit'){pet.damage=Math.max(1,Number(pet.damage)||1)+pts*1;const add=pts*4;pet.maxHp=Math.max(1,Number(pet.maxHp)||1)+add;pet.hp=Math.min(pet.maxHp,(Number(pet.hp)||0)+add);pet.specialPowerBonus=(Number(pet.specialPowerBonus)||0)+pts*.04}
+    }
+    this.saveGame()
+    this.toast(`🐾 Atributos de ${pet.name} confirmados! (+${total} pontos)`)
+    return true
+  }
   syncPetVisual(){
     const pet=this.activePet(),root=this.state.dungeon?this.dungeonArena:this.worldRoot
     const key=pet?`${pet.id}:${pet.recoverUntil>Date.now()?'recovering':'ready'}:${root===this.dungeonArena?'dungeon':'world'}`:'none'
