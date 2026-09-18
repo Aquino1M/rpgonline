@@ -10,6 +10,7 @@ import { GateManager } from './dungeons/GateManager.js'
 import { XPFeedbackManager } from './dungeons/XPFeedbackManager.js'
 import { CaravanManager } from './caravans/CaravanManager.js'
 import { WorldEnvironment } from './world/WorldEnvironment.js'
+import { AmbientAtmosphere } from './world/AmbientAtmosphere.js'
 import { saveCloudProfile, signOutAccount } from './supabaseService.js'
 
 const V3=()=>new THREE.Vector3()
@@ -76,6 +77,7 @@ export class ShadowGame {
     this.makeNPCs(); this.spawnAdventurerBots(); this.spawnCityGuards(); this.seedPortals(); this.createWeatherSystem(); this.bind(); this.createDungeonArena(); this.resize(); refreshGuildBoard(this.state)
     this.gateManager=new GateManager(this); this.xpFeedback=new XPFeedbackManager(this); this.gateManager.init()
     this.worldEnv=new WorldEnvironment(this); this.worldEnv.init()
+    this.ambientAtmosphere=new AmbientAtmosphere(this); this.ambientAtmosphere.init()
     this.caravanManager=new CaravanManager(this); this.caravanManager.init()
     this.resizeObserver=new ResizeObserver(()=>this.resize()); this.resizeObserver.observe(this.canvas)
     this.autoSave=setInterval(()=>this.saveGame(),10000)
@@ -374,7 +376,7 @@ export class ShadowGame {
   }
 
   createDungeonArena(){
-    this.dungeonArena=new THREE.Group();this.dungeonArena.name='DungeonWorld';this.dungeonArena.visible=false;this.scene.add(this.dungeonArena)
+    this.dungeonArena=new THREE.Group();this.dungeonArena.name='DungeonWorld';this.dungeonArena.visible=false;this.dungeonArena.position.set(0,-9999,0);this.scene.add(this.dungeonArena)
     const floor=mesh(new THREE.CylinderGeometry(30,32,1.1,40),mat(0x242637));floor.position.y=-.55;this.dungeonArena.add(floor)
     const ring=mesh(new THREE.TorusGeometry(22,.45,8,40),mat(0x4b405f,{emissive:0x140b25,emissiveIntensity:.4}));ring.rotation.x=Math.PI/2;ring.position.y=.08;this.dungeonArena.add(ring)
     for(let i=0;i<18;i++){const a=i/18*Math.PI*2,r=22+(i%3)*2;const p=mesh(new THREE.BoxGeometry(1.4+(i%2),4+(i%4),1.4),mat(i%3===0?0x43364d:0x313445));p.position.set(Math.cos(a)*r,(4+(i%4))/2,Math.sin(a)*r);p.rotation.y=-a;this.dungeonArena.add(p)}
@@ -682,7 +684,11 @@ export class ShadowGame {
       if(e.button===2&&!this.combatMode&&!this.state.uiPanel){
         this.freeLook=true;this.freeLookPointer=e.pointerId;this.freeLookLast={x:e.clientX,y:e.clientY};this.canvas.setPointerCapture?.(e.pointerId);e.preventDefault();return
       }
-      if(!this.combatMode||this.state.uiPanel)return
+      if(this.state.uiPanel)return
+      if(!this.combatMode){
+        if(e.button===0)this.attack()
+        return
+      }
       if(e.button===0)this.attack();if(e.button===2)this.setBlocking(true)
     })
     on(window,'pointerup',e=>{
@@ -839,6 +845,7 @@ export class ShadowGame {
         })
       }
     }
+    this.ambientAtmosphere?.decorateChunkFlora(cx, cz, key, group, zone)
     this.worldRoot.add(group);this.chunks.set(key,{group,zone,cx,cz,key,hasWater,colliders});this.spawnChunkMobs(cx,cz,zone,key)
   }
 
@@ -1551,15 +1558,29 @@ export class ShadowGame {
         let root=hit.object
         while(root?.parent&&!visible.some(e=>e.g===root))root=root.parent
         const direct=visible.find(e=>e.g===root)
-        if(direct&&direct.g.position.distanceTo(this.player.position)<=maxRange)return direct
+        if(direct){
+          const rangeLimit = direct.isCaravanCart ? maxRange + 4.5 : maxRange + 1.2
+          const dist = hit.point ? hit.point.distanceTo(this.player.position) : direct.g.position.distanceTo(this.player.position)
+          if(dist <= rangeLimit) return direct
+        }
       }
     }
     // Soft aim-assist fallback for melee heads close to the center of the screen.
     let best=null,bestScore=Infinity
     for(const e of visible){
-      const world=e.g.position.clone();world.y+=e.boss?2.7:1.75;const d=world.distanceTo(this.camera.position);if(d>maxRange+this.cameraDistance||d<.2)continue
-      const ndc=world.clone().project(this.camera);if(ndc.z<-1||ndc.z>1)continue;const screen=Math.hypot(ndc.x-this.aimNdcX,ndc.y*.78);if(screen>screenRadius)continue
-      const playerDist=e.g.position.distanceTo(this.player.position),score=screen*4+playerDist/maxRange;if(score<bestScore){best=e;bestScore=score}
+      const world=e.g.position.clone()
+      world.y+=e.boss?2.7:e.isCaravanCart?1.5:1.75
+      const d=world.distanceTo(this.camera.position)
+      const allowedCamDist = maxRange + this.cameraDistance + (e.isCaravanCart ? 4.5 : 0)
+      if(d>allowedCamDist||d<.2)continue
+      const ndc=world.clone().project(this.camera)
+      if(ndc.z<-1||ndc.z>1)continue
+      const screen=Math.hypot(ndc.x-this.aimNdcX,ndc.y*.78)
+      if(screen>(e.isCaravanCart ? screenRadius * 1.8 : screenRadius))continue
+      const playerDist=Math.max(0, e.g.position.distanceTo(this.player.position) - (e.isCaravanCart ? 2.5 : 0))
+      if(playerDist > maxRange) continue
+      const score=screen*4+playerDist/maxRange
+      if(score<bestScore){best=e;bestScore=score}
     }
     return best
   }
@@ -1715,7 +1736,34 @@ export class ShadowGame {
     }
 
     const aimed=this.getCrosshairTarget(6,.24);let best=aimed
-    if(!best){let bd=4.15;const f=V3().set(Math.sin(this.player.rotation.y),0,Math.cos(this.player.rotation.y));for(const e of [...this.enemies,...this.bots]){if(e.dead||!e.g.visible)continue;const d=e.g.position.distanceTo(this.player.position);if(d<bd){const dir=e.g.position.clone().sub(this.player.position).normalize();if(dir.dot(f)>.05){best=e;bd=d}}}}
+    if(!best){
+      let bd=5.2
+      const f=V3().set(Math.sin(this.player.rotation.y),0,Math.cos(this.player.rotation.y))
+      const caravanTargets=this.caravanManager?this.caravanManager.getAttackableTargets():[]
+      for(const e of [...this.enemies,...this.bots,...caravanTargets]){
+        if(e.dead||!e.g?.visible)continue
+        let effectiveDist, dir
+        if(e.isCaravanCart && e.caravan){
+          const c = e.caravan
+          const h = c.heading || 0
+          const fx = Math.sin(h), fz = Math.cos(h)
+          const ax = c.position.x - fx * 2.4, az = c.position.z - fz * 2.4
+          const bx = c.position.x + fx * 3.6, bz = c.position.z + fz * 3.6
+          const abx = bx - ax, abz = bz - az
+          const lenSq = abx * abx + abz * abz || 1
+          const t = Math.max(0, Math.min(1, ((this.player.position.x - ax) * abx + (this.player.position.z - az) * abz) / lenSq))
+          const cx = ax + abx * t, cz = az + abz * t
+          effectiveDist = Math.hypot(this.player.position.x - cx, this.player.position.z - cz)
+          dir = V3().set(cx - this.player.position.x, 0, cz - this.player.position.z).normalize()
+        } else {
+          effectiveDist = e.g.position.distanceTo(this.player.position)
+          dir = e.g.position.clone().sub(this.player.position).normalize()
+        }
+        if(effectiveDist < bd){
+          if(dir.dot(f) > -.4){best=e;bd=effectiveDist}
+        }
+      }
+    }
     if(best){
       const dir=best.g.position.clone().sub(this.player.position);dir.y=0;if(dir.lengthSq())this.player.rotation.y=Math.atan2(dir.x,dir.z);let dmg=Math.round(this.state.atk*(.92+Math.random()*.16));const crit=Math.random()<Math.min(.35,.08+(this.state.critChance||0)/100);if(crit)dmg=Math.round(dmg*1.5);this.damageEnemy(best,dmg,{knockback:.45,crit});this.haptic(crit?28:10);this.multiplayer?.send({type:'combat',action:'attack',world:this.currentWorldId()})
       return
@@ -1850,11 +1898,12 @@ export class ShadowGame {
         }
       } else {
         let hitTarget=null
-        const candidates=[...this.enemies.filter(e=>!e.dead&&e.g.visible),...this.bots.filter(b=>!b.dead&&b.g.visible)]
+        const caravanTargets=this.caravanManager?this.caravanManager.getAttackableTargets():[]
+        const candidates=[...this.enemies.filter(e=>!e.dead&&e.g.visible),...this.bots.filter(b=>!b.dead&&b.g.visible),...caravanTargets]
         for(const e of candidates){
           const mobCenter=e.g.position.clone()
-          mobCenter.y+=(e.boss?1.8:1.1)
-          const hitRadius=e.boss?2.4:1.25
+          mobCenter.y+=(e.boss?1.8:e.isCaravanCart?1.4:1.1)
+          const hitRadius=e.boss?2.4:e.isCaravanCart?3.2:1.25
           if(p.pos.distanceTo(mobCenter)<=hitRadius){
             hitTarget=e
             break
@@ -1902,7 +1951,12 @@ export class ShadowGame {
       }else if(/aoe|storm|smite|summon/.test(type)){
         const mult=type==='holy_smite'?2.6:type==='summon_beast'?1.65:2.2
         this.specialAnim=.55;this.player.userData.motion='special';this.spawnAbilityRing(color,6.5,.55)
-        for(const e of [...this.enemies,...this.bots])if(!e.dead&&e.g.visible&&e.g.position.distanceTo(this.player.position)<6.5)this.damageEnemy(e,Math.round(this.state.atk*mult*(this.state.abilityDamageMult||1)),{knockback:.65})
+        const caravanTargets=this.caravanManager?this.caravanManager.getAttackableTargets():[]
+        for(const e of [...this.enemies,...this.bots,...caravanTargets]){
+          if(e.dead||!e.g?.visible)continue
+          const dist=Math.max(0,e.g.position.distanceTo(this.player.position)-(e.isCaravanCart?2.5:0))
+          if(dist<6.5)this.damageEnemy(e,Math.round(this.state.atk*mult*(this.state.abilityDamageMult||1)),{knockback:.65})
+        }
         this.toast(ability.name)
       }else {
         if(!target){this.abilityCooldowns[ability.id]=0;this.state.stamina+=ability.cost;this.toast('Mire em um inimigo para usar esta habilidade.');return false}
@@ -1915,7 +1969,13 @@ export class ShadowGame {
       const dir=target.g.position.clone().sub(this.player.position);dir.y=0;if(dir.lengthSq())this.player.rotation.y=Math.atan2(dir.x,dir.z)
       this.specialAnim=.42;this.player.userData.motion='special';this.spawnAbilityRing(0x76d9ff,2.2,.32);const dmg=Math.floor(this.state.atk*1.3*(this.state.abilityDamageMult||1));this.damageEnemy(target,dmg,{knockback:.7});this.toast(`Corte Astral • ${dmg}`)
     }else if(ability.slot===2){
-      this.specialAnim=.55;this.player.userData.motion='special';this.spawnAbilityRing(0x9d7cff,ability.range,.55);for(const e of [...this.enemies,...this.bots])if(!e.dead&&e.g.visible&&e.g.position.distanceTo(this.player.position)<ability.range)this.damageEnemy(e,Math.floor(this.state.atk*1.55*(this.state.abilityDamageMult||1)),{knockback:.65})
+      this.specialAnim=.55;this.player.userData.motion='special';this.spawnAbilityRing(0x9d7cff,ability.range,.55);
+      const caravanTargets=this.caravanManager?this.caravanManager.getAttackableTargets():[]
+      for(const e of [...this.enemies,...this.bots,...caravanTargets]){
+        if(e.dead||!e.g?.visible)continue
+        const dist=Math.max(0,e.g.position.distanceTo(this.player.position)-(e.isCaravanCart?2.5:0))
+        if(dist<ability.range)this.damageEnemy(e,Math.floor(this.state.atk*1.55*(this.state.abilityDamageMult||1)),{knockback:.65})
+      }
       this.toast('Onda Astral!')
     }else{
       this.dashTime=.34;this.invuln=.42;this.player.userData.motion='dash';this.spawnAbilityRing(0x75f4cf,2.5,.28);this.toast('Passo Etéreo!')
@@ -2405,12 +2465,67 @@ export class ShadowGame {
   startPartyReadyCheck(gate){this.gateManager?.startPartyReadyCheck(gate)}
   confirmPartyReady(gate){this.gateManager?.confirmPartyReady(gate)}
   cancelPartyReadyCheck(){this.gateManager?.closeGateModal()}
-  closeDungeonCompletion(){this.gateManager?.leaveDungeon()}
-  abandonDungeon(){this.gateManager?.leaveDungeon()}
+  cleanDungeonVisuals(){
+    if (this.state) {
+      this.state.dungeon = null
+      this.state.dungeonCompletion = null
+    }
+    this.activeWorld = 'open'
+    if (this.dungeonArena) {
+      this.dungeonArena.visible = false
+      this.dungeonArena.position.set(0, -9999, 0)
+      this.dungeonArena.children?.forEach(c => { if(c.userData?.__modernDungeonDynamic) c.visible = false })
+    }
+    for (const child of [...this.scene.children]) {
+      if (child === this.dungeonArena || child === this.worldRoot || child === this.player || child === this.mountModel || child === this.auraRoot) continue
+      if (
+        child.name === 'GrandColiseumDungeonArena' ||
+        child.name?.startsWith('Coliseum') ||
+        child.name?.startsWith('Dungeon') ||
+        child.userData?.dungeonInstanceId ||
+        child.userData?.__modernDungeonDynamic
+      ) {
+        this.scene.remove(child)
+      }
+    }
+    this.gateManager?.clearDungeonGeometry?.()
+    if (this.gateManager) this.gateManager.activeInstance = null
+    this.clearEnemies()
+  }
+  closeDungeonCompletion(){
+    this.gateManager?.leaveDungeon()
+    this.cleanDungeonVisuals()
+    this.setWorldVisible(true)
+  }
+  abandonDungeon(){
+    this.gateManager?.leaveDungeon()
+    this.cleanDungeonVisuals()
+    this.setWorldVisible(true)
+    const ret = this.dungeonReturnPosition || { x: 0, z: 20 }
+    this.player.position.set(ret.x, 0, ret.z)
+    this.repopulateVisibleChunks?.()
+    this.scene.background.set(0x8bc8ee)
+    this.scene.fog.color.set(0x8bc8ee)
+    this.scene.fog.near = 65
+    this.scene.fog.far = 155
+    this.toast('Você abandonou a masmorra e retornou a Asterra.')
+  }
   setDestinationMarker(gate){this.gateManager?.setDestinationMarker(gate)}
   clearDestinationMarker(){this.gateManager?.clearDestinationMarker()}
   closeCaravanModal(){this.caravanManager?.closeCaravanModal()}
   lootCaravan(id){return this.caravanManager?.lootCaravanById(id)||false}
+  attackCaravan(){
+    if(!this.caravanManager)return
+    const p=this.player?.position
+    for(const c of this.caravanManager.caravans){
+      const d=this.caravanManager.getCaravanDistance(c,p)
+      if(d<12.0){
+        this.enterCombat(8)
+        this.attack(true)
+        break
+      }
+    }
+  }
 
   interact(){
     if(this.state.uiPanel){this.closePanel();return}
@@ -2444,13 +2559,13 @@ export class ShadowGame {
 
   enterDungeon(p){
     this.state.mount.active=false;this.mountModel.visible=false;this.player.position.y=0;this.dungeonReturnPosition={x:this.player.position.x,z:this.player.position.z}
-    this.state.dungeon={name:p.name,rarity:p.rarity.name,color:p.rarity.color,level:p.level,floor:1,floors:p.floors,transition:false,worldSeed:Math.floor(hash2(Math.round(p.x),Math.round(p.z))*999999)};this.clearEnemies();this.setWorldVisible(false);this.dungeonArena.visible=true;this.activeWorld='dungeon';this.player.position.set(0,0,9);this.scene.background.set(0x090711);this.scene.fog.color.set(0x090711);this.scene.fog.near=22;this.scene.fog.far=62;this.spawnDungeonFloor();this.closePanel();this.toast(`Entrando em ${p.name} — mundo instanciado`)
+    this.state.dungeon={name:p.name,rarity:p.rarity.name,color:p.rarity.color,level:p.level,floor:1,floors:p.floors,transition:false,worldSeed:Math.floor(hash2(Math.round(p.x),Math.round(p.z))*999999)};this.clearEnemies();this.setWorldVisible(false);this.dungeonArena.position.set(0,0,0);this.dungeonArena.visible=true;this.activeWorld='dungeon';this.player.position.set(0,0,9);this.scene.background.set(0x090711);this.scene.fog.color.set(0x090711);this.scene.fog.near=22;this.scene.fog.far=62;this.spawnDungeonFloor();this.closePanel();this.toast(`Entrando em ${p.name} — mundo instanciado`)
   }
   setWorldVisible(v){for(const c of this.chunks.values())c.group.visible=v;for(const c of this.cityGroups||[])c.group.visible=v;for(const r of this.roadMeshes||[])r.mesh.visible=v;for(const lm of this.landmarkMeshes||[])lm.group.visible=v;for(const n of this.npcs)n.g.visible=v;for(const p of this.portals)p.g.visible=v}
-  clearEnemies(){for(const e of this.enemies){this.worldRoot.remove(e.g);this.dungeonArena.remove(e.g)}this.enemies=[]}
+  clearEnemies(){for(const e of this.enemies){this.worldRoot.remove(e.g);this.dungeonArena.remove(e.g);e.g?.parent?.remove?.(e.g)}this.enemies=[]}
   repopulateVisibleChunks(){for(const c of this.chunks.values())this.spawnChunkMobs(c.cx,c.cz,c.zone,c.key)}
   spawnDungeonFloor(){const d=this.state.dungeon;if(!d)return;this.toast(`${d.name} • Andar ${d.floor}/${d.floors}`);const count=4+d.floor*2;for(let i=0;i<count;i++){const a=i/count*Math.PI*2,r=9+(i%3)*4;this.enemies.push(this.makeEnemy(Math.cos(a)*r,Math.sin(a)*r,d.level+d.floor*2,`Guardião do Andar ${d.floor}`,false,null,null,`d:${d.worldSeed}:${d.floor}:mob:${i}`))}if(d.floor===d.floors)this.enemies.push(this.makeEnemy(0,-17,d.level+d.floor*3,`Chefe — ${d.name}`,true,null,null,`d:${d.worldSeed}:${d.floor}:boss`))}
-  advanceDungeonIfClear(){const d=this.state.dungeon;if(!d)return;if(!this.enemies.some(e=>!e.dead)&&!d.transition){d.transition=true;setTimeout(()=>{if(!this.state.dungeon)return;if(d.floor<d.floors){d.floor++;d.transition=false;this.spawnDungeonFloor()}else{this.state.stats.dungeons++;progressQuest(this.state,'dungeon','clear',1);progressGuildMissions(this.state,'dungeon','clear',1);this.state.dungeon=null;this.activeWorld='open';this.dungeonArena.visible=false;this.setWorldVisible(true);this.player.position.set(this.dungeonReturnPosition?.x||0,0,(this.dungeonReturnPosition?.z||0)+5);this.repopulateVisibleChunks();this.scene.fog.near=65;this.scene.fog.far=155;d.transition=false;this.toast('Masmorra concluída! Retornando a Asterra.')}} ,850)}}
+  advanceDungeonIfClear(){const d=this.state.dungeon;if(!d)return;if(!this.enemies.some(e=>!e.dead)&&!d.transition){d.transition=true;setTimeout(()=>{if(!this.state.dungeon)return;if(d.floor<d.floors){d.floor++;d.transition=false;this.spawnDungeonFloor()}else{this.state.stats.dungeons++;progressQuest(this.state,'dungeon','clear',1);progressGuildMissions(this.state,'dungeon','clear',1);this.cleanDungeonVisuals();this.setWorldVisible(true);this.player.position.set(this.dungeonReturnPosition?.x||0,0,(this.dungeonReturnPosition?.z||0)+5);this.repopulateVisibleChunks();this.scene.fog.near=65;this.scene.fog.far=155;d.transition=false;this.toast('Masmorra concluída! Retornando a Asterra.')}} ,850)}}
 
   updatePortals(t){for(const p of this.portals){const d=Math.hypot(this.player.position.x-p.x,this.player.position.z-p.z);p.g.visible=!this.state.dungeon&&d<WORLD.decorDistance;if(p.g.visible){p.ring.rotation.z+=.008;p.core.rotation.z-=.004;p.sparks.forEach((s,i)=>{const a=t*1.5+s.userData.phase;s.position.set(Math.cos(a)*1.8,1.7+Math.sin(a*1.7)*.9,Math.sin(a)*.15)})}}}
 
@@ -2595,7 +2710,7 @@ export class ShadowGame {
   updatePlayer(dt,t){
     if(this.state.hp<=0){
       this.combatCooldown=0;this.inCombat=false;this.state.inCombat=false;this.state.combatTimer=0;
-      this.state.hp=this.state.maxHp;this.state.mount.active=false;this.mountModel.visible=false;this.respawnPlayerAt('aurora-city');this.setWorldVisible(true);this.state.dungeon=null;this.dungeonArena.visible=false;this.repopulateVisibleChunks();this.toast('Você retornou à Cidadela Aurora.')
+      this.state.hp=this.state.maxHp;this.state.mount.active=false;this.mountModel.visible=false;this.cleanDungeonVisuals();this.respawnPlayerAt('aurora-city');this.setWorldVisible(true);this.repopulateVisibleChunks();this.toast('Você retornou à Cidadela Aurora.')
     }
     if(this.combatCooldown>0){
       this.combatCooldown=Math.max(0,this.combatCooldown-dt)
@@ -3064,6 +3179,6 @@ applyEnemyNetworkState(st){
       this.renderer.render(this.scene,this.camera)
       return
     }
-    if(!this.state.dungeon)this.ensureChunks();this.updateDayNight(dt);this.updateWeather(dt,t);this.updatePlayer(dt,t);this.updatePets(dt);if(this.auraRoot)this.auraRoot.position.copy(this.player.position);this.updateEffects(dt);this.updateProjectiles(dt);this.updateCityVisibility();this.updateRespawns();this.updateBots(dt,t);this.updateCityGuards(dt,t);this.updateEnemies(dt,t);this.updatePortals(t);this.gateManager?.update(dt,t);this.caravanManager?.update(dt,t);this.updateWater(t);this.updateNPCs(t,dt);this.advanceDungeonIfClear();this.updateInteractions();this.cameraFollow(dt);this.updateMultiplayer(dt);this.emitHud();this.renderer.render(this.scene,this.camera)
+    if(!this.state.dungeon)this.ensureChunks();this.updateDayNight(dt);this.updateWeather(dt,t);this.ambientAtmosphere?.update(dt,t);this.updatePlayer(dt,t);this.updatePets(dt);if(this.auraRoot)this.auraRoot.position.copy(this.player.position);this.updateEffects(dt);this.updateProjectiles(dt);this.updateCityVisibility();this.updateRespawns();this.updateBots(dt,t);this.updateCityGuards(dt,t);this.updateEnemies(dt,t);this.updatePortals(t);this.gateManager?.update(dt,t);this.caravanManager?.update(dt,t);this.updateWater(t);this.updateNPCs(t,dt);this.advanceDungeonIfClear();this.updateInteractions();this.cameraFollow(dt);this.updateMultiplayer(dt);this.emitHud();this.renderer.render(this.scene,this.camera)
   }
 }

@@ -151,7 +151,7 @@ export const CARAVAN_SETTINGS = {
   travelSpeed: 4.8,            // Units per second along the road
   restTimeSeconds: 45,         // Time spent in destination before starting next route
   recruitTimeSeconds: 15,      // Time spent gathering escort
-  cartMaxHp: 3800,             // Health of the main wagon
+  cartMaxHp: 480,              // Balanced wagon health for engaging combat raid (approx 8-12 player hits)
   breakdownChance: 0.08,       // Chance to experience a temporary mechanical breakdown on road
   monsterAmbushChance: 0.16,   // Chance for wandering monsters to attack caravan on dangerous routes
   playerCrimeInfamy: 50,       // Reputation hit when attacking caravan

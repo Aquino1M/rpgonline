@@ -919,17 +919,21 @@ export class GateManager {
 
   leaveDungeon() {
     const inst = this.activeInstance
-    if (!inst) return
 
-    this.clearDungeonGeometry(inst.id)
+    this.clearDungeonGeometry(inst?.id)
     this.game.clearEnemies()
 
     // Restore open world
     this.activeInstance = null
-    this.game.state.dungeon = null
-    this.game.state.dungeonCompletion = null
+    if (this.game.state) {
+      this.game.state.dungeon = null
+      this.game.state.dungeonCompletion = null
+    }
     this.game.activeWorld = 'open'
-    this.game.dungeonArena.visible = false
+    if (this.game.dungeonArena) {
+      this.game.dungeonArena.visible = false
+      this.game.dungeonArena.position.set(0, -9999, 0)
+    }
     this.game.setWorldVisible(true)
 
     // Return player to position before entering
@@ -948,10 +952,24 @@ export class GateManager {
 
   clearDungeonGeometry(instanceId) {
     for (const child of [...this.game.scene.children]) {
-      if (child.userData?.dungeonInstanceId === instanceId) this.game.scene.remove(child)
+      if (child === this.game.dungeonArena || child === this.game.worldRoot) continue
+      if (
+        child.name === 'GrandColiseumDungeonArena' ||
+        child.name?.startsWith('Coliseum') ||
+        child.name?.startsWith('Dungeon') ||
+        child.userData?.dungeonInstanceId ||
+        child.userData?.__modernDungeonDynamic ||
+        (instanceId && child.userData?.dungeonInstanceId === instanceId)
+      ) {
+        this.game.scene.remove(child)
+      }
     }
-    this.game.dungeonArena?.children?.forEach(child => {
-      if (child.userData?.__modernDungeonDynamic) child.visible = false
-    })
+    if (this.game.dungeonArena) {
+      this.game.dungeonArena.visible = false
+      this.game.dungeonArena.position.set(0, -9999, 0)
+      this.game.dungeonArena.children?.forEach(child => {
+        if (child.userData?.__modernDungeonDynamic) child.visible = false
+      })
+    }
   }
 }

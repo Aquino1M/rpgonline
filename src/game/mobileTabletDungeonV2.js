@@ -71,7 +71,13 @@ function markLegacyDungeonDecor(game) {
 
 function enableModernDungeonRoot(game) {
   const root = game?.dungeonArena
-  if (!root || !modernDungeon(game)) return
+  if (!root) return
+  if (!modernDungeon(game)) {
+    root.visible = false
+    root.position.set(0, -9999, 0)
+    return
+  }
+  root.position.set(0, 0, 0)
   root.visible = true
   for (const child of root.children || []) {
     if (child.userData?.[LEGACY]) child.visible = false
@@ -85,6 +91,7 @@ function restoreLegacyDungeonRoot(game) {
     if (child.userData?.[LEGACY]) child.visible = false
   }
   root.visible = false
+  root.position.set(0, -9999, 0)
 }
 
 function preChaseDungeonMobs(game, dt) {

@@ -78,7 +78,7 @@ function decoratePlayer(game, root) {
 }
 
 function decorateEnemy(enemy) {
-  if (!enemy?.g || enemy.g.userData?.visualRemakeV100) return enemy
+  if (!enemy?.g || enemy.g.userData?.visualRemakeV100 || enemy.overhaulRig) return enemy
   enemy.g.userData ||= {}
   enemy.g.userData.visualRemakeV100 = true
 

@@ -2,7 +2,8 @@
 import { CITIES, ROADS } from '../config.js'
 
 export class WorldRoadGraph {
-  constructor() {
+  constructor(game = null) {
+    this.game = game
     this.cityMap = new Map()
     this.adjacency = new Map()
     this.initGraph()
@@ -65,7 +66,70 @@ export class WorldRoadGraph {
     return [startId, endId]
   }
 
-  buildWaypointsForRoute(cityPath, spacing = 12) {
+  getCardinalGate(city, toward, extra = 0) {
+    const dx = toward.x - city.x
+    const dz = toward.z - city.z
+    const r = Number(city.wallRadius) || Number(city.radius) || 30
+    if (Math.abs(dx) >= Math.abs(dz)) {
+      const sign = dx >= 0 ? 1 : -1
+      return { x: city.x + sign * (r + extra), z: city.z }
+    }
+    const sign = dz >= 0 ? 1 : -1
+    return { x: city.x, z: city.z + sign * (r + extra) }
+  }
+
+  getRoadKeyPoints(cityA, cityB) {
+    // Check if the 3D road mesh points already exist in game runtime
+    if (this.game?.roadMeshes) {
+      const found = this.game.roadMeshes.find(
+        r => (r.a?.id === cityA.id && r.b?.id === cityB.id) || (r.a?.id === cityB.id && r.b?.id === cityA.id)
+      )
+      if (found && Array.isArray(found.points) && found.points.length >= 2) {
+        const pts = found.points.map(p => ({ x: p.x, z: p.z }))
+        const oriented = (found.a?.id === cityA.id) ? pts : [...pts].reverse()
+        return [
+          { x: cityA.x, z: cityA.z },
+          ...oriented,
+          { x: cityB.x, z: cityB.z }
+        ]
+      }
+    }
+
+    // Deterministic canonical road geometry calculation matching worldTravelPolishV2
+    const isFirstA = cityA.id < cityB.id
+    const first = isFirstA ? cityA : cityB
+    const second = isFirstA ? cityB : cityA
+
+    const gateFirst = this.getCardinalGate(first, second, 0.2)
+    const gateSecond = this.getCardinalGate(second, first, 0.2)
+    const outsideFirst = this.getCardinalGate(first, second, 8.5)
+    const outsideSecond = this.getCardinalGate(second, first, 8.5)
+
+    const dx = outsideSecond.x - outsideFirst.x
+    const dz = outsideSecond.z - outsideFirst.z
+    const d = Math.hypot(dx, dz) || 1
+    const perpX = -dz / d
+    const perpZ = dx / d
+    let hash = 0
+    const key = `${first.id}:${second.id}`
+    for (let i = 0; i < key.length; i++) hash = ((hash << 5) - hash + key.charCodeAt(i)) | 0
+    const bend = Math.min(18, Math.max(5, d * 0.025)) * ((Math.abs(hash) % 2) ? 1 : -1)
+    const mid = {
+      x: (outsideFirst.x + outsideSecond.x) * 0.5 + perpX * bend,
+      z: (outsideFirst.z + outsideSecond.z) * 0.5 + perpZ * bend
+    }
+
+    const roadSegments = [gateFirst, outsideFirst, mid, outsideSecond, gateSecond]
+    const orientedRoad = isFirstA ? roadSegments : [...roadSegments].reverse()
+
+    return [
+      { x: cityA.x, z: cityA.z },
+      ...orientedRoad,
+      { x: cityB.x, z: cityB.z }
+    ]
+  }
+
+  buildWaypointsForRoute(cityPath, spacing = 6.5) {
     const waypoints = []
 
     for (let i = 0; i < cityPath.length - 1; i++) {
@@ -73,24 +137,23 @@ export class WorldRoadGraph {
       const cityB = this.cityMap.get(cityPath[i + 1])
       if (!cityA || !cityB) continue
 
-      const ax = cityA.x, az = cityA.z
-      const bx = cityB.x, bz = cityB.z
-      const dist = Math.hypot(bx - ax, bz - az)
-      const steps = Math.max(3, Math.ceil(dist / spacing))
+      const keyPoints = this.getRoadKeyPoints(cityA, cityB)
 
-      for (let s = 0; s < steps; s++) {
-        const t = s / steps
-        // Linear road with subtle natural sway to avoid rigid grid look
-        const sway = Math.sin(t * Math.PI) * 1.5
-        const normalX = -(bz - az) / (dist || 1)
-        const normalZ = (bx - ax) / (dist || 1)
+      for (let k = 0; k < keyPoints.length - 1; k++) {
+        const p1 = keyPoints[k]
+        const p2 = keyPoints[k + 1]
+        const segDist = Math.hypot(p2.x - p1.x, p2.z - p1.z)
+        const steps = Math.max(1, Math.ceil(segDist / spacing))
 
-        waypoints.push({
-          x: ax + (bx - ax) * t + normalX * sway,
-          z: az + (bz - az) * t + normalZ * sway,
-          segmentFrom: cityA.id,
-          segmentTo: cityB.id
-        })
+        for (let s = 0; s < steps; s++) {
+          const t = s / steps
+          waypoints.push({
+            x: p1.x + (p2.x - p1.x) * t,
+            z: p1.z + (p2.z - p1.z) * t,
+            segmentFrom: cityA.id,
+            segmentTo: cityB.id
+          })
+        }
       }
     }
 

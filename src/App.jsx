@@ -243,7 +243,7 @@ export default function App(){
         </button>
       </div>
     )}
-    {hud.caravanModal && <CaravanModal modal={hud.caravanModal} onLoot={id=>call('lootCaravan',id)} onClose={() => call('closeCaravanModal')} />}
+    {hud.caravanModal && <CaravanModal modal={hud.caravanModal} onLoot={id=>call('lootCaravan',id)} onAttack={()=>call('attackCaravan')} onClose={() => call('closeCaravanModal')} />}
     {hud.levelUpCelebration && (
       <div className="level-up-modal" style={{position:'absolute',top:'35%',left:'50%',transform:'translate(-50%,-50%)',zIndex:30,textAlign:'center',pointerEvents:'none',animation:'toastin .4s cubic-bezier(0.16, 1, 0.3, 1)'}}>
         <div style={{fontSize:'36px',fontWeight:'900',letterSpacing:'.18em',color:'#facc15',textShadow:'0 0 35px #eab308, 0 4px 15px rgba(0,0,0,0.8)'}}>★ LEVEL UP! ★</div>
@@ -2339,7 +2339,7 @@ function WaypointArrow({ marker, playerPos, cameraYaw = 0, onClear }) {
   )
 }
 
-function CaravanModal({ modal, onClose, onLoot }) {
+function CaravanModal({ modal, onClose, onLoot, onAttack }) {
   if (!modal) return null
   const { title, text, goods = [], type = 'info', onHelp } = modal
 
@@ -2403,6 +2403,29 @@ function CaravanModal({ modal, onClose, onLoot }) {
               }}
             >
               📦 SAQUEAR CARGA
+            </button>
+          )}
+
+          {type !== 'loot' && (
+            <button
+              type="button"
+              onClick={() => {
+                onAttack?.()
+                onClose()
+              }}
+              style={{
+                flex: 1,
+                padding: '12px',
+                borderRadius: '12px',
+                border: '1px solid #ef4444',
+                background: 'linear-gradient(135deg, #dc2626, #b91c1c)',
+                color: '#ffffff',
+                fontWeight: '900',
+                fontSize: '13px',
+                cursor: 'pointer'
+              }}
+            >
+              ⚔️ ATACAR CARAVANA (INICIAR SAQUE)
             </button>
           )}
 

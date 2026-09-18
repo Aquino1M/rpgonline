@@ -220,23 +220,31 @@ export class CaravanEscortAI {
 
       // AI Decision: Threat response vs marching in formation
       let threat = guard.target
-      if (threat && (threat.dead || threat.hp <= 0 || threat === this.game.player && guard.mesh.position.distanceTo(this.game.player.position) > 30)) {
-        threat = null
-        guard.target = null
+      if (threat) {
+        const targetPos = threat.position || threat.g?.position
+        const threatDead = threat.dead || (threat.hp !== undefined && threat.hp <= 0)
+        const dCart = targetPos ? cartPos.distanceTo(targetPos) : 999
+        const dGuard = (targetPos && guard.mesh) ? guard.mesh.position.distanceTo(targetPos) : 999
+        // Leash threat: don't pursue threats too far from cart or if threat is dead/invalid
+        if (threatDead || dCart > 18 || dGuard > 22) {
+          threat = null
+          guard.target = null
+        }
       }
 
       // Check threats targeting caravan or guards (Player if crime committed, or aggressive mobs)
       if (!threat) {
         if (caravan.attackedByPlayer && this.game.player) {
-          const dToPlayer = guard.mesh.position.distanceTo(this.game.player.position)
-          if (dToPlayer < 24) threat = this.game.player
+          const dToPlayer = guard.mesh ? guard.mesh.position.distanceTo(this.game.player.position) : cartPos.distanceTo(this.game.player.position)
+          if (dToPlayer < 22) threat = this.game.player
         }
         if (!threat && this.game.enemies) {
-          let bestDist = 22
+          let bestDist = 12
           for (const mob of this.game.enemies) {
             if (mob.dead || (mob.hp !== undefined && mob.hp <= 0) || !mob.g?.position) continue
             const d = guard.mesh.position.distanceTo(mob.g.position)
-            if (d < bestDist) {
+            const dCart = cartPos.distanceTo(mob.g.position)
+            if (dCart < 14 && d < bestDist) {
               threat = mob
               bestDist = d
             }

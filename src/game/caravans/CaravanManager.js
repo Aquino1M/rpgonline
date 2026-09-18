@@ -8,7 +8,7 @@ import { CaravanEscortAI } from './CaravanEscortAI.js'
 export class CaravanManager {
   constructor(game) {
     this.game = game
-    this.roadGraph = new WorldRoadGraph()
+    this.roadGraph = new WorldRoadGraph(game)
     this.escortAI = new CaravanEscortAI(game)
     this.caravans = []
     this.routeRaidStats = new Map() // routeKey -> number of successful raids
@@ -316,20 +316,23 @@ export class CaravanManager {
     const dz = targetWp.z - c.position.z
     const dist = Math.hypot(dx, dz)
 
-    if (dist < 2.0) {
+    if (dist < 2.8) {
       c.currentWaypointIdx++
       c.stuckTimer = 0
-
-      // Rare Breakdown event on road
-      if (Math.random() < CARAVAN_SETTINGS.breakdownChance * 0.05) {
-        c.state = CARAVAN_STATES.BROKEN_DOWN
-        c.stateTimer = 18 // 18s repair time
-      }
       return
     }
 
-    // Advance along route
-    const step = Math.min(dist, c.speed * dt)
+    // Anti-stuck watchdog: if cart fails to advance to next waypoint within 5.5s, skip to next
+    c.stuckTimer = (c.stuckTimer || 0) + dt
+    if (c.stuckTimer > 5.5) {
+      c.currentWaypointIdx++
+      c.stuckTimer = 0
+      return
+    }
+
+    // Advance along route steadily
+    const speed = Math.max(3.8, c.speed || 4.8)
+    const step = Math.min(dist, speed * dt)
     c.position.x += (dx / dist) * step
     c.position.z += (dz / dist) * step
     c.heading = Math.atan2(dx, dz)
@@ -368,12 +371,34 @@ export class CaravanManager {
       return
     }
 
-    // If threats cleared, return to traveling after 8s
-    const threatsNearby = c.guards.some(g => g.target && !g.target.dead)
-    if (!threatsNearby && c.stateTimer > 8) {
+    // Check if threats are still actively nearby
+    let threatsNearby = false
+    if (c.attackedByPlayer && this.game.player) {
+      if (c.position.distanceTo(this.game.player.position) < 18) threatsNearby = true
+    }
+    if (!threatsNearby && this.game.enemies) {
+      for (const mob of this.game.enemies) {
+        if (!mob.dead && mob.g?.visible && (mob.hp === undefined || mob.hp > 0)) {
+          if (c.position.distanceTo(mob.g.position) < 14) {
+            threatsNearby = true
+            break
+          }
+        }
+      }
+    }
+
+    // Return to traveling after threats clear or safety timeout
+    if (!threatsNearby && c.stateTimer > 4) {
       c.state = CARAVAN_STATES.TRAVELING
+      c.stateTimer = 0
       c.attackedByPlayer = false
+      for (const g of c.guards) g.target = null
       this.game.state.wantedLevel = Math.max(0, (this.game.state.wantedLevel || 0) - 1)
+    } else if (c.stateTimer > 15) {
+      c.state = CARAVAN_STATES.TRAVELING
+      c.stateTimer = 0
+      c.attackedByPlayer = false
+      for (const g of c.guards) g.target = null
     }
   }
 
@@ -448,9 +473,9 @@ export class CaravanManager {
     if (!this.game.enemies) return
 
     for (const mob of this.game.enemies) {
-      if (mob.dead || !mob.g.visible) continue
+      if (mob.dead || !mob.g?.visible || (mob.hp !== undefined && mob.hp <= 0)) continue
       const d = c.position.distanceTo(mob.g.position)
-      if (d < 16) {
+      if (d < 9.5) {
         c.state = CARAVAN_STATES.UNDER_ATTACK
         c.stateTimer = 0
         if (isNear) {
@@ -489,13 +514,28 @@ export class CaravanManager {
     }
   }
 
+  getCaravanDistance(c, playerPos) {
+    if (!c || !playerPos) return 999
+    const h = c.heading || 0
+    const fx = Math.sin(h), fz = Math.cos(h)
+    const ax = c.position.x - fx * 2.4, az = c.position.z - fz * 2.4
+    const bx = c.position.x + fx * 3.6, bz = c.position.z + fz * 3.6
+    const abx = bx - ax, abz = bz - az
+    const lenSq = abx * abx + abz * abz || 1
+    const t = Math.max(0, Math.min(1, ((playerPos.x - ax) * abx + (playerPos.z - az) * abz) / lenSq))
+    const cx = ax + abx * t, cz = az + abz * t
+    return Math.hypot(playerPos.x - cx, playerPos.z - cz)
+  }
+
   getInteractionPrompt() {
     const playerPos = this.game.player ? this.game.player.position : new THREE.Vector3()
 
     for (const c of this.caravans) {
-      const d = c.position.distanceTo(playerPos)
-      if (d < 5.0) {
-        if (c.lootAvailable) {
+      const d = this.getCaravanDistance(c, playerPos)
+      if (d < 5.8) {
+        const canLoot = c.lootAvailable || c.hp <= 0 || c.guards.every(g => g.dead)
+        if (canLoot) {
+          c.lootAvailable = true
           return {
             prompt: `E — Saquear Carga da ${c.name}`,
             action: { type: 'caravan_loot', label: 'Saquear Caravana', icon: '💰', caravan: c }
@@ -503,12 +543,12 @@ export class CaravanManager {
         }
         if (c.state === CARAVAN_STATES.UNDER_ATTACK) {
           return {
-            prompt: `⚔ Defenda a ${c.name} dos atacantes! (+XP e Ouro)`,
-            action: { type: 'caravan_defend', label: 'Defender Caravana', icon: '🛡', caravan: c }
+            prompt: `⚔ ${c.attackedByPlayer ? 'Destrua a carroça da' : 'Defenda ou Ataque a'} ${c.name}!`,
+            action: { type: 'caravan_attack', label: 'Atacar / Inspecionar', icon: '⚔️', caravan: c }
           }
         }
         return {
-          prompt: `E — Inspecionar ${c.name} [→ ${c.destCityName}]`,
+          prompt: `E — Inspecionar Carga da ${c.name} [→ ${c.destCityName}]`,
           action: { type: 'caravan_info', label: c.name, icon: '🚚', caravan: c }
         }
       }
@@ -520,13 +560,15 @@ export class CaravanManager {
     const playerPos = this.game.player ? this.game.player.position : new THREE.Vector3()
 
     for (const c of this.caravans) {
-      const d = c.position.distanceTo(playerPos)
-      if (d < 5.0) {
-        if (c.lootAvailable) {
+      const d = this.getCaravanDistance(c, playerPos)
+      if (d < 5.8) {
+        const canLoot = c.lootAvailable || c.hp <= 0 || c.guards.every(g => g.dead)
+        if (canLoot) {
+          c.lootAvailable = true
           this.lootCaravan(c)
           return true
         }
-        // Info inspection
+        // Open inspection modal
         this.openCaravanInfoModal(c)
         return true
       }
@@ -535,7 +577,7 @@ export class CaravanManager {
   }
 
   lootCaravan(caravan) {
-    if (!caravan.lootAvailable) return
+    if (!caravan) return
 
     caravan.lootAvailable = false
     const goldGained = caravan.cargoGold || 450
@@ -564,11 +606,16 @@ export class CaravanManager {
 
   openCaravanInfoModal(caravan) {
     if (!this.game.state) return
+    const canLoot = caravan.lootAvailable || caravan.hp <= 0 || caravan.guards.every(g => g.dead)
+    if (canLoot) caravan.lootAvailable = true
+
     this.game.state.caravanModal = {
       caravanId: caravan.id,
       title: caravan.name,
-      type: caravan.lootAvailable ? 'loot' : 'info',
-      text: caravan.lootAvailable ? `A carga está desprotegida. Saqueie ${caravan.cargo.length} mercadorias e ${caravan.cargoGold} ouro.` : `${caravan.originCityName} → ${caravan.destCityName} • ${caravan.guards.filter(g => !g.dead).length}/${caravan.guards.length} guardas ativos. Ataque a carroça ou a escolta para iniciar o roubo.`,
+      type: canLoot ? 'loot' : 'info',
+      text: canLoot
+        ? `💥 A carroça quebrou e a carga está vulnerável! Saqueie ${caravan.cargo.length} tipos de mercadorias e ${caravan.cargoGold}◈ ouro.`
+        : `${caravan.originCityName} → ${caravan.destCityName} • ${caravan.guards.filter(g => !g.dead).length}/${caravan.guards.length} guardas ativos. Ataque a carroça com sua arma ou use o botão abaixo para iniciar o saque!`,
       goods: caravan.cargo.map(item => ({name:item.name,qty:item.qty||1})),
       origin: caravan.originCityName,
       destination: caravan.destCityName,
@@ -647,6 +694,7 @@ export class CaravanManager {
   getAttackableTargets() {
     const targets = []
     for (const c of this.caravans) {
+      if (c.maxHp > 600) { c.maxHp = 480; c.hp = Math.min(c.hp, 480) }
       if (c.meshGroup && c.meshGroup.visible && c.hp > 0) {
         targets.push({
           g: c.meshGroup,
@@ -678,6 +726,21 @@ export class CaravanManager {
     return targets
   }
 
+  flashCaravanMesh(caravan, crit = false) {
+    if (!caravan.meshGroup) return
+    caravan.meshGroup.traverse(child => {
+      if (child.isMesh && child.material && !child.material.map) {
+        if (!child.userData.origColor) child.userData.origColor = child.material.color.clone()
+        child.material.color.setHex(crit ? 0xffea79 : 0xff4444)
+        setTimeout(() => {
+          if (child.material && child.userData.origColor) {
+            child.material.color.copy(child.userData.origColor)
+          }
+        }, 120)
+      }
+    })
+  }
+
   onDamageCaravanEntity(e, amount, { crit = false, knockback = 0.35 } = {}) {
     const dealt = Math.max(1, Math.round(amount))
     this.game.enterCombat?.(8)
@@ -685,7 +748,12 @@ export class CaravanManager {
     if (e.isCaravanCart) {
       const caravan = e.caravan
       this.onPlayerAttackCaravan(caravan, dealt)
-      this.game.spawnDamageText?.(caravan.position, dealt, crit)
+      e.hp = caravan.hp
+      this.flashCaravanMesh(caravan, crit)
+      const p = caravan.position.clone(); p.y += 2.2
+      this.game.spawnDamageText?.(p, dealt, crit, '#fbbf24')
+      this.game.spawnAbilityRing?.(0xf59e0b, 1.8, 0.3)
+      this.game.haptic?.(crit ? 35 : 18)
       this.game.state.target = {
         name: caravan.name,
         level: 25,
@@ -694,13 +762,13 @@ export class CaravanManager {
         boss: false,
         crit
       }
-      return true
+      return dealt
     }
 
     if (e.isCaravanGuard) {
       const guard = e.guard
       const caravan = e.caravan
-      if (!guard || guard.dead) return false
+      if (!guard || guard.dead) return 0
 
       if (!caravan.attackedByPlayer) {
         caravan.attackedByPlayer = true
@@ -714,6 +782,7 @@ export class CaravanManager {
       }
 
       guard.hp -= dealt
+      e.hp = guard.hp
       guard.target = this.game.player
       this.game.spawnDamageText?.(guard.mesh.position, dealt, crit)
       this.escortAI.updateGuardNameplate(guard)
@@ -738,18 +807,21 @@ export class CaravanManager {
         guard.dead = true
         if (guard.mesh) guard.mesh.visible = false
         const xp = Math.round(25 + guard.level * 6)
-        this.game.gainXp?.(xp)
-        this.game.toast?.(`Guarda ${guard.name} derrotado! +${xp} XP`)
-        
-        const anyAlive = caravan.guards.some(g => !g.dead)
-        if (!anyAlive && caravan.state !== CARAVAN_STATES.ROBBED) {
+        this.game.awardCombatXp?.(xp)
+        this.game.state.gold = (this.game.state.gold || 0) + Math.round(15 + guard.level * 1.5)
+        this.game.toast?.(`⚔️ Guarda derrotado! +${xp} XP`)
+
+        // If all guards dead, caravan can now be looted
+        const aliveGuards = caravan.guards.filter(g => !g.dead).length
+        if (aliveGuards === 0) {
           caravan.state = CARAVAN_STATES.ROBBED
           caravan.lootAvailable = true
-          this.game.toast?.(`🏆 Todos os guardas foram derrotados! Caravana indefesa! Saqueie com [E]!`)
+          this.game.toast?.(`💰 A escolta da ${caravan.name} foi derrotada! Pressione [E] para saquear a carga!`)
+          this.game.spawnAbilityRing?.(0x22c55e, 3.8, 0.6)
         }
       }
-      return true
+      return dealt
     }
-    return false
+    return 0
   }
 }

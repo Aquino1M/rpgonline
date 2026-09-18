@@ -369,14 +369,12 @@ if (!ShadowGame.prototype[PATCH_FLAG]) {
   const previousMakeEnemy = proto.makeEnemy
   proto.makeEnemy = function polishedEnemy(x, z, level, name, boss, zone, chunkKey = null, netId = null) {
     const originalName = name
-    const presentation = MOB_PRESENTATION.get(norm(name))
-    const visualName = presentation?.[0] || name
-    const enemy = previousMakeEnemy.call(this, x, z, level, visualName, boss, zone, chunkKey, netId)
+    const enemy = previousMakeEnemy.call(this, x, z, level, originalName, boss, zone, chunkKey, netId)
     if (!enemy) return enemy
 
     enemy.name = originalName
-    enemy.displayName = presentation?.[1] || originalName
-    enemy.visualName = visualName
+    enemy.displayName = originalName
+    enemy.visualName = originalName
     enemy.groundFixFrames = 12
     alignImportedMob(enemy)
     this.updateMobLabel?.(enemy)
