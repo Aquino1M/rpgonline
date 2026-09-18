@@ -152,70 +152,7 @@ export class AmbientAtmosphere {
   }
 
   updateAtmosphericParticles(dt, t) {
-    if (!this.particles || this.game.state.dungeon) {
-      if (this.particles) this.particles.visible = false
-      return
-    }
-    this.particles.visible = true
-
-    const playerPos = this.game.player.position
-    this.particles.position.set(playerPos.x, 0, playerPos.z)
-
-    const curZone = zoneAt(playerPos.x, playerPos.z, ZONES)
-    this.currentZoneId = curZone ? curZone.id : 'aurora'
-
-    const hour = this.game.dayHours || 12
-    const isNight = hour < 5.8 || hour > 18.5
-
-    const [tr, tg, tb] = this.getBiomeColor(this.currentZoneId, isNight, t)
-
-    const pos = this.particles.geometry.attributes.position.array
-    const cols = this.particles.geometry.attributes.color.array
-
-    const isEmber = this.currentZoneId === 'ember'
-    const isVoid = this.currentZoneId === 'void'
-    const isHighland = this.currentZoneId === 'highlands'
-
-    for (let i = 0; i < this.particleCount; i++) {
-      const p = this.particleData[i]
-      const idx = i * 3
-
-      // Movement logic per biome
-      if (isEmber || isVoid) {
-        // Ascending embers / void wisps
-        pos[idx + 1] += dt * (1.2 + p.life * 1.5)
-        pos[idx] += Math.sin(t * 1.5 + p.phase) * dt * 0.8
-        pos[idx + 2] += Math.cos(t * 1.5 + p.phase) * dt * 0.8
-        if (pos[idx + 1] > 14) {
-          pos[idx + 1] = 0.3
-          pos[idx] = (Math.random() - 0.5) * 44
-          pos[idx + 2] = (Math.random() - 0.5) * 44
-        }
-      } else if (isHighland) {
-        // High wind streaks drifting horizontally
-        pos[idx] += dt * 3.8
-        pos[idx + 1] -= dt * 0.4
-        pos[idx + 2] += Math.sin(t + p.phase) * dt * 0.4
-        if (pos[idx] > 24) pos[idx] = -24
-        if (pos[idx + 1] < 0.2) pos[idx + 1] = 9
-      } else {
-        // Gentle floating motes / fireflies
-        pos[idx] += Math.sin(t * 0.8 + p.phase) * dt * (isNight ? 1.1 : 0.4)
-        pos[idx + 1] += Math.cos(t * 0.6 + p.phase) * dt * (isNight ? 0.6 : 0.25)
-        pos[idx + 2] += Math.sin(t * 0.7 + p.phase * 1.5) * dt * (isNight ? 1.1 : 0.4)
-
-        if (pos[idx + 1] < 0.2) pos[idx + 1] = 7.5
-        if (pos[idx + 1] > 8.5) pos[idx + 1] = 0.5
-      }
-
-      // Smooth color shift
-      cols[idx] += (tr - cols[idx]) * dt * 2.0
-      cols[idx + 1] += (tg - cols[idx + 1]) * dt * 2.0
-      cols[idx + 2] += (tb - cols[idx + 2]) * dt * 2.0
-    }
-
-    this.particles.geometry.attributes.position.needsUpdate = true
-    this.particles.geometry.attributes.color.needsUpdate = true
+    if (this.particles) this.particles.visible = false
   }
 
   // =========================================================================

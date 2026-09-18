@@ -133,21 +133,12 @@ function drawPetNameplate(sprite, pet) {
 
 export function findBestPetTarget(game) {
   if (!game) return null
-  if (isPetCombatTarget(game, game.petTarget)) return game.petTarget
-
-  const st = game.state?.target
-  if (st && !st.dead) {
-    const fromEnemies = (game.enemies || []).find(e => isPetCombatTarget(game, e) && (e === st || e.name === st.name || (e.boss && st.boss)))
-    if (fromEnemies) return fromEnemies
+  // O Pet deve atacar ESTRITAMENTE o mob que o dono (jogador) atacar
+  const candidate = game.petTarget || game.lastPlayerAttackedEnemy
+  if (candidate && isPetCombatTarget(game, candidate)) {
+    return candidate
   }
-
-  const pPos = game.player?.position
-  if (!pPos) return null
-  const candidates = (game.enemies || []).filter(e => isPetCombatTarget(game, e) && e.g.position.distanceTo(pPos) <= 24)
-  if (candidates.length) {
-    candidates.sort((a, b) => a.g.position.distanceTo(pPos) - b.g.position.distanceTo(pPos))
-    return candidates[0]
-  }
+  game.petTarget = null
   return null
 }
 
@@ -422,7 +413,8 @@ export function installPetCombatV2(game) {
       }
 
       if (target.dead || Number(target.hp) <= 0) {
-        game.petTarget = findBestPetTarget(game)
+        game.petTarget = null
+        game.lastPlayerAttackedEnemy = null
       }
     } else {
       moveVisualToward(game, home, 7.6, dt)

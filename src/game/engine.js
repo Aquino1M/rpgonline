@@ -1514,8 +1514,18 @@ export class ShadowGame {
     this.updateMobLabel?.(e)
     if(knockback&&this.player?.position)e.g.position.addScaledVector(e.g.position.clone().sub(this.player.position).normalize(),knockback)
     if(!fromPet&&!fromGuard&&this.tryTamePet(e))return true
-    if(!fromPet&&!fromGuard)this.petAttackTarget(e)
-    if(e.hp<=0)this.kill(e);return true
+    if(!fromPet&&!fromGuard){
+      this.lastPlayerAttackedEnemy=e
+      this.petTarget=e
+      this.petAttackTarget(e)
+    }
+    if(e.hp<=0){
+      if(this.lastPlayerAttackedEnemy===e)this.lastPlayerAttackedEnemy=null
+      if(this.petTarget===e)this.petTarget=null
+      this.kill(e)
+      return true
+    }
+    return true
   }
   flashEnemy(e,crit=false){const material=e?.body?.material;if(!material?.emissive)return;const old=material.emissive.clone(),oldIntensity=material.emissiveIntensity;material.emissive.set(crit?0xffd45b:0xffffff);material.emissiveIntensity=1.35;setTimeout(()=>{if(!e.dead&&material){material.emissive.copy(old);material.emissiveIntensity=oldIntensity}},90)}
   spawnDamageText(pos,amount,crit=false,color=null){const c=document.createElement('canvas');c.width=256;c.height=96;const x=c.getContext('2d');x.textAlign='center';x.font=`900 ${crit?44:36}px Inter,Arial`;x.lineWidth=7;x.strokeStyle='rgba(0,0,0,.78)';x.strokeText(`${crit?'CRIT ':''}${amount}`,128,58);x.fillStyle=color||(crit?'#ffd968':'#ffffff');x.fillText(`${crit?'CRIT ':''}${amount}`,128,58);const texture=new THREE.CanvasTexture(c),sprite=new THREE.Sprite(new THREE.SpriteMaterial({map:texture,transparent:true,depthTest:false,depthWrite:false}));sprite.position.copy(pos);sprite.position.y+=2.4;sprite.scale.set(crit?2.8:2.2,crit?1.05:.82,1);sprite.renderOrder=40;this.scene.add(sprite);this.effects.push({type:'damage',object:sprite,life:.75,maxLife:.75,texture})}
@@ -2315,13 +2325,6 @@ export class ShadowGame {
   updateClassAura(){
     if(!this.auraRoot){this.auraRoot=new THREE.Group();this.scene.add(this.auraRoot)}
     this.auraRoot.clear()
-    const activeId=this.state.classState?.activeClassId||'mercenary_swordsman'
-    const cls=CLASSES_LIST.find(c=>c.id===activeId)||CLASSES_LIST[0]
-    const color=new THREE.Color(cls.auraColor||0x94a3b8)
-    const ringGeo=new THREE.RingGeometry(.65,.85,24)
-    const ringMat=new THREE.MeshBasicMaterial({color,side:THREE.DoubleSide,transparent:true,opacity:.55})
-    const ring=new THREE.Mesh(ringGeo,ringMat)
-    ring.rotation.x=-Math.PI/2;ring.position.y=.04;this.auraRoot.add(ring)
   }
   awakenClass(){
     const awakeningCount=this.state.classState?.awakeningCount||0
@@ -2783,6 +2786,20 @@ export class ShadowGame {
       this.inCombat=false
       this.state.inCombat=false
       this.state.combatTimer=0
+    }
+    if(!this.state.inCombat && (this.state.wantedLevel || 0) > 0){
+      this.wantedDecayTimer = (this.wantedDecayTimer || 0) + dt
+      if(this.wantedDecayTimer >= 10){
+        this.wantedDecayTimer = 0
+        this.state.wantedLevel = Math.max(0, (this.state.wantedLevel || 0) - 1)
+        if(this.state.wantedLevel === 0){
+          this.toast?.('🕊️ Você não é mais procurado pelas autoridades.')
+        }else{
+          this.toast?.(`⚠️ Nível de procurado reduzido: ${this.state.wantedLevel}/5`)
+        }
+      }
+    }else if(this.state.inCombat){
+      this.wantedDecayTimer = 0
     }
     this.state.stamina=Math.min(this.state.maxStamina,this.state.stamina+18*dt)
     if(!this.state.inCombat&&this.state.stamina>=this.state.maxStamina-0.5&&this.state.hp<this.state.maxHp&&!this.state.dungeon?.transition){

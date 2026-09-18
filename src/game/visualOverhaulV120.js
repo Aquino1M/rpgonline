@@ -468,26 +468,11 @@ function decoratePlayerOverhaul(game, root) {
     rig.head.add(headAccents)
   }
 
-  // Dynamic Class Aura Base
+  // Class Aura desativada para eliminar lag e efeito de aura indesejado
   removeTaggedChildren(root, 'classAura')
-  const classAura = new THREE.Group()
-  classAura.name = 'ClassAura'
-  classAura.userData.classAura = true
-  root.add(classAura)
-
-  const auraRing = mesh(new THREE.RingGeometry(0.75, 1.15, 24), glowMat(0x38bdf8, 0.55))
-  auraRing.rotation.x = -Math.PI / 2
-  auraRing.position.y = 0.06
-  classAura.add(auraRing)
-
-  const auraRune = mesh(new THREE.TorusGeometry(0.95, 0.03, 6, 24), glowMat(0x38bdf8, 0.8))
-  auraRune.rotation.x = -Math.PI / 2
-  auraRune.position.y = 0.07
-  classAura.add(auraRune)
-
-  rig.classAura = classAura
-  rig.auraRing = auraRing
-  rig.auraRune = auraRune
+  rig.classAura = null
+  rig.auraRing = null
+  rig.auraRune = null
 
   return root
 }
@@ -1003,40 +988,7 @@ function spawnDefendHitFX(game) {
 
 // --- Running Effects: Billowing Dust Clouds & Speed Streaks ---
 function updateRunningDustFX(game, dt, moving, isSprinting) {
-  if (!game?.player || !moving || !game.grounded) return
-  const scene = game.state.dungeon ? game.dungeonArena : game.scene
-  if (!scene) return
-
-  game._dustTimer = (game._dustTimer || 0) + dt
-  const interval = isSprinting ? 0.09 : 0.16
-
-  if (game._dustTimer >= interval) {
-    game._dustTimer = 0
-
-    // Spawn dust puff under feet
-    const dustMat = glowMat(0xd4d4d8, 0.55)
-    const dustGeo = new THREE.SphereGeometry(isSprinting ? 0.28 : 0.18, 6, 5)
-    const dust = new THREE.Mesh(dustGeo, dustMat)
-
-    const side = Math.random() > 0.5 ? -0.22 : 0.22
-    const forward = new THREE.Vector3(Math.sin(game.player.rotation.y), 0, Math.cos(game.player.rotation.y))
-    const right = new THREE.Vector3(forward.z, 0, -forward.x)
-
-    dust.position.copy(game.player.position)
-      .addScaledVector(forward, -0.4)
-      .addScaledVector(right, side)
-    dust.position.y = 0.12
-    scene.add(dust)
-
-    game.effects.push({
-      type: 'dustPuff',
-      object: dust,
-      material: dustMat,
-      life: 0.38,
-      maxLife: 0.38,
-      growRate: isSprinting ? 2.6 : 1.8,
-    })
-  }
+  // Desativado: geração contínua de malhas sob os pés causava lag
 }
 
 // --- Power & Skill Effects: Multi-tiered Runic Mandala & Geysers ---
@@ -1179,14 +1131,13 @@ if (!ShadowGame.prototype[OVERHAUL_FLAG]) {
     return dealt
   }
 
-  // 7. Hook Ability Casting for Spectacular 3D Geysers & Runic Mandalas
+  // 7. Hook Ability Casting
   const previousSpawnAbilityRing = proto.spawnAbilityRing
   proto.spawnAbilityRing = function visualOverhaulAbilityRing(color = 0x38bdf8, radius = 3.5, duration = 0.55) {
-    spawnOverhaulAbilityFX(this, color, radius, duration)
     return previousSpawnAbilityRing.call(this, color, radius, duration)
   }
 
-  // 8. Hook Player Animation Loop (Defend Stance, Bow Pull, Cape Wave & Dust FX)
+  // 8. Hook Player Animation Loop (Defend Stance, Bow Pull, Cape Wave)
   const previousAnimatePlayer = proto.animatePlayer
   proto.animatePlayer = function visualOverhaulAnimate(dt, t, moving) {
     previousAnimatePlayer.call(this, dt, t, moving)
@@ -1212,26 +1163,7 @@ if (!ShadowGame.prototype[OVERHAUL_FLAG]) {
       this.rig.shoulderR.rotation.y = -0.45
     }
 
-    // 2. Running Dust FX
-    updateRunningDustFX(this, dt, moving, isSprinting)
-
-    // 3. Class Aura Color & Pulse
-    if (this.rig.classAura) {
-      const activeId = this.state?.classState?.activeClassId || 'mercenary_swordsman'
-      const cls = CLASSES_LIST?.find((c) => c.id === activeId)
-      const auraColor = cls?.auraColor || 0x38bdf8
-
-      if (this.rig.auraRing?.material) {
-        this.rig.auraRing.material.color.setHex(auraColor)
-        this.rig.auraRing.material.opacity = 0.45 + Math.sin(t * 3.5) * 0.2
-      }
-      if (this.rig.auraRune?.material) {
-        this.rig.auraRune.material.color.setHex(auraColor)
-        this.rig.auraRune.rotation.z = t * 1.2
-      }
-    }
-
-    // 4. Active Spellbook Idle Float
+    // 2. Active Spellbook Idle Float
     if (this.activeOverhaulWeapon?.userData?.animateBook) {
       this.activeOverhaulWeapon.userData.animateBook(t)
     }

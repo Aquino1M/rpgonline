@@ -220,7 +220,6 @@ export default function App(){
         <MenuButton icon="📜" label="Missões" hotkey="J" onClick={()=>call('togglePanel','quests')}/>
         <MenuButton icon="🏛" label="Guilda" hotkey="U" onClick={()=>call('togglePanel','guild')}/>
         <MenuButton icon="✚" label="Atributos" hotkey="K" badge={hud.attributePoints||0} onClick={()=>call('togglePanel','attributes')}/>
-        <MenuButton icon="🐾" label="Pets" hotkey="P" onClick={()=>call('togglePanel','pets')}/>
         <MenuButton icon="🤝" label="Trocar" hotkey="T" onClick={()=>call('togglePanel','trade')}/>
         <MenuButton icon="🗺" label="Mapa" hotkey="M" onClick={()=>call('togglePanel','map')}/>
         <MenuButton icon="⚙" label="Opções" hotkey="O" onClick={()=>call('togglePanel','settings')}/>

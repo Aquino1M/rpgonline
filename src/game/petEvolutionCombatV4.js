@@ -178,19 +178,8 @@ function recentAttacker(game){
 }
 
 function commandPetDefense(game){
-  const pet=game?.activePet?.()
-  if(!pet||Number(pet.recoverUntil)>Date.now())return false
-  const attacker=recentAttacker(game)
-  if(!attacker)return false
-  game.petTarget=attacker
-  pet.inCombat=true
-  pet.combatUntil=Date.now()+7000
-  game.petAttackTarget?.(attacker)
-  if(!game.__petDefenseToastAt||Date.now()-game.__petDefenseToastAt>2800){
-    game.__petDefenseToastAt=Date.now()
-    game.toast?.(`🛡️ ${pet.name} entrou em defesa e foi atrás de ${attacker.name}!`)
-  }
-  return true
+  // O Pet só deve atacar os mobs que o dono (jogador) atacar diretamente
+  return false
 }
 
 function installAutoDefense(game){
